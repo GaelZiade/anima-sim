@@ -1,0 +1,44 @@
+{
+  "distanciaInicial": 8,
+  "equipoA": [
+    {
+      "id": "luchador", "nombre": "Luchador (Grappling/Pankration)", "pv": 160, "turno": 90, "ataque": 170, "defensa": 160,
+      "danoBase": 40, "tipoAtaque": "CON", "ta": { "FIL": 1, "CON": 1, "PEN": 1 }, "rf": 60, "constitucion": 9,
+      "tipoMovimiento": 8, "tipoDefensa": "esquiva", "arma": { "nombre": "Desarmado", "desarmado": true },
+      "atributos": { "FUE": 10, "DES": 9, "AGI": 9 },
+      "rasgos": { "artesMarciales": ["Grappling (Avanzado)", "Pankration (Avanzado)", "Kung Fu (Avanzado)"] }
+    },
+    {
+      "id": "guardian", "nombre": "Guardián", "pv": 180, "turno": 60, "ataque": 160, "defensa": 190,
+      "danoBase": 60, "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 4, "CON": 3, "PEN": 4 }, "rf": 60,
+      "constitucion": 9, "tipoMovimiento": 7, "arma": { "nombre": "Espada larga" },
+      "rasgos": { "arsMagnus": ["Guardian", "Ataque Final"] }
+    },
+    {
+      "id": "boxeador", "nombre": "Boxeador (Godhand)", "pv": 140, "turno": 100, "ataque": 220, "defensa": 150,
+      "danoBase": 50, "tipoAtaque": "CON", "ta": { "CON": 1 }, "rf": 55, "constitucion": 8, "tipoMovimiento": 8,
+      "tipoDefensa": "esquiva", "arma": { "nombre": "Desarmado", "desarmado": true },
+      "rasgos": { "artesMarciales": ["Boxeo (Supremo)", "Godhand (Base)"] }
+    }
+  ],
+  "equipoB": [
+    {
+      "id": "m1", "nombre": "Mercenario 1", "pv": 170, "turno": 60, "ataque": 175, "defensa": 165, "danoBase": 70,
+      "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 3, "CON": 2, "PEN": 3 }, "rf": 55, "constitucion": 8,
+      "tipoMovimiento": 7, "arma": { "nombre": "Espada larga" },
+      "sinArmas": { "turno": 80, "ataque": 90, "defensa": 80, "danoBase": 15, "tipoAtaque": "CON" }
+    },
+    {
+      "id": "m2", "nombre": "Mercenario 2", "pv": 170, "turno": 60, "ataque": 175, "defensa": 165, "danoBase": 70,
+      "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 3, "CON": 2, "PEN": 3 }, "rf": 55, "constitucion": 8,
+      "tipoMovimiento": 7, "arma": { "nombre": "Espada larga" },
+      "sinArmas": { "turno": 80, "ataque": 90, "defensa": 80, "danoBase": 15, "tipoAtaque": "CON" }
+    },
+    {
+      "id": "m3", "nombre": "Mercenaria 3", "pv": 150, "turno": 75, "ataque": 185, "defensa": 160, "danoBase": 55,
+      "tipoAtaque": "PEN", "tamanoArma": "P", "ta": { "FIL": 2, "CON": 2, "PEN": 2 }, "rf": 50, "constitucion": 7,
+      "tipoMovimiento": 8, "arma": { "nombre": "Estoque", "precisa": true },
+      "rasgos": { "arsMagnus": ["Berserker", "Maniobra Especial"] }
+    }
+  ]
+}

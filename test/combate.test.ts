@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest';
+import type { Ficha } from '../src/motor/modelo';
+import { simularCombate } from '../src/motor/combate';
+import { monteCarlo } from '../src/motor/montecarlo';
+
+function ficha(nombre: string, cambios: Partial<Ficha> = {}): Ficha {
+  return {
+    id: nombre, nombre, pv: 120, turno: 60, ataque: 120, defensa: 120, danoBase: 50,
+    tipoAtaque: 'FIL', tamanoArma: 'M', ta: { FIL: 2 }, rf: 50, constitucion: 7, tipoMovimiento: 7,
+    ...cambios,
+  };
+}
+
+describe('combate', () => {
+  it('termina y es reproducible con la misma semilla', () => {
+    const a = simularCombate([ficha('A')], [ficha('B')], { semilla: 42 });
+    const b = simularCombate([ficha('A')], [ficha('B')], { semilla: 42 });
+    expect(a.ganador).toBe(b.ganador);
+    expect(a.asaltos).toBe(b.asaltos);
+    expect(a.luchadores.map((l) => l.pv)).toEqual(b.luchadores.map((l) => l.pv));
+  });
+
+  it('espejo: cerca de 50%', () => {
+    const r = monteCarlo([ficha('A')], [ficha('B')], 6000, { semilla: 3 });
+    expect(r.victoriasA / r.combates).toBeGreaterThan(0.44);
+    expect(r.victoriasA / r.combates).toBeLessThan(0.56);
+  });
+
+  it('más habilidad gana casi siempre', () => {
+    const r = monteCarlo([ficha('Maestro', { ataque: 200, defensa: 200 })], [ficha('Novato', { ataque: 80, defensa: 80 })], 2000);
+    expect(r.victoriasA / r.combates).toBeGreaterThan(0.95);
+  });
+
+  it('el número pesa: el héroe gana menos contra tres guardias que contra uno', () => {
+    const heroe = ficha('Héroe', { ataque: 150, defensa: 150 });
+    const guardia = (n: string) => ficha(n, { ataque: 100, defensa: 90 });
+    const uno = monteCarlo([heroe], [guardia('G1')], 1000);
+    const tres = monteCarlo([heroe], [guardia('G1'), guardia('G2'), guardia('G3')], 1000);
+    expect(uno.victoriasA / uno.combates).toBeGreaterThan(0.95);
+    expect(tres.victoriasA / tres.combates).toBeLessThan(uno.victoriasA / uno.combates - 0.05);
+  });
+
+  it('narra el combate cuando se pide', () => {
+    const r = simularCombate([ficha('A')], [ficha('B')], { semilla: 1, registrar: true });
+    expect(r.registro!.length).toBeGreaterThan(3);
+  });
+});

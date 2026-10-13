@@ -1,0 +1,39 @@
+{
+  "distanciaInicial": 10,
+  "equipoA": [
+    {
+      "id": "espadachin",
+      "nombre": "Espadachín",
+      "pv": 140,
+      "turno": 70,
+      "ataque": 150,
+      "defensa": 140,
+      "danoBase": 55,
+      "tipoAtaque": "FIL",
+      "tamanoArma": "M",
+      "ta": { "FIL": 2, "CON": 1, "PEN": 2 },
+      "rf": 50,
+      "constitucion": 7,
+      "tipoMovimiento": 8,
+      "perfil": "equilibrado"
+    }
+  ],
+  "equipoB": [
+    {
+      "id": "barbaro",
+      "nombre": "Bárbaro con mandoble",
+      "pv": 170,
+      "turno": 45,
+      "ataque": 160,
+      "defensa": 110,
+      "danoBase": 90,
+      "tipoAtaque": "FIL",
+      "tamanoArma": "G",
+      "ta": { "FIL": 3, "CON": 2, "PEN": 3 },
+      "rf": 60,
+      "constitucion": 9,
+      "tipoMovimiento": 7,
+      "perfil": "agresivo"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "distanciaInicial": 15,
+  "equipoA": [
+    {
+      "id": "veterano", "nombre": "Veterano", "pv": 160, "turno": 60, "ataque": 180, "defensa": 170,
+      "danoBase": 60, "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 4, "CON": 3, "PEN": 4 },
+      "rf": 65, "constitucion": 8, "tipoMovimiento": 7, "perfil": "equilibrado"
+    },
+    {
+      "id": "acrobata", "nombre": "Acróbata", "pv": 110, "turno": 95, "ataque": 140, "defensa": 160,
+      "danoBase": 40, "tipoAtaque": "PEN", "tamanoArma": "P", "ta": { "FIL": 1, "CON": 1, "PEN": 1 },
+      "rf": 45, "constitucion": 6, "tipoMovimiento": 10, "perfil": "cauto"
+    }
+  ],
+  "equipoB": [
+    {
+      "id": "guardia1", "nombre": "Guardia 1", "pv": 100, "turno": 50, "ataque": 125, "defensa": 115,
+      "danoBase": 50, "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 2, "CON": 1, "PEN": 2 },
+      "rf": 40, "constitucion": 6, "tipoMovimiento": 6, "perfil": "equilibrado"
+    },
+    {
+      "id": "guardia2", "nombre": "Guardia 2", "pv": 100, "turno": 50, "ataque": 125, "defensa": 115,
+      "danoBase": 50, "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 2, "CON": 1, "PEN": 2 },
+      "rf": 40, "constitucion": 6, "tipoMovimiento": 6, "perfil": "equilibrado"
+    },
+    {
+      "id": "guardia3", "nombre": "Guardia 3", "pv": 100, "turno": 50, "ataque": 125, "defensa": 115,
+      "danoBase": 50, "tipoAtaque": "FIL", "tamanoArma": "M", "ta": { "FIL": 2, "CON": 1, "PEN": 2 },
+      "rf": 40, "constitucion": 6, "tipoMovimiento": 6, "perfil": "equilibrado"
+    },
+    {
+      "id": "oso", "nombre": "Oso", "pv": 220, "turno": 40, "ataque": 150, "defensa": 80,
+      "danoBase": 60, "tipoAtaque": "CON", "tamanoArma": "M", "ta": { "FIL": 2, "CON": 2, "PEN": 2 },
+      "rf": 70, "constitucion": 12, "tipoMovimiento": 8, "inteligencia": 3
+    }
+  ]
+}
