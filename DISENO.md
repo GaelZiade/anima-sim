@@ -222,7 +222,9 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   recuerda en `localStorage`.
 - **Combate:** dos equipos, con arma y perfil por luchador; una ficha repetida se numera. Opciones
   del escenario (rotura, huida, espacio reducido, armas enfundadas, fase lunar), cantidad de
-  combates, hilos y semilla.
+  combates, hilos y semilla. La fase lunar sólo se habilita si alguien tiene el Legado de la Luna.
+- **Publicación:** `.github/workflows/pages.yml` la construye y la publica en GitHub Pages en cada
+  push a `main`.
 - **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en
   tandas de 250, cada una con su semilla; cada worker pide la siguiente al terminar, y
   `combinar` (`src/motor/montecarlo.ts`) junta los resultados. Resultados parciales en vivo.

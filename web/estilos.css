@@ -126,7 +126,7 @@ button {
   cursor: pointer;
 }
 button:hover { border-color: var(--tenue); }
-button:disabled { opacity: 0.5; cursor: default; }
+button:disabled, select:disabled { opacity: 0.5; cursor: default; }
 button.principal { background: var(--acento); border-color: var(--acento); color: var(--acento-texto); font-weight: 600; }
 button.chico { padding: 2px 8px; font-size: 13px; white-space: nowrap; }
 
@@ -150,3 +150,4 @@ td:last-child { white-space: normal; min-width: 160px; }
 
 .registro h3 { margin: 14px 0 4px; font-size: 14px; color: var(--tenue); }
 .registro p { margin: 2px 0; font-size: 14px; }
+.nota { font-size: 12px; color: var(--tenue); }

@@ -4,6 +4,7 @@
 import { armasCuerpoACuerpo, jsonAFicha, leerHoja } from '../src/hoja/ficha';
 import type { HojaJson } from '../src/hoja/hojaAJson';
 import { simularCombate } from '../src/motor/combate';
+import { estilos } from '../src/motor/estilos';
 import type { Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import { correrEnParalelo, type Corrida } from './paralelo';
@@ -91,7 +92,8 @@ function fichasDe(equipo: Integrante[], vistos: Map<string, number>): Ficha[] {
 
 function escenarioActual() {
   const vistos = new Map<string, number>();
-  const fase = ($('faseLunar') as HTMLSelectElement).value as OpcionesEscenario['faseLunar'] | '';
+  const selectorLuna = $<HTMLSelectElement>('faseLunar');
+  const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
   const opciones: OpcionesEscenario = {
     rotura: marcado('rotura'),
     huida: marcado('huida'),
@@ -229,7 +231,7 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
     const quitar = () => {
       integrantes.splice(n, 1);
       guardar();
-      dibujarEquipo(clave);
+      dibujarEquipos();
     };
     return crear('li', {},
       crear('strong', {}, e.nombre),
@@ -240,9 +242,25 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
   }));
 }
 
+/** La fase lunar sólo importa si alguien tiene el Legado de la Luna (Tsukiyomi, Dominus p.79). */
+function habilitarFaseLunar() {
+  const fichas = [...estado.equipoA, ...estado.equipoB].flatMap((i) => {
+    const e = buscar(i.clave);
+    try {
+      return e ? [fichaBase(e, i.arma)] : [];
+    } catch {
+      return [];
+    }
+  });
+  const alguno = fichas.some((f) => estilos(f, false).tsukiyomi);
+  $<HTMLSelectElement>('faseLunar').disabled = !alguno;
+  $('notaLuna').hidden = alguno;
+}
+
 function dibujarEquipos() {
   dibujarEquipo('equipoA');
   dibujarEquipo('equipoB');
+  habilitarFaseLunar();
 }
 
 function dibujar() {
