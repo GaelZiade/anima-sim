@@ -13,6 +13,8 @@ export interface ResumenLuchador {
   bajas: number;
   criticos: number;
   asaltoCaidaMedio: number | null;
+  /** Fracción de combates en que cayó (para combinar `asaltoCaidaMedio`). */
+  caidas: number;
   ataquesPorCombate: number;
   contrasPorCombate: number;
   cansancioPorCombate: number;
@@ -83,11 +85,51 @@ export function monteCarlo(
       bajas: a.bajas / combates,
       criticos: a.criticos / combates,
       asaltoCaidaMedio: a.caidas ? a.sumaCaida / a.caidas : null,
+      caidas: a.caidas / combates,
       ataquesPorCombate: a.ataques / combates,
       contrasPorCombate: a.contras / combates,
       cansancioPorCombate: a.cansancio / combates,
       defensaTotalPorCombate: a.defensaTotal / combates,
       maniobras: Object.fromEntries(Object.entries(a.maniobras).map(([m, n]) => [m, n / combates])),
     })),
+  };
+}
+
+/** Junta resultados de tandas independientes (p. ej. una por worker) en uno solo. */
+export function combinar(partes: ResultadoMonteCarlo[]): ResultadoMonteCarlo {
+  const combates = partes.reduce((s, p) => s + p.combates, 0);
+  /** Promedio de un valor por combate, pesado por la cantidad de combates de cada parte. */
+  const media = (f: (p: ResultadoMonteCarlo) => number) => partes.reduce((s, p) => s + f(p) * p.combates, 0) / combates;
+  return {
+    combates,
+    victoriasA: partes.reduce((s, p) => s + p.victoriasA, 0),
+    victoriasB: partes.reduce((s, p) => s + p.victoriasB, 0),
+    empates: partes.reduce((s, p) => s + p.empates, 0),
+    asaltosMedio: media((p) => p.asaltosMedio),
+    milisegundos: Math.max(...partes.map((p) => p.milisegundos)),
+    luchadores: partes[0].luchadores.map((l0, j) => {
+      const m = (f: (l: ResumenLuchador) => number) => media((p) => f(p.luchadores[j]));
+      const caidas = m((l) => l.caidas);
+      const maniobras: Record<string, number> = {};
+      for (const p of partes) {
+        for (const [k, n] of Object.entries(p.luchadores[j].maniobras)) maniobras[k] = (maniobras[k] ?? 0) + (n * p.combates) / combates;
+      }
+      return {
+        nombre: l0.nombre, equipo: l0.equipo,
+        supervivencia: m((l) => l.supervivencia),
+        huida: m((l) => l.huida),
+        danoCausado: m((l) => l.danoCausado),
+        danoRecibido: m((l) => l.danoRecibido),
+        bajas: m((l) => l.bajas),
+        criticos: m((l) => l.criticos),
+        asaltoCaidaMedio: caidas ? m((l) => (l.asaltoCaidaMedio ?? 0) * l.caidas) / caidas : null,
+        caidas,
+        ataquesPorCombate: m((l) => l.ataquesPorCombate),
+        contrasPorCombate: m((l) => l.contrasPorCombate),
+        cansancioPorCombate: m((l) => l.cansancioPorCombate),
+        defensaTotalPorCombate: m((l) => l.defensaTotalPorCombate),
+        maniobras,
+      };
+    }),
   };
 }

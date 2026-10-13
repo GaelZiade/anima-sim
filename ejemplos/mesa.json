@@ -1,9 +1,9 @@
 {
   "distanciaInicial": 10,
   "equipoA": [
-    { "hoja": "C:/Users/Pire/Downloads/Fichasanima/Kaito Lvl 7 Ultimo.xlsm" }
+    { "hoja": "../fichas/Kaito Lvl 7 Ultimo.xlsm" }
   ],
   "equipoB": [
-    { "hoja": "C:/Users/Pire/Downloads/Fichasanima/Teseo Anima Gaia Reborn Nivel 7 Boxeito Ataque final Guardian (1).xlsm" }
+    { "hoja": "../fichas/Teseo Anima Gaia Reborn Nivel 7 Boxeito Ataque final Guardian (1).xlsm" }
   ]
 }

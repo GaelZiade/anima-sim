@@ -5,6 +5,9 @@
   "description": "Simulador de combate para Anima: Beyond Fantasy con IA heurística y Monte Carlo",
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "sim": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -13,6 +16,7 @@
     "@types/node": "22.15.3",
     "tsx": "4.19.4",
     "typescript": "5.8.3",
+    "vite": "6.4.4",
     "vitest": "3.1.2"
   },
   "dependencies": {

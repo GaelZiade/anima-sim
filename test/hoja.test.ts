@@ -1,14 +1,15 @@
 // Planillas reales de la mesa: los mismos casos que `sheet_import_test.dart` de animaMasterToolkit,
-// más la conversión a Ficha del simulador. No están en el repositorio: si faltan, se saltan.
+// más la conversión a Ficha del simulador. Están en `fichas/` (o en la carpeta de ANIMA_FICHAS).
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { elegirArma, jsonAFicha, leerHoja, tieneRasgo } from '../src/hoja/ficha';
 import type { HojaJson } from '../src/hoja/hojaAJson';
 import { monteCarlo } from '../src/motor/montecarlo';
 import { capacidades } from '../src/motor/rasgos';
 
-const CARPETA = process.env.ANIMA_FICHAS ?? 'C:/Users/Pire/Downloads/Fichasanima';
+const CARPETA = process.env.ANIMA_FICHAS ?? fileURLToPath(new URL('../fichas', import.meta.url));
 
 /** Archivo de la carpeta que empieza con `prefijo` (las copias se renombran: "(1)", "(2)"). */
 function buscar(prefijo: string): string | null {

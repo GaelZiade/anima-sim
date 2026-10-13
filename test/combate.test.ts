@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ficha } from '../src/motor/modelo';
 import { simularCombate } from '../src/motor/combate';
-import { monteCarlo } from '../src/motor/montecarlo';
+import { combinar, monteCarlo } from '../src/motor/montecarlo';
 
 function ficha(nombre: string, cambios: Partial<Ficha> = {}): Ficha {
   return {
@@ -43,5 +43,21 @@ describe('combate', () => {
   it('narra el combate cuando se pide', () => {
     const r = simularCombate([ficha('A')], [ficha('B')], { semilla: 1, registrar: true });
     expect(r.registro!.length).toBeGreaterThan(3);
+  });
+});
+
+describe('combinar tandas', () => {
+  it('junta tandas de Monte Carlo como si fuera una sola corrida', () => {
+    const [a, b] = [ficha('A'), ficha('B', { ataque: 140 })];
+    const partes = [monteCarlo([a], [b], 300, { semilla: 1 }), monteCarlo([a], [b], 100, { semilla: 2 })];
+    const r = combinar(partes);
+    expect(r.combates).toBe(400);
+    expect(r.victoriasA + r.victoriasB + r.empates).toBe(400);
+    expect(r.asaltosMedio).toBeCloseTo((partes[0].asaltosMedio * 300 + partes[1].asaltosMedio * 100) / 400);
+    const l = r.luchadores[0];
+    expect(l.supervivencia).toBeCloseTo((partes[0].luchadores[0].supervivencia * 300 + partes[1].luchadores[0].supervivencia * 100) / 400);
+    const caidos = partes.map((p) => p.luchadores[1].caidas * p.combates);
+    const sumaAsaltos = partes.reduce((s, p, i) => s + (p.luchadores[1].asaltoCaidaMedio ?? 0) * caidos[i], 0);
+    expect(r.luchadores[1].asaltoCaidaMedio).toBeCloseTo(sumaAsaltos / (caidos[0] + caidos[1]));
   });
 });

@@ -12,7 +12,7 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
    ("¿cuánto daño espero?", "¿qué chance de contra?") es una consulta a esa tabla.
 3. **Pocas opciones por decisión.** Cantidad de ataques 1..N, objetivos alcanzables, 0-2 de cansancio.
 4. **Sin registro en Monte Carlo.** El log narrativo sólo se arma para el combate que se mira.
-5. **Varios workers** (fase 2), uno por núcleo. BattleCast usa uno solo.
+5. **Varios workers**, uno por núcleo (en la página). BattleCast usa uno solo.
 
 ## Reglas modeladas (fase 1: combate físico cuerpo a cuerpo)
 
@@ -90,8 +90,8 @@ macro `ExportJson.bas` de la propia planilla: mismas celdas, mismo JSON.
   salvo que se pida otra, y lee los rasgos que cambian negativos (Inmunidad al dolor y al
   cansancio, Eliminación de penalizadores, Exhausto).
 
-Los tests de `test/hoja.test.ts` son los de `sheet_import_test.dart` sobre las cinco planillas
-reales (en `Downloads/Fichasanima`, o en la carpeta de `ANIMA_FICHAS`). Si faltan, se saltan.
+Los tests de `test/hoja.test.ts` son los de `sheet_import_test.dart` sobre las planillas reales de
+`fichas/` (o de la carpeta de `ANIMA_FICHAS`). Si faltan, se saltan.
 
 ## Rasgos de combate (`src/motor/rasgos.ts`)
 
@@ -212,6 +212,24 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
 - **Del toolkit:** Resistir el dolor (Tabla 15), combate de masas (Bestiario) y el lector de
   enemigos desde texto (`npc_text_parser`).
 
+## Página (`web/`)
+
+Versión base de la interfaz, al estilo BattleCast. Todo corre en el navegador del usuario: las
+planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningún lado.
+
+- **Fichas:** se arrastran planillas `.xlsx`/`.xlsm` o un escenario `.json` (el formato del CLI). Las
+  planillas de un escenario se buscan por nombre de archivo entre las ya cargadas. Lo cargado se
+  recuerda en `localStorage`.
+- **Combate:** dos equipos, con arma y perfil por luchador; una ficha repetida se numera. Opciones
+  del escenario (rotura, huida, espacio reducido, armas enfundadas, fase lunar), cantidad de
+  combates, hilos y semilla.
+- **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en
+  tandas de 250, cada una con su semilla; cada worker pide la siguiente al terminar, y
+  `combinar` (`src/motor/montecarlo.ts`) junta los resultados. Resultados parciales en vivo.
+- **Narrar un combate:** corre uno con registro, con la semilla elegida.
+
+El contenedor de desarrollo queda para tests, simulaciones largas y mediciones.
+
 ## Cómo correrlo
 
 ```bash
@@ -221,6 +239,8 @@ npm run sim -- ejemplos/duelo.json           # 10.000 combates
 npm run sim -- ejemplos/duelo.json ver 7     # narra el combate con semilla 7
 npm run sim -- ficha "Kaito.xlsm"            # lo que se lee de una planilla
 npm run sim -- ejemplos/mesa.json            # Kaito contra Teseo desde sus planillas
+npm run dev                                  # la página en http://localhost:5173
+npm run build                                # la página estática en dist/
 ```
 
 Velocidad (un hilo, empaquetado): ~4.500 duelos/s de ~10 asaltos. El tiempo se va en la IA
@@ -234,7 +254,7 @@ alguien lo agrega a una lista ordenada por llegada: el orden define frente/flanc
 ## Fases
 
 1. **Motor físico + IA + Monte Carlo por consola** ← ahora
-2. Interfaz web (Vite) + workers en paralelo
+2. Interfaz web (Vite) + workers en paralelo ← versión base hecha
 3. Ki: acumulación y técnicas
 4. Magia (zeon, ACT, escudos) y psíquica
 5. Proyectiles, maniobras (derribo, presa, desarmar, área), repetición animada
