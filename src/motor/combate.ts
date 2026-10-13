@@ -6,7 +6,7 @@ import { textoTirada, tirarD100, tirarD100Cerrada, type TiradaD100 } from './dad
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
   bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico,
-  PEN_PIFIA_TURNO, porcentajeDano, type Localizacion, type TipoAtaque,
+  porcentajeDano, type Localizacion, type TipoAtaque,
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
@@ -150,16 +150,17 @@ function jugarAsalto(ctx: Contexto) {
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
   }
 
-  // 2. Iniciativa: turno + d100 abierta. Una pifia no tira nivel: resta lo de la Tabla 52 según el
-  // dado natural, y el personaje queda donde le toque en el orden.
+  // 2. Iniciativa: turno + d100 abierta. Una pifia tira su nivel y lo resta, como en cualquier
+  // tirada (Core p.10): vale natural − nivel, y el personaje queda donde le toque en el orden.
   const desempate = new Map<Luchador, number>();
   const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
     const t = tirarD100(ctx.rng);
     const turno = turnoFinal(l);
-    l.iniciativa = turno + (t.pifia ? PEN_PIFIA_TURNO[t.natural] : t.valor);
-    tiradas?.set(l, t.pifia ? `${turno}−${-PEN_PIFIA_TURNO[t.natural]} (pifia: ${t.natural})` : textoTirada(turno, t));
+    const valor = t.pifia ? t.natural - t.nivelPifia : t.valor;
+    l.iniciativa = turno + valor;
+    tiradas?.set(l, textoTirada(turno, t, valor));
   }
   const orden = [...vivos].sort(
     (a, b) => b.iniciativa - a.iniciativa || b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,

@@ -62,8 +62,8 @@ describe('combinar tandas', () => {
   });
 });
 
-describe('pifia en la iniciativa (Tabla 52)', () => {
-  it('resta 125/100/75 y ordena por ese valor: alguien muy rápido que pifia no actúa necesariamente último', () => {
+describe('pifia en la iniciativa', () => {
+  it('tira nivel y lo resta: alguien muy rápido que pifia no actúa necesariamente último', () => {
     const rapido = ficha('Rápido', { turno: 300 });
     const lento = ficha('Lento', { turno: 20 });
     let pifiasVistas = 0;
@@ -75,10 +75,10 @@ describe('pifia en la iniciativa (Tabla 52)', () => {
         // El orden del registro sigue la iniciativa de mayor a menor, pifie quien pifie.
         const valores = [...e.texto.matchAll(/(?:Rápido|Lento) (-?\d+) \[/g)].map((m) => Number(m[1]));
         expect(valores).toEqual([...valores].sort((a, b) => b - a));
-        const pifia = /Rápido (-?\d+) \[300(−\d+) \(pifia: (\d)\)\]/.exec(e.texto);
+        const pifia = /Rápido (-?\d+) \[300[−+](\d+) \(pifia: (\d), nivel (\d+)\)\]/.exec(e.texto);
         if (!pifia) continue;
         pifiasVistas++;
-        expect(Number(pifia[1])).toBe(300 + { 1: -125, 2: -100, 3: -75 }[Number(pifia[3])]!);
+        expect(Number(pifia[1])).toBe(300 + Number(pifia[3]) - Number(pifia[4]));
         if (e.texto.indexOf('Rápido') < e.texto.indexOf('Lento')) rapidoPrimeroPifiando++;
       }
     }

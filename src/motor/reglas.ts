@@ -85,8 +85,6 @@ export const PEN_ACCION_ACTIVA = 25;
 export const BONO_CANSANCIO = 15;
 export const MAX_CANSANCIO_ASALTO = 2;
 export const DIFERENCIA_SORPRESA = 150;
-/** Tabla 52 */
-export const PEN_PIFIA_TURNO: Record<number, number> = { 1: -125, 2: -100, 3: -75 };
 
 /** Core p.97: un único golpe que quita la mitad de los PV actuales (o más) es crítico. */
 export function esCritico(dano: number, pvActuales: number): boolean {
