@@ -150,37 +150,26 @@ function jugarAsalto(ctx: Contexto) {
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
   }
 
-  // 2. Iniciativa: turno + d100 abierta. Una pifia actúa último.
-  const pifiados = new Set<Luchador>();
-  const paraSorpresa = new Map<Luchador, number>();
+  // 2. Iniciativa: turno + d100 abierta. Una pifia no tira nivel: resta lo de la Tabla 52 según el
+  // dado natural, y el personaje queda donde le toque en el orden.
   const desempate = new Map<Luchador, number>();
   const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
     const t = tirarD100(ctx.rng);
     const turno = turnoFinal(l);
-    // En la iniciativa la pifia no tiene nivel: sólo hace actuar último (Tabla 52).
-    tiradas?.set(l, t.pifia ? `${turno}+${t.natural} (pifia: actúa último)` : textoTirada(turno, t));
-    if (t.pifia) {
-      pifiados.add(l);
-      l.iniciativa = turno + t.natural;
-      paraSorpresa.set(l, turno + PEN_PIFIA_TURNO[t.natural]);
-    } else {
-      l.iniciativa = turno + t.valor;
-      paraSorpresa.set(l, l.iniciativa);
-    }
+    l.iniciativa = turno + (t.pifia ? PEN_PIFIA_TURNO[t.natural] : t.valor);
+    tiradas?.set(l, t.pifia ? `${turno}−${-PEN_PIFIA_TURNO[t.natural]} (pifia: ${t.natural})` : textoTirada(turno, t));
   }
   const orden = [...vivos].sort(
-    (a, b) =>
-      Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
-      b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
+    (a, b) => b.iniciativa - a.iniciativa || b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
   );
   for (const a of vivos)
     for (const b of vivos)
       // Uroboros sorprende con 100 de diferencia en vez de 150 (Dominus p.79).
       if (
         a.equipo !== b.equipo && !b.previene.has(a) &&
-        haySorpresa(paraSorpresa.get(a)! - paraSorpresa.get(b)!, a.cap.est.diferenciaSorpresa)
+        haySorpresa(a.iniciativa - b.iniciativa, a.cap.est.diferenciaSorpresa)
       ) {
         a.sorprendeA.add(b);
         log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre}.`);

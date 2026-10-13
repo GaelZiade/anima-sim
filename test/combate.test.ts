@@ -61,3 +61,28 @@ describe('combinar tandas', () => {
     expect(r.luchadores[1].asaltoCaidaMedio).toBeCloseTo(sumaAsaltos / (caidos[0] + caidos[1]));
   });
 });
+
+describe('pifia en la iniciativa (Tabla 52)', () => {
+  it('resta 125/100/75 y ordena por ese valor: alguien muy rápido que pifia no actúa necesariamente último', () => {
+    const rapido = ficha('Rápido', { turno: 300 });
+    const lento = ficha('Lento', { turno: 20 });
+    let pifiasVistas = 0;
+    let rapidoPrimeroPifiando = 0;
+    for (let semilla = 1; semilla <= 400; semilla++) {
+      const r = simularCombate([rapido], [lento], { semilla, registrar: true });
+      for (const e of r.registro!) {
+        if (!e.texto.startsWith('Iniciativa:')) continue;
+        // El orden del registro sigue la iniciativa de mayor a menor, pifie quien pifie.
+        const valores = [...e.texto.matchAll(/(?:Rápido|Lento) (-?\d+) \[/g)].map((m) => Number(m[1]));
+        expect(valores).toEqual([...valores].sort((a, b) => b - a));
+        const pifia = /Rápido (-?\d+) \[300(−\d+) \(pifia: (\d)\)\]/.exec(e.texto);
+        if (!pifia) continue;
+        pifiasVistas++;
+        expect(Number(pifia[1])).toBe(300 + { 1: -125, 2: -100, 3: -75 }[Number(pifia[3])]!);
+        if (e.texto.indexOf('Rápido') < e.texto.indexOf('Lento')) rapidoPrimeroPifiando++;
+      }
+    }
+    expect(pifiasVistas).toBeGreaterThan(0);
+    expect(rapidoPrimeroPifiando).toBeGreaterThan(0);
+  });
+});

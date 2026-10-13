@@ -18,7 +18,7 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 
 | Regla | Fuente |
 |---|---|
-| Iniciativa = turno + d100 abierta cada asalto; pifia en turno actúa último | Core p.86, Tabla 52 |
+| Iniciativa = turno + d100 abierta cada asalto; una pifia no tira nivel: resta 125/100/75 (natural 1/2/3) y se ordena con ese valor | Core p.86, Tabla 52 |
 | Sorpresa: diferencia de iniciativa ≥150 → −90 a la defensa en la primera acción del que sorprende | Core p.86 |
 | Ataque y defensa: habilidad + d100 abierta (90+, luego 91+, 92+…; 100 siempre abre) | Core p.10 |
 | Pifia 1-3 (maestría >200: 1-2). Ataque pifiado: falla, contra con bono = nivel de pifia, pierde acciones | Core p.97 |
