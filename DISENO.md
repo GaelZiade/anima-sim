@@ -228,7 +228,10 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
 - **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en
   tandas de 250, cada una con su semilla; cada worker pide la siguiente al terminar, y
   `combinar` (`src/motor/montecarlo.ts`) junta los resultados. Resultados parciales en vivo.
-- **Narrar un combate:** corre uno con registro, con la semilla elegida.
+- **Narrar un combate:** corre uno con registro, con la semilla elegida. Cada tirada muestra sus
+  dados: abiertas con cada d100 (`170+159 (abierta: 93+66)`), pifias con el natural y el nivel,
+  y críticos con daño + d100 contra RF + d100. Abiertas y pifias se resaltan en color. Los dados
+  de una abierta sólo se guardan cuando abre (`TiradaD100.dados`), para no costar en Monte Carlo.
 
 El contenedor de desarrollo queda para tests, simulaciones largas y mediciones.
 

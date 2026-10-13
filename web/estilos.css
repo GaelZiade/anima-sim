@@ -1,5 +1,7 @@
 :root {
   --fondo: #f6f4ef;
+  --abierta: #1d7a3e;
+  --pifia: #b3261e;
   --panel: #ffffff;
   --borde: #ddd8cc;
   --texto: #1f1d1a;
@@ -28,6 +30,8 @@
     --empate: #77736b;
     --fila: #24232a;
     --error: #f08a7e;
+    --abierta: #6fd08f;
+    --pifia: #ff8a80;
     color-scheme: dark;
   }
 }
@@ -151,3 +155,5 @@ td:last-child { white-space: normal; min-width: 160px; }
 .registro h3 { margin: 14px 0 4px; font-size: 14px; color: var(--tenue); }
 .registro p { margin: 2px 0; font-size: 14px; }
 .nota { font-size: 12px; color: var(--tenue); }
+.registro .abierta { color: var(--abierta); font-weight: 600; }
+.registro .pifia { color: var(--pifia); font-weight: 600; }

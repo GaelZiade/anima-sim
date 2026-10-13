@@ -2,7 +2,7 @@
 
 import type { Contexto, Equipo, Ficha, Luchador, OpcionesEscenario } from './modelo';
 import { crearRng, dado, type Rng } from './rng';
-import { tirarD100, tirarD100Cerrada } from './dados';
+import { textoTirada, tirarD100, tirarD100Cerrada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
   bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico,
@@ -154,10 +154,13 @@ function jugarAsalto(ctx: Contexto) {
   const pifiados = new Set<Luchador>();
   const paraSorpresa = new Map<Luchador, number>();
   const desempate = new Map<Luchador, number>();
+  const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
     const t = tirarD100(ctx.rng);
     const turno = turnoFinal(l);
+    // En la iniciativa la pifia no tiene nivel: sólo hace actuar último (Tabla 52).
+    tiradas?.set(l, t.pifia ? `${turno}+${t.natural} (pifia: actúa último)` : textoTirada(turno, t));
     if (t.pifia) {
       pifiados.add(l);
       l.iniciativa = turno + t.natural;
@@ -182,7 +185,7 @@ function jugarAsalto(ctx: Contexto) {
         a.sorprendeA.add(b);
         log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre}.`);
       }
-  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa}${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`);
+  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`);
 
   // 3. Acciones en orden.
   for (const l of orden) {
@@ -246,9 +249,11 @@ function retirarse(ctx: Contexto, l: Luchador) {
   l.ataquesRestantes = 0;
   if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
   if (l.ficha.acrobacias !== undefined) {
-    const acrobacias = l.ficha.acrobacias - penAccion(l) + tirarD100(ctx.rng).valor;
+    const base = l.ficha.acrobacias - penAccion(l);
+    const t = tirarD100(ctx.rng);
+    const acrobacias = base + t.valor;
     const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + tirarD100(ctx.rng).valor) > 40);
-    log(ctx, () => `${l.ficha.nombre} intenta escapar con Acrobacias (${acrobacias})${supera ? ' y lo logra' : ''}.`);
+    log(ctx, () => `${l.ficha.nombre} intenta escapar con Acrobacias (${textoTirada(base, t)} = ${acrobacias})${supera ? ' y lo logra' : ''}.`);
     if (supera) return huir(ctx, l);
   }
   log(ctx, () => `${l.ficha.nombre} intenta retirarse.`);
@@ -359,7 +364,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
 
   if (tA.pifia) {
     atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
-    log(ctx, () => `${etiqueta}: pifia (nivel ${tA.nivelPifia}).`);
+    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
     ofrecerContra(ctx, def, atk, tA.nivelPifia);
     return;
   }
@@ -369,7 +374,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const contras: { quien: Luchador; bono: number }[] = [];
   for (const blanco of blancos) {
     if (!activo(blanco) || !activo(atk)) continue;
-    const r = resolverDefensa(ctx, atk, blanco, habAtk, tA.valor, opcionesAtk, etiqueta);
+    const r = resolverDefensa(ctx, atk, blanco, habAtk, tA, opcionesAtk, etiqueta);
     if (r.contra !== null) {
       contras.push({ quien: r.defensor, bono: r.contra });
       // Parar un ataque en área lo intercepta: los demás no tienen que defenderse.
@@ -401,7 +406,7 @@ interface Golpe {
 }
 
 function resolverDefensa(
-  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, dadoAtk: number, o: Golpe, etiqueta: string,
+  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
   // Un aliado puede defender en su lugar: Guardián (−10, sin necesitar el turno, Dominus p.86) o
   // Apartar (esquiva −30, Guardaespaldas −10; acción activa reservada, Core p.93).
@@ -427,17 +432,17 @@ function resolverDefensa(
 
   let resultado: number;
   if (quienDefiende.ficha.acumulacion) {
-    resultado = habAtk + dadoAtk;
-    log(ctx, () => `${etiqueta}: ${habAtk}+${dadoAtk} contra acumulación → ${resultado}.`);
+    resultado = habAtk + tA.valor;
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`);
   } else {
     const tD = tirarD100(ctx.rng, esMaestro(quienDefiende.ficha.defensa));
     const valorDef = tD.pifia ? tD.natural - tD.nivelPifia : tD.valor;
     quienDefiende.defensasHechas++;
     // La defensa final nunca es negativa.
     const total = Math.max(0, habDef + valorDef);
-    resultado = habAtk + dadoAtk - total;
+    resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    log(ctx, () => `${etiqueta}: ${habAtk}+${dadoAtk} contra ${quien}${habDef}+${valorDef}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${textoTirada(habDef, tD, valorDef)}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
     if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
@@ -515,9 +520,10 @@ function resolverDefensa(
 function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, estado: EstadoMushin | null) {
   const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const res = def.ficha.rf + dadoRf - penAccion(def);
+  const baseRf = def.ficha.rf - penAccion(def);
+  const res = baseRf + dadoRf;
   if (dadoRf === 100 || res >= dif) {
-    log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} contra ${dif}).`);
+    log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
     return;
   }
   const fallo = dif - res;
@@ -525,7 +531,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   def.pv -= 2 * fallo;
   atk.stats.danoCausado += 2 * fallo;
   def.stats.danoRecibido += 2 * fallo;
-  log(ctx, () => `  ${def.ficha.nombre} falla la RF por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`);
+  log(ctx, () => `  ${def.ficha.nombre} falla la RF (${res} [${baseRf}+${dadoRf}] contra ${dif}) por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`);
   if (estado) {
     // Estados de la Tabla del Mushin arcano. Las parálisis duran tantos asaltos como el fracaso.
     if (estado === 'dolor') def.penDolor += 40;
@@ -759,12 +765,19 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   // Enuth: +20 al crítico para dejar inconsciente; arcano +50 (Dominus p.43).
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
   const bono = atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth;
-  const nivel = nivelCritico(dano + bono, tirarD100Cerrada(ctx.rng), !!def.ficha.acumulacion);
+  const dadoCritico = tirarD100Cerrada(ctx.rng);
+  const nivel = nivelCritico(dano + bono, dadoCritico, !!def.ficha.acumulacion);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const res = def.ficha.rf + def.cap.est.bonoRfCritico + dadoRf - penAccion(def);
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico - penAccion(def);
+  const res = baseRf + dadoRf;
+  const tiradas = () => {
+    const suma = dano + bono + dadoCritico;
+    const detalle = suma === nivel ? `${dano + bono}+${dadoCritico}` : `${dano + bono}+${dadoCritico}=${suma}, reducido`;
+    return `Crítico ${nivel} [${detalle}] contra RF ${res} [${baseRf}+${dadoRf}]`;
+  };
   furiaDeOrochi(ctx, def);
   if (dadoRf === 100 || res >= nivel) {
-    log(ctx, () => `  Crítico ${nivel}: ${def.ficha.nombre} lo resiste (${res}).`);
+    log(ctx, () => `  ${tiradas()}: ${def.ficha.nombre} lo resiste${dadoRf === 100 ? ' (100 natural)' : ''}.`);
     return;
   }
   const fallo = nivel - res;
@@ -777,7 +790,7 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   // Un crítico con efectos quita la acción a quien resistía el golpe, a Seraphite arcano y, si pasa
   // de 50, a los seres con acumulación.
   if (def.ficha.acumulacion ? fallo > 50 : resistia || def.modo.seraphite === 3) def.aLaDefensiva = true;
-  log(ctx, () => `  Crítico ${nivel}: ${def.ficha.nombre} falla por ${fallo}${fallo > 50 ? ` (${loc})` : ''}, −${fallo} a toda acción.`);
+  log(ctx, () => `  ${tiradas()}: ${def.ficha.nombre} falla por ${fallo}${fallo > 50 ? ` (${loc})` : ''}, −${fallo} a toda acción.`);
   if (!activo(def)) return;
   // Inconsciencia: sólo negativos o la inconsciencia buscada, nunca la muerte (Core p.92).
   if (m === 'inconsciencia') {

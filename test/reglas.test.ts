@@ -3,7 +3,7 @@ import {
   absorcion, bonoContraataque, danoFinal, esCritico, haySorpresa, maxAtaques, negativoCansancio, nivelCritico,
   PEN_ATAQUE_ADICIONAL, penDefensaAdicional, porcentajeDano,
 } from '../src/motor/reglas';
-import { tirarD100 } from '../src/motor/dados';
+import { textoTirada, tirarD100 } from '../src/motor/dados';
 import { crearLuchador } from '../src/motor/combate';
 import { penAccion } from '../src/motor/calculos';
 import type { Ficha, Rasgos } from '../src/motor/modelo';
@@ -127,4 +127,15 @@ describe('rasgos que cambian los negativos', () => {
   it('dos fuentes de mitad no se aplican dos veces', () => expect(con({ ...inmunidad, ...eliminacion }, 1)).toBe(-40));
   it('Esencia de vacío anula cansancio y dolor de críticos, no el deterioro físico', () =>
     expect(con({ habilidadesKi: ['Esencia de Vacio'] }, 0, 40, 40)).toBe(-40));
+});
+
+describe('texto de las tiradas (narración)', () => {
+  it('muestra los dados de una abierta y el detalle de una pifia', () => {
+    expect(textoTirada(170, tirarD100(dadosFijos(47)))).toBe('170+47');
+    expect(textoTirada(170, tirarD100(dadosFijos(95, 12)))).toBe('170+107 (abierta: 95+12)');
+    expect(textoTirada(170, tirarD100(dadosFijos(95, 93, 12)))).toBe('170+200 (abierta ×2: 95+93+12)');
+    const pifia = tirarD100(dadosFijos(2, 37));
+    expect(textoTirada(150, pifia, pifia.natural - pifia.nivelPifia)).toBe('150−35 (pifia: 2, nivel 37)');
+    expect(tirarD100(dadosFijos(47)).dados).toBeUndefined();
+  });
 });

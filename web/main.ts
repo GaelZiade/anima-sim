@@ -345,6 +345,14 @@ async function simular() {
   }
 }
 
+/** Marca las tiradas abiertas y las pifias del registro para verlas de un vistazo. */
+function resaltarTiradas(texto: string): (Node | string)[] {
+  return texto.split(/(\((?:abierta|pifia)[^)]*\)|¡pifia!)/).map((parte, i) => {
+    if (i % 2 === 0) return parte;
+    return crear('span', { className: parte.includes('abierta') ? 'abierta' : 'pifia' }, parte);
+  });
+}
+
 function narrar() {
   const esc = validar();
   if (!esc) return;
@@ -359,7 +367,7 @@ function narrar() {
       asalto = e.asalto;
       nodos.push(crear('h3', {}, `Asalto ${asalto}`));
     }
-    nodos.push(crear('p', {}, e.texto));
+    nodos.push(crear('p', {}, ...resaltarTiradas(e.texto)));
   }
   const ganador = r.ganador === 'empate' ? 'Empate' : `Gana el equipo ${r.ganador}`;
   nodos.push(crear('h3', {}, `${ganador} en ${r.asaltos} asaltos (semilla ${semilla})`));
