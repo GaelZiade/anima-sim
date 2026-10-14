@@ -173,9 +173,27 @@ export const AMENAZADO: ModEstado = { ataque: -20, parada: -120, esquiva: -120, 
 /** Suma de los modificadores por estado de un luchador. */
 const SIN_ESTADOS: Readonly<ModEstado> = Object.freeze({ ataque: 0, parada: 0, esquiva: 0, turno: 0 });
 
+/** Tabla 43: levitando, vuelo y carga. */
+const LEVITANDO: ModEstado = { ataque: -20, parada: -20, esquiva: -40, turno: 0 };
+const VUELO_7: ModEstado = { ataque: 10, parada: 10, esquiva: 10, turno: 10 };
+const VUELO_15: ModEstado = { ataque: 15, parada: 10, esquiva: 20, turno: 10 };
+const CARGANDO: ModEstado = { ataque: 10, parada: -10, esquiva: -20, turno: 0 };
+
+/**
+ * Cómo se mueve en el aire: el vuelo (7 o más) necesita "un amplio espacio para maniobrar", así que
+ * en un espacio reducido no da bono (Tabla 43, Core p.90).
+ */
+function enElAire(l: Luchador): ModEstado | null {
+  const vuelo = l.ficha.tipoVuelo ?? 0;
+  if (vuelo >= 7 && !l.entorno.espacioReducido) return vuelo >= 15 ? VUELO_15 : VUELO_7;
+  if (l.ficha.estados?.levitando) return LEVITANDO;
+  return null;
+}
+
 export function modEstados(l: Luchador): Readonly<ModEstado> {
-  // Lo más común: ni derribado, ni paralizado, ni apresando.
-  if (!l.derribado && l.paralisis === 0 && l.paralisisTurnos <= 0 && !l.apresando) return SIN_ESTADOS;
+  const aire = l.ficha.tipoVuelo || l.ficha.estados?.levitando ? enElAire(l) : null;
+  // Lo más común: ni derribado, ni paralizado, ni apresando, ni en el aire, ni cargando.
+  if (!l.derribado && l.paralisis === 0 && l.paralisisTurnos <= 0 && !l.apresando && !aire && !l.cargando) return SIN_ESTADOS;
   const m: ModEstado = { ataque: 0, parada: 0, esquiva: 0, turno: 0 };
   const sumar = (x: ModEstado, sinDefensa = false) => {
     m.ataque += x.ataque;
@@ -187,10 +205,13 @@ export function modEstados(l: Luchador): Readonly<ModEstado> {
   };
   const e = l.cap.est;
   if (l.derribado && !e.derribadoSinPenalizador) sumar(DERRIBADO);
-  // Paralización inducida (Mushin arcano), aparte de la de una presa.
-  if (l.paralisisTurnos > 0 && l.paralisisInducida > l.paralisis) sumar(PARALISIS[l.paralisisInducida as 1 | 2 | 3], e.defensaSinParalisis);
-  // Quien apresa queda en parálisis menor (salvo Pankration avanzado).
-  const paralisis = Math.max(l.paralisis, l.apresando && !e.sinPenalizadorApresando ? 1 : 0) as 0 | 1 | 2 | 3;
+  // Las parálisis no se suman: vale la peor entre la de una presa (sufrida o hecha: quien apresa
+  // queda en parálisis menor, salvo Pankration avanzado) y la inducida por Mushin arcano.
+  const deLaPresa = Math.max(l.paralisis, l.apresando && !e.sinPenalizadorApresando ? 1 : 0);
+  const inducida = l.paralisisTurnos > 0 ? l.paralisisInducida : 0;
+  const paralisis = Math.max(deLaPresa, inducida) as 0 | 1 | 2 | 3;
   if (paralisis > 0) sumar(PARALISIS[paralisis as 1 | 2 | 3], e.defensaSinParalisis && paralisis < 3);
+  if (aire) sumar(aire);
+  if (l.cargando) sumar(CARGANDO);
   return m;
 }

@@ -123,3 +123,47 @@ armas sin Presa Inusual, no desarma a quien pelea sin armas, no apunta a puntos 
 Eterna ni hace maniobras contra acumulación, declara modos y Prever Sorpresa antes de la iniciativa,
 usa Ataque Final una vez y por debajo de la mitad de los PV, y prepara Godhand sólo si todavía puede
 atacar.
+
+## 6. Modificadores en el flujo del combate (segunda pasada)
+
+Revisión de la Tabla 43 fila por fila y de cuándo se aplica cada modificador en `atacar` →
+`resolverDefensa`, con pruebas que leen los números del registro (`test/flujo.test.ts`).
+
+| # | Qué estaba mal | Qué dice el manual | Dónde |
+|---|---|---|---|
+| 16 | **Sorpresa**: el −90 nunca llegaba a la defensa. La sorpresa se borraba al declarar el ataque, antes de que el sorprendido se defendiera | "Un personaje sorprendido tiene un penalizador de –90 a cualquier acción enfrentada […] incluyendo su capacidad de defenderse de un ataque. Este penalizador queda limitado a la primera acción del sujeto que consigue la sorpresa." Core p.86. Ahora se gasta al terminar esa acción (todos los blancos de un área incluidos), antes de las contras | `combate.ts` |
+| 17 | **Acciones activas**: levantarse, zafarse y moverse más de ¼ daban −25 en total | "Por cada una que realice con posterioridad sufrirá un penalizador acumulable de –25." Core p.87 | `calculos.ts`, `combate.ts` |
+| 18 | **Parálisis**: la inducida (Mushin arcano) y la de una presa se sumaban | Son grados de una misma situación de la Tabla 43: vale la peor | `maniobras.ts` |
+| 19 | **Acumulación sorprendida**: absorbía entero | "Si un ser con acumulación recibe un ataque con sorpresa disminuye a la mitad el valor de su Absorción." Core p.99 | `calculos.ts` |
+
+Narración: el registro muestra primero la iniciativa y después quién sorprende a quién (con la
+diferencia), y primero la acumulación de Ki y después la técnica que se ejecuta con ella.
+
+Verificado y correcto:
+
+- Flanco −10/−30, espalda −30/−80, posición superior +20 contra derribado, derribado −30 y −10 al
+  turno, parálisis −20/−80/−200, amenazado sólo contra quien amenaza (Core p.90), desenfundar −25,
+  espacio reducido, defensas adicionales −30/−50/−70/−90, resistir −80 con mínimo 0, defensa total +30.
+- **Apuntar sin armas a −30**: correcto. El combate desarmado es Precisa (Tabla 30) y Precisa "permite
+  al personaje disminuir a la mitad los penalizadores de los golpes apuntados" (Core p.76). El −60 de
+  la cabeza queda en −30.
+Agregado después (lo que faltaba de la Tabla 43 y los estados del capítulo 14 que son modificadores):
+
+- **Ceguera parcial y absoluta** (Tabla 43), por estar cegado (estado del luchador) o por la oscuridad
+  del escenario (penumbra, oscuridad total, oscuridad mágica). Visión nocturna ignora la penumbra y
+  reduce a la mitad la oscuridad total (Core p.20); la completa anula la natural (Core p.318).
+  Detección del Ki deja la absoluta en parcial y reduce a la mitad flanco y espalda (Dominus p.11; se
+  supone que la tirada de detección sale). Un área de Ki no sufre la ceguera del atacante.
+- **Combinación con flanco y espalda** según la Tabla 1 del Dominus (p.11) para los dos grados de
+  ceguera, al atacar y al defenderse. Antes sólo estaba la absoluta de Velez a la defensa.
+- **Carga** (+10 / −10 / −20, sin el −25 por correr): se declara antes de la iniciativa si corrió
+  hacia el enemigo el asalto anterior y no está trabado (Core p.90). Con la distancia inicial por
+  defecto (10 m) casi nunca se da: se llega en el primer asalto.
+- **Levitando** (−20 / −20 / −40) y **vuelo** 7 a 14 (+10 a todo) o 15+ (+15 / +10 / +20, +10 al
+  turno). El vuelo no da bono en un espacio reducido: pide "un amplio espacio para maniobrar".
+- **Enemigo pequeño** (−10) y **diminuto** (−20 al ataque, −10 a pararlo), salvo Ataque en área.
+  Tamaño = Fuerza + Constitución (Core p.14) o el que diga la ficha; sin esas características no se
+  compara.
+- **Miedo** (−60) y **Dolor** (−20 / −40 / −80) como estados que duran todo el combate (Core
+  p.232-233).
+- En la página: selector de luz en Opciones y un tercer selector por luchador con su estado.

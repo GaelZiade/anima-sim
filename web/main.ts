@@ -19,6 +19,8 @@ interface Integrante {
   arma: string;
   /** Vacío: el de la ficha. */
   perfil: Perfil | '';
+  /** Estado con el que empieza (ver ESTADOS); vacío: normal. Falta en lo guardado antes. */
+  estado?: string;
 }
 
 interface Estado {
@@ -31,8 +33,25 @@ interface Estado {
 interface EscenarioJson {
   distanciaInicial?: number;
   opciones?: OpcionesEscenario;
-  equipoA: (Ficha | { hoja: string; arma?: string; perfil?: Perfil; nombre?: string })[];
+  equipoA: (Ficha | { hoja: string; arma?: string; perfil?: Perfil; nombre?: string; estado?: string })[];
   equipoB: EscenarioJson['equipoA'];
+}
+
+/** Estados de la Tabla 43 y del capítulo 14 del Core con que puede empezar un luchador. */
+const ESTADOS: [string, string, (f: Ficha) => Ficha][] = [
+  ['', 'Sin estados', (f) => f],
+  ['cegueraParcial', 'Ceguera parcial', (f) => ({ ...f, estados: { ...f.estados, ceguera: 'parcial' } })],
+  ['cegueraAbsoluta', 'Ceguera absoluta', (f) => ({ ...f, estados: { ...f.estados, ceguera: 'absoluta' } })],
+  ['miedo', 'Miedo (−60)', (f) => ({ ...f, estados: { ...f.estados, miedo: true } })],
+  ['dolor', 'Dolor (−40)', (f) => ({ ...f, estados: { ...f.estados, dolor: 'normal' } })],
+  ['dolorExtremo', 'Dolor extremo (−80)', (f) => ({ ...f, estados: { ...f.estados, dolor: 'extremo' } })],
+  ['levitando', 'Levitando', (f) => ({ ...f, estados: { ...f.estados, levitando: true } })],
+  ['vuelo7', 'Vuelo 7 a 14', (f) => ({ ...f, tipoVuelo: 7 })],
+  ['vuelo15', 'Vuelo 15 o más', (f) => ({ ...f, tipoVuelo: 15 })],
+];
+
+function conEstado(f: Ficha, estado = ''): Ficha {
+  return (ESTADOS.find(([v]) => v === estado)?.[2] ?? ((x: Ficha) => x))(f);
 }
 
 const PERFILES: [Perfil | '', string][] = [
@@ -83,7 +102,7 @@ function fichasDe(equipo: Integrante[], vistos: Map<string, number>): Ficha[] {
   return equipo.flatMap((i) => {
     const e = buscar(i.clave);
     if (!e) return [];
-    const f = fichaBase(e, i.arma, i.perfil);
+    const f = conEstado(fichaBase(e, i.arma, i.perfil), i.estado);
     const n = (vistos.get(f.id) ?? 0) + 1;
     vistos.set(f.id, n);
     return [n === 1 ? f : { ...f, id: `${f.id}-${n}`, nombre: `${f.nombre} (${n})` }];
@@ -94,6 +113,7 @@ function escenarioActual() {
   const vistos = new Map<string, number>();
   const selectorLuna = $<HTMLSelectElement>('faseLunar');
   const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
+  const oscuridad = $<HTMLSelectElement>('oscuridad').value as OpcionesEscenario['oscuridad'] | '';
   const opciones: OpcionesEscenario = {
     rotura: marcado('rotura'),
     huida: marcado('huida'),
@@ -101,6 +121,7 @@ function escenarioActual() {
     armasEnfundadas: marcado('armasEnfundadas'),
     desequilibrio: marcado('desequilibrio'),
     ...(fase ? { faseLunar: fase } : {}),
+    ...(oscuridad ? { oscuridad } : {}),
   };
   return {
     equipoA: fichasDe(estado.equipoA, vistos),
@@ -154,14 +175,14 @@ async function cargarArchivos(archivos: File[]) {
 
 function aplicarEscenario(esc: EscenarioJson): string[] {
   const errores: string[] = [];
-  const integrantes = (lista: EscenarioJson['equipoA']): Integrante[] => lista.flatMap((x) => {
+  const integrantes = (lista: EscenarioJson['equipoA']): Integrante[] => lista.flatMap((x): Integrante[] => {
     if ('hoja' in x) {
       const clave = nombreDeArchivo(x.hoja);
       if (!buscar(clave)) {
         errores.push(`Falta cargar la planilla "${clave}"`);
         return [];
       }
-      return [{ clave, arma: x.arma ?? '', perfil: x.perfil ?? '' }];
+      return [{ clave, arma: x.arma ?? '', perfil: x.perfil ?? '', estado: x.estado ?? '' }];
     }
     const clave = `ficha:${x.id}`;
     agregarALaBiblioteca({ clave, nombre: x.nombre, tipo: 'ficha', ficha: x });
@@ -173,6 +194,7 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
   const o = esc.opciones ?? {};
   for (const id of ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const) ($(id) as HTMLInputElement).checked = !!o[id];
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
+  ($('oscuridad') as HTMLSelectElement).value = o.oscuridad ?? '';
   return errores;
 }
 
@@ -225,7 +247,7 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
   }
   lista.replaceChildren(...integrantes.map((i, n) => {
     const e = buscar(i.clave)!;
-    const cambiar = (campo: 'arma' | 'perfil') => (v: string) => {
+    const cambiar = (campo: 'arma' | 'perfil' | 'estado') => (v: string) => {
       (i as unknown as Record<string, string>)[campo] = v;
       guardar();
     };
@@ -242,7 +264,8 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
       crear('button', { type: 'button', className: 'chico', onclick: quitar, title: 'Sacar del equipo' }, '×'),
       crear('div', { className: 'campos' },
         selector(armas, i.arma, cambiar('arma')),
-        selector(PERFILES, i.perfil, cambiar('perfil'))));
+        selector(PERFILES, i.perfil, cambiar('perfil')),
+        selector(ESTADOS.map(([v, texto]): [string, string] => [v, texto]), i.estado ?? '', cambiar('estado'))));
   }));
 }
 

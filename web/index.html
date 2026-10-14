@@ -44,6 +44,14 @@
           <label>Hilos <input type="number" id="hilos" min="1" max="64" value="4"></label>
           <label>Distancia inicial (m) <input type="number" id="distancia" min="0" value="10"></label>
           <label>Semilla <input type="number" id="semilla" min="1" value="1"></label>
+          <label>Luz
+            <select id="oscuridad">
+              <option value="">Buena luz</option>
+              <option value="penumbra">Penumbra (ceguera parcial)</option>
+              <option value="total">Oscuridad total (ceguera absoluta)</option>
+              <option value="magica">Oscuridad mágica</option>
+            </select>
+          </label>
           <label>Fase lunar
             <select id="faseLunar">
               <option value="">De día</option>

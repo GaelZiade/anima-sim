@@ -15,8 +15,6 @@ import { localizacionArmadura, type Ranura } from './rasgos';
 import type { ModKi } from './ki';
 
 export const ALCANCE = 2;
-/** Ceguera absoluta (Tabla 43) contra ataques invisibles de Velez arcano. */
-const PEN_CEGUERA = 80;
 /** Atacar con el crítico secundario del arma (Core p.92). */
 const PEN_CRITICO_SECUNDARIO = 10;
 /** Prever Sorpresa: −40 a la primera acción enfrentada contra cada adversario elegido (Dominus p.14). */
@@ -48,6 +46,8 @@ export function puedeActuar(l: Luchador): boolean {
  */
 /** Legado de la Luna: +5 llena, +10 menguante, +15 creciente, +20 nueva, +30 eclipse (Dominus p.79). */
 const BONO_LUNAR = { llena: 5, menguante: 10, creciente: 15, nueva: 20, eclipse: 30 } as const;
+const PEN_MIEDO = 60;
+const PEN_DOLOR = { leve: 20, normal: 40, extremo: 80 } as const;
 
 export function penAccion(l: Luchador): number {
   const c = l.cap;
@@ -56,11 +56,15 @@ export function penAccion(l: Luchador): number {
   const luna = c.est.tsukiyomi && fase ? BONO_LUNAR[fase] : 0;
   // Sangre Eterna: consciente con PV negativos, con un negativo igual a esos PV (Dominus p.80).
   const negativos = c.est.sangreEterna && l.pv < 0 ? -l.pv : 0;
-  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + negativos - luna;
+  // Miedo: −60 a toda acción que no sea huir (Core p.232); pelear no lo es.
+  const miedo = l.ficha.estados?.miedo ? PEN_MIEDO : 0;
+  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + negativos + miedo - luna;
+  // Dolor como estado (Core p.233): no baja con los asaltos como el de los críticos.
+  const estadoDolor = l.ficha.estados?.dolor ? PEN_DOLOR[l.ficha.estados.dolor] : 0;
   let cansancio = negativoCansancio(l.cansancio, max) * (c.dobleCansancio ? 2 : 1);
   if (c.mitadCansancio) cansancio = Math.trunc(cansancio / 2);
   const dolor = c.mitadDolorCritico ? Math.trunc(l.penDolor / 2) : l.penDolor;
-  return dolor + l.penFisico + cansancio + negativos - luna;
+  return dolor + estadoDolor + l.penFisico + cansancio + negativos + miedo - luna;
 }
 
 /**
@@ -121,19 +125,99 @@ export function posicionDe(atacante: Luchador, defensor: Luchador): Posicion {
   return i < 0 ? posicionPorOrden(defensor.trabados.length) : posicionPorOrden(i);
 }
 
+type Campo = 'ataque' | 'parada' | 'esquiva';
+
+/** Ceguera parcial y absoluta (Tabla 43). */
+const CEGUERA: Record<1 | 2, Record<Campo, number>> = {
+  1: { ataque: -30, parada: -30, esquiva: -15 },
+  2: { ataque: -100, parada: -80, esquiva: -80 },
+};
+
+/** Posición y ceguera juntas, en vez de sumarse (Dominus p.11, Tabla 1). */
+const POSICION_Y_CEGUERA: Record<'flanco' | 'espalda', Record<1 | 2, Record<Campo, number>>> = {
+  flanco: { 1: { ataque: -40, parada: -50, esquiva: -40 }, 2: { ataque: -100, parada: -100, esquiva: -100 } },
+  espalda: { 1: { ataque: -40, parada: -90, esquiva: -80 }, 2: { ataque: -100, parada: -120, esquiva: -120 } },
+};
+
+export interface Ceguera {
+  /** 0 ve, 1 ceguera parcial, 2 absoluta. */
+  nivel: 0 | 1 | 2;
+  /** Parte del penalizador que sufre (Visión nocturna en la oscuridad total: la mitad). */
+  factor: number;
+  /** Localiza al rival sin verlo (Detección del Ki): flanco y espalda a la mitad (Dominus p.11). */
+  localiza: boolean;
+}
+const SIN_CEGUERA: Ceguera = { nivel: 0, factor: 1, localiza: false };
+
+/**
+ * Ceguera por la oscuridad del escenario. La Visión nocturna (ventaja) ignora la penumbra y reduce a la
+ * mitad la carencia absoluta de luz y la oscuridad mágica (Core p.20); la completa anula la oscuridad
+ * natural (Core p.318), y ante la mágica se toma como la ventaja.
+ */
+function cegueraPorOscuridad(l: Luchador): Ceguera {
+  const o = l.entorno.oscuridad;
+  if (!o) return SIN_CEGUERA;
+  const vision = l.cap.est.visionNocturna;
+  if (o === 'penumbra') return vision ? SIN_CEGUERA : { nivel: 1, factor: 1, localiza: false };
+  if (o === 'total' && vision === 2) return SIN_CEGUERA;
+  return { nivel: 2, factor: vision ? 0.5 : 1, localiza: false };
+}
+
+/**
+ * Cuánto no ve `l` a `rival`: lo peor entre estar cegado (Core p.233), la oscuridad y un ataque
+ * invisible. Con Detección del Ki lo localiza: ceguera parcial en vez de absoluta y la mitad de los
+ * penalizadores de flanco y espalda (Dominus p.11). Se supone que la tirada de detección sale.
+ */
+export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
+  const propia = l.ficha.estados?.ceguera;
+  const casos: Ceguera[] = [
+    propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,
+    cegueraPorOscuridad(l),
+    invisible ? { nivel: 2, factor: 1, localiza: false } : SIN_CEGUERA,
+  ];
+  const valor = (c: Ceguera) => (c.nivel ? CEGUERA[c.nivel].ataque * c.factor : 0);
+  const peor = casos.reduce((a, b) => (valor(b) < valor(a) ? b : a));
+  if (peor.nivel === 2 && l.cap.est.deteccionKi) return { nivel: 1, factor: 1, localiza: true };
+  return peor;
+}
+
+/** Posición (ya con lo que la reduce) más ceguera, con los valores combinados de la Tabla 1 del Dominus. */
+function conCeguera(pos: Posicion, posicion: number, c: Ceguera, campo: Campo): number {
+  if (c.nivel === 0) return posicion;
+  const p = c.localiza ? Math.trunc(posicion / 2) : posicion;
+  const suma = p + CEGUERA[c.nivel][campo] * c.factor;
+  if (pos === 'frente' || posicion === 0) return suma;
+  return Math.max(suma, POSICION_Y_CEGUERA[pos][c.nivel][campo]);
+}
+
 /**
  * Penalizador de flanco o espalda al atacar (Tabla 43): lo sufre quien ataca a un rival que tiene en
  * su lateral o detrás, no quien está ahí (Core p.90: "−30 a parar […] y −10 para atacarlo"). Soo Bahk
  * avanzado ataca a sus laterales con habilidad plena; Hanja, en cualquier posición (Dominus p.38, p.43).
+ * Se combina con la ceguera; un área de Ki que cubre toda la zona no la sufre (Dominus p.11).
  */
-function modPosicionAtaque(atk: Luchador, def: Luchador): number {
+function situacionAtaque(atk: Luchador, def: Luchador, ki: ModKi | undefined): number {
   const i = atk.trabados.indexOf(def);
-  if (i < 0) return 0;
-  const pos = posicionPorOrden(i);
+  const pos = i < 0 ? 'frente' : posicionPorOrden(i);
   const e = atk.cap.est;
-  if (pos === 'flanco') return e.factorFlanco === 0 ? 0 : MOD_POSICION.flanco.ataque;
-  if (pos === 'espalda') return e.factorEspalda === 0 ? 0 : MOD_POSICION.espalda.ataque;
-  return 0;
+  const factor = pos === 'flanco' ? e.factorFlanco : pos === 'espalda' ? e.factorEspalda : 1;
+  const posicion = factor === 0 ? 0 : MOD_POSICION[pos].ataque;
+  return conCeguera(pos, posicion, ki?.area ? SIN_CEGUERA : cegueraContra(atk, def), 'ataque');
+}
+
+/** Tamaño (Core p.14): el de la ficha, o Fuerza + Constitución; null si no hay con qué calcularlo. */
+function tamanoDe(l: Luchador): number | null {
+  if (l.ficha.tamano) return l.ficha.tamano;
+  const a = l.ficha.atributos;
+  return a?.FUE !== undefined && a?.CON !== undefined ? a.FUE + a.CON : null;
+}
+
+/** El rival es 1 pequeño (la mitad del Tamaño o menos) o 2 diminuto (una décima parte), Tabla 43. */
+function rivalChico(l: Luchador, rival: Luchador): 0 | 1 | 2 {
+  const yo = tamanoDe(l);
+  const el = tamanoDe(rival);
+  if (yo === null || el === null) return 0;
+  return el * 10 <= yo ? 2 : el * 2 <= yo ? 1 : 0;
 }
 
 export interface OpcionesAtaque {
@@ -181,7 +265,11 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   // Selene arcano contraataca "con Habilidad de Ataque plena": esas contras no cuentan como ataques,
   // así que no arrastran el penalizador de los ataques adicionales (Dominus p.39).
   const pen = o.esContra && e.contrasIlimitadas ? 0 : (declarados - 1) * atk.cap.penPorAtaque + ranura.pen;
-  const activa = atk.movioActivo || o.conMovimientoActivo ? PEN_ACCION_ACTIVA : 0;
+  // Cada acción activa distinta hecha antes en el asalto resta 25, acumulable (Core p.87).
+  // En carga correr no cuenta como acción activa (Core p.90).
+  const activa = PEN_ACCION_ACTIVA * (atk.accionesActivas + (o.conMovimientoActivo && !atk.movioActivo && !atk.cargando ? 1 : 0));
+  // Enemigo pequeño −10, diminuto −20; desaparece con un Ataque en área (Core p.91).
+  const chico = o.maniobra === 'area' || ki?.area ? 0 : [0, 10, 20][rivalChico(atk, def)];
   const tipo = o.tipo ?? perfil.tipoAtaque;
   const secundario = tipo !== perfil.tipoAtaque && !e.criticoSecundarioLibre ? PEN_CRITICO_SECUNDARIO : 0;
   // Ataque Final: +20, y cada punto de cansancio da +20 en vez de +15 (Dominus p.86).
@@ -193,7 +281,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) - (ki?.precision ?? 0)) +
     (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
-    (atk.paralisis === 3 ? 0 : modPosicionAtaque(atk, def)) + modEstados(atk).ataque + desequilibrio(atk, def) +
+    (atk.paralisis === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
     // Contra un rival derribado se suma la posición superior (Tabla 43, Dominus p.38).
     (def.derribado ? BONO_POSICION_SUPERIOR : 0) -
     (atk.previenePendiente.has(def) ? PEN_PREVER_SORPRESA : 0) +
@@ -233,19 +321,16 @@ function noVeElAtaque(def: Luchador, atk: Luchador): boolean {
   return atk.cap.est.intangible && !def.cap.est.veEnergia;
 }
 
-/** Flanco o espalda + ceguera absoluta, a la defensa (Dominus p.11, Tabla 1). */
-const POSICION_Y_CEGUERA: Record<Posicion, number> = { frente: -PEN_CEGUERA, flanco: -100, espalda: -120 };
 
 /**
  * Posición y ceguera a la defensa, combinadas según la Tabla 1 del Dominus (p.11): flanco + ceguera
  * absoluta −100 y espalda + ceguera absoluta −120 en vez de sumarse; con parálisis completa quedan en
  * su −200 (ni posición ni ceguera suman más).
  */
-function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number): number {
+function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number, campo: 'parada' | 'esquiva'): number {
   if (def.paralisis === 3) return 0;
   const posicion = MOD_POSICION[pos].defensa * factorPos;
-  if (!noVeElAtaque(def, atk)) return posicion;
-  return Math.max(posicion - PEN_CEGUERA, POSICION_Y_CEGUERA[pos]);
+  return conCeguera(pos, posicion, cegueraContra(def, atk, noVeElAtaque(def, atk)), campo);
 }
 
 /**
@@ -280,7 +365,9 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   let h =
     base - penDefensaAdicional(previas) - penAccion(def) - penEspacio(def, campo) -
     (sinArma ? 0 : penDesenfundar(def, campo)) +
-    situacionDefensa(def, atk, pos, factorPos) + desequilibrio(def, atk) +
+    situacionDefensa(def, atk, pos, factorPos, campo) + desequilibrio(def, atk) -
+    // Parar a un enemigo diminuto: −10 (Tabla 43).
+    (campo === 'parada' && rivalChico(def, atk) === 2 ? 10 : 0) +
     ((def.ficha.tipoDefensa ?? 'parada') === 'parada' ? est.parada : est.esquiva) +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) -
     (def.previenePendiente.has(atk) ? PEN_PREVER_SORPRESA : 0) +
@@ -316,7 +403,9 @@ export function absorcionContra(
   // (Dominus p.60, Core p.83).
   const extra = kiDef?.ta ?? 0;
   if (extra) ta = Math.max(ta, extra) + Math.floor(Math.min(ta, extra) / 2);
-  return absorcion(Math.max(0, ta - reduccion));
+  const abs = absorcion(Math.max(0, ta - reduccion));
+  // Un ser con acumulación sorprendido recibe el golpe de lleno: Absorción a la mitad (Core p.99).
+  return def.ficha.acumulacion && atk.sorprendeA.has(def) ? Math.floor(abs / 2) : abs;
 }
 
 export type ZonaArmadura = 'cuerpo' | 'cabeza' | 'extremidad';

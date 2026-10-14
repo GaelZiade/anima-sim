@@ -26,7 +26,7 @@ interface DesdeHoja {
 
 interface Escenario {
   distanciaInicial?: number;
-  /** Reglas opcionales: rotura, espacioReducido, armasEnfundadas, faseLunar, huida, desequilibrio. */
+  /** Reglas opcionales: rotura, espacioReducido, oscuridad, armasEnfundadas, faseLunar, huida, desequilibrio. */
   opciones?: OpcionesEscenario;
   equipoA: (Ficha | DesdeHoja)[];
   equipoB: (Ficha | DesdeHoja)[];

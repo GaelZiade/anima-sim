@@ -51,7 +51,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     trabados: [],
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
-    movioActivo: false, metrosMovidos: 0, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
+    movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
     derribado: false, paralisis: 0, apresadoPor: null, apresando: null, desarmado: false,
     paralisisInducida: 0, paralisisTurnos: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
@@ -125,7 +125,8 @@ function jugarAsalto(ctx: Contexto) {
   const vivos = ctx.luchadores.filter(activo);
   for (const l of vivos) {
     l.haActuado = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
-    l.movioActivo = false; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
+    l.movioAsaltoAnterior = l.metrosMovidos > 0;
+    l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
     l.planResistir = null;
     l.repitioControl = false;
     // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
@@ -146,6 +147,11 @@ function jugarAsalto(ctx: Contexto) {
     l.bonoVariableEn = d.bonoVariableEn;
     l.previene = new Set(d.preverSorpresa);
     l.previenePendiente = new Set(d.preverSorpresa);
+    // Carga (Tabla 43, Core p.90): se declara antes de la iniciativa, corriendo hacia un enemigo desde
+    // el asalto anterior y sin estar trabado. Quien puede cargar y va a atacar, carga.
+    l.cargando = !d.defensaTotal && l.movioAsaltoAnterior && !l.derribado && !l.apresadoPor &&
+      !ctx.luchadores.some((e) => e.equipo !== l.equipo && activo(e) && enAlcance(l, e));
+    if (l.cargando) log(ctx, () => `${l.ficha.nombre} carga.`);
     if (d.preverSorpresa.length) log(ctx, () => `${l.ficha.nombre} prevé la sorpresa de ${d.preverSorpresa.map((e) => e.ficha.nombre).join(', ')}.`);
     if (d.despertarOrochi && l.orochi === 0) {
       l.orochi = 1;
@@ -169,13 +175,13 @@ function jugarAsalto(ctx: Contexto) {
       for (const t of decision.soltar) log(ctx, () => `${l.ficha.nombre} deja de mantener ${t.nombre}.`);
       for (const t of decision.liberar) log(ctx, () => `${l.ficha.nombre} deja ir ${t.nombre}, que tenía en espera.`);
       empezarAsalto(l, decision, penAccion(l), ctx.asalto);
+      if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
       const tecnica = ia.tecnicaDeTurno(ctx, l);
       if (tecnica) {
         ejecutar(l, tecnica);
         l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
-        log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre}.`);
+        log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre} [Ki ${textoKi(l)}].`);
       }
-      if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
     }
   }
 
@@ -206,6 +212,7 @@ function jugarAsalto(ctx: Contexto) {
       Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
       b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
   );
+  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`);
   for (const a of vivos)
     for (const b of vivos)
       // Uroboros sorprende con 100 de diferencia en vez de 150 (Dominus p.79).
@@ -214,9 +221,8 @@ function jugarAsalto(ctx: Contexto) {
         haySorpresa(paraSorpresa.get(a)! - paraSorpresa.get(b)!, a.cap.est.diferenciaSorpresa)
       ) {
         a.sorprendeA.add(b);
-        log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre}.`);
+        log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre} (${paraSorpresa.get(a)! - paraSorpresa.get(b)!} de diferencia).`);
       }
-  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`);
 
   // 3. Acciones en orden.
   for (const l of orden) {
@@ -251,10 +257,10 @@ function turno(ctx: Contexto, l: Luchador) {
     return;
   }
   if (puedeActuar(l)) {
-    // Levantarse es una acción activa: lo siguiente va con −25.
+    // Levantarse es una acción activa: lo siguiente va con −25 (acumulable con moverse, Core p.87).
     if (l.derribado) {
       l.derribado = false;
-      l.movioActivo = true;
+      l.accionesActivas++;
       log(ctx, () => `${l.ficha.nombre} se levanta.`);
     }
     if (l.apresadoPor && !zafarse(ctx, l)) l.ataquesRestantes = 0;
@@ -341,8 +347,14 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
   }
   l.metrosMovidos += paso;
   ctx.movimientosEnAsalto++;
-  if (l.metrosMovidos > total / 4) l.movioActivo = true;
-  log(ctx, () => `${l.ficha.nombre} avanza ${paso.toFixed(1)} m${l.movioActivo ? ' (acción activa, −25)' : ''}.`);
+  const yaActivo = l.movioActivo;
+  if (l.metrosMovidos > total / 4 && !yaActivo) {
+    l.movioActivo = true;
+    // En carga, correr no penaliza el ataque (Core p.90).
+    if (!l.cargando) l.accionesActivas++;
+  }
+  const nota = l.movioActivo && !yaActivo ? (l.cargando ? ' (a la carga)' : ' (acción activa, −25)') : '';
+  log(ctx, () => `${l.ficha.nombre} avanza ${paso.toFixed(1)} m${nota}.`);
   for (const e of ctx.luchadores) {
     if (e.equipo === l.equipo || !activo(e) || !enAlcance(l, e)) continue;
     if (!e.trabados.includes(l)) e.trabados.push(l);
@@ -405,7 +417,6 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   if (!a.esContra && atk.cap.est.xingQuan) atk.objetivoUnico = def;
   const godhand = atk.godhandListo;
   atk.godhandListo = false;
-  atk.sorprendeA.clear(); // la sorpresa sólo vale para su primera acción
   atk.previenePendiente.delete(def);
 
   const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
@@ -418,6 +429,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque);
     if (tA.pifia) {
       atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
+      atk.sorprendeA.clear();
       log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
       ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
@@ -442,8 +454,12 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     if (def.amenazadoPor === atk && m !== 'engatillar') def.amenazadoPor = null;
     // Ataque combinado (Leo): si la hoja alcanzó el cuerpo, dispara a bocajarro antes de cualquier contra.
     if (m === 'combinado' && impactoCombinado && atk.balas > 0 && activo(atk) && activo(def)) disparoCombinado(ctx, atk, def);
+    // La sorpresa vale sólo para su primera acción (Core p.86): se gasta al resolverla, después de
+    // que el sorprendido se defendió con su −90 y antes de cualquier contra.
+    atk.sorprendeA.clear();
     for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
   }
+  atk.sorprendeA.clear();
 }
 
 /** Bocajarro: +30 al disparo (Tabla 47). */
@@ -826,7 +842,7 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
   }
   if (dif > 0) {
     soltar(l);
-    l.movioActivo = true;
+    l.accionesActivas++;
     log(ctx, () => `${l.ficha.nombre} se zafa de ${captor.ficha.nombre}.`);
     return true;
   }

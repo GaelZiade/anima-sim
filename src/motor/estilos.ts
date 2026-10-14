@@ -117,6 +117,10 @@ export interface Estilos {
   paraEnergia: boolean;
   /** Ve los ataques de energía invisibles: Detección del Ki o Ver lo sobrenatural. */
   veEnergia: boolean;
+  /** Detección del Ki: localiza a quien no ve, con ceguera parcial en vez de absoluta (Dominus p.11). */
+  deteccionKi: boolean;
+  /** Visión nocturna: 1 la ventaja (Core p.20), 2 completa (Core p.318). */
+  visionNocturna: 0 | 1 | 2;
 
   // ---------------------------------------------------------------- modalidades declaradas
   /** Kung Fu avanzado +10 / supremo +20 / Asakusen arcano +40, a elegir antes de la iniciativa. */
@@ -279,6 +283,8 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     defensaSinParalisis: hanja >= 3,
     paraEnergia: tiene(r.habilidadesKi, 'extrusion de presencia') || tiene(r.habilidadesKi, 'extension del aura'),
     veEnergia: tiene(r.habilidadesKi, 'deteccion del ki') || tiene(v, 'ver lo sobrenatural'),
+    deteccionKi: tiene(r.habilidadesKi, 'deteccion del ki'),
+    visionNocturna: tiene(v, 'vision nocturna completa') ? 2 : tiene(v, 'vision nocturna') ? 1 : 0,
     bonoVariable,
     seraphite: seraphite >= 3 ? 3 : seraphite >= 1 ? 1 : 0,
     berserker: tiene(ars, 'berserker'),

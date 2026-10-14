@@ -52,6 +52,24 @@ export interface Ficha {
   acrobacias?: number;
   /** Dominios del Ki: reserva, acumulaciones y técnicas (Core p.102-107, Dominus cap. 5). */
   ki?: KiFicha;
+  /** Estados con los que empieza el combate (Tabla 43, Core cap. 14). */
+  estados?: EstadosFicha;
+  /** Tipo de vuelo: de 7 a 14 o de 15 en adelante da bonos con espacio para maniobrar (Tabla 43). */
+  tipoVuelo?: number;
+  /** Tamaño (Core p.14). Si falta, Fuerza + Constitución; sin esas características no se compara. */
+  tamano?: number;
+}
+
+/** Estados que duran todo el combate (Core cap. 14) y situaciones de la Tabla 43. */
+export interface EstadosFicha {
+  /** Cegado (Core p.233): ceguera absoluta, o parcial si sólo está deslumbrado. */
+  ceguera?: 'parcial' | 'absoluta';
+  /** Miedo: −60 a toda acción que no sea huir (Core p.232). */
+  miedo?: boolean;
+  /** Dolor: −20 leve, −40, −80 extremo a toda acción (Core p.233). */
+  dolor?: 'leve' | 'normal' | 'extremo';
+  /** Levita de algún modo o lo mantienen en el aire (Tabla 43). */
+  levitando?: boolean;
 }
 
 /** Características de las que se acumula Ki (Core p.102). */
@@ -214,7 +232,13 @@ export interface Luchador {
   defensasHechas: number;
   cansancioAsalto: number;
   movioActivo: boolean;
+  /** Acciones activas distintas del ataque hechas este asalto (moverse, levantarse, zafarse): −25 cada una (Core p.87). */
+  accionesActivas: number;
   metrosMovidos: number;
+  /** Se movió el asalto anterior: puede declarar una carga si no está trabado (Tabla 43, Core p.90). */
+  movioAsaltoAnterior: boolean;
+  /** En carga este asalto: +10 al ataque, −10 a la parada, −20 a la esquiva, sin −25 por correr. */
+  cargando: boolean;
   /** Enemigos sobre los que tiene sorpresa hasta su primera acción. */
   sorprendeA: Set<Luchador>;
   /** Prever Sorpresa (Dominus p.14): enemigos contra los que la declaró este asalto. */
@@ -287,6 +311,11 @@ export interface OpcionesEscenario {
   rotura?: boolean;
   /** Pelean en un espacio reducido (Tabla 43). */
   espacioReducido?: boolean;
+  /**
+   * Oscuridad (Tabla 43): penumbra da ceguera parcial; total (carencia absoluta de luz) y mágica,
+   * ceguera absoluta. Visión nocturna la reduce o la anula (Core p.20, p.318).
+   */
+  oscuridad?: 'penumbra' | 'total' | 'magica';
   /** Empiezan con las armas enfundadas: desenfundar cuesta −25 (Tabla 43). */
   armasEnfundadas?: boolean;
   /** Fase de la luna para los Legados de Tsukiyomi (Dominus p.79). Sin valor: de día. */
