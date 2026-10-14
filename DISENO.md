@@ -248,8 +248,8 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   cargadas). *Genéricos*: los arquetipos de Abel y las fichas de `ejemplos/`, siempre disponibles.
   Cada uno se suma con "+ A" o "+ B" las veces que haga falta. Lo cargado se recuerda en
   `localStorage`.
-- **Mapa** (`tablero.ts`): grilla de celdas de 1 m de tamaño configurable, con paredes que se pintan
-  o borran con clic o arrastre. Las fichas se ubican solas al sumarlas (el A desde la izquierda, el
+- **Mapa** (`tablero.ts`): grilla de celdas de 1 m de tamaño configurable, con paredes que se ponen
+  con clic izquierdo y se sacan con clic derecho (también arrastrando). Las fichas se ubican solas al sumarlas (el A desde la izquierda, el
   B desde la derecha) y se arrastran a otra celda. Mapa y posiciones viajan en
   `OpcionesEscenario` (`mapa`, `posiciones`), así el Monte Carlo usa el mismo mapa.
 - **Combate:** dos equipos, con arma, perfil y estado inicial por luchador; una ficha repetida se
@@ -257,10 +257,16 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   lunar), cantidad de combates, hilos y semilla. La fase lunar sólo se habilita si alguien tiene el
   Legado de la Luna.
 - **En vivo:** corre un combate con la semilla elegida y lo reproduce sobre el mapa, una línea del
-  registro por vez: las fichas se mueven animadas, llevan su barra de PV, se marcan a la defensiva
-  (borde punteado) o caídas (cruz), y se resaltan quién actúa y a quién. Cada línea del registro
-  guarda la foto de todos (`Evento.foto`). Controles: reproducir/pausa (espacio), línea anterior o
-  siguiente (flechas), desde el principio y velocidad; clic en una línea de la narración salta ahí.
+  registro por vez. Las fichas recorren el camino real celda por celda (`Evento.camino`) y dejan
+  una estela punteada de su color, que dura todo el asalto. Quien tiene el turno lleva un aro
+  dorado y un triángulo encima, y se destaca en la barra de iniciativa del asalto (`Evento.turno`,
+  `Evento.orden`). Cada ataque dibuja una flecha de quien ataca a quien defiende, roja si impacta,
+  gris si falla (punteada si pifia) y dorada si es una contra, con el defensor rodeado del mismo
+  color (`Evento.ataque`); el daño aparece flotando sobre quien lo recibe (`Evento.dano`). Barras
+  de PV, borde punteado a la defensiva, cruz si cayó. Cada línea guarda la foto de todos
+  (`Evento.foto`).
+  Controles: reproducir/pausa (espacio), línea anterior o siguiente (flechas), desde el principio y
+  velocidad; clic en una línea de la narración salta ahí.
 - **Publicación:** `.github/workflows/pages.yml` la construye y la publica en GitHub Pages en cada
   push a `main`.
 - **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en

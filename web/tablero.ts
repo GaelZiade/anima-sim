@@ -1,5 +1,6 @@
 // Tablero en canvas, al estilo BattleCast: grilla de celdas de 1 m con paredes, y las fichas de los
-// luchadores. Sirve para editar (arrastrar fichas, pintar paredes) y para ver un combate en vivo.
+// luchadores. Sirve para editar (arrastrar fichas, pintar paredes) y para ver un combate en vivo:
+// recorridos con estela, de quién es el turno, flechas de ataque y daño.
 
 import type { Celda } from '../src/motor/mapa';
 
@@ -23,6 +24,23 @@ export interface MapaTablero {
   paredes: Set<string>;
 }
 
+/** Un ataque para dibujar: flecha de quien ataca a quien defiende. */
+export interface FlechaAtaque {
+  de: string;
+  a: string;
+  /** impacto: resultado positivo; falla: se defendió; pifia: el ataque pifió. */
+  tipo: 'impacto' | 'falla' | 'pifia';
+  contra: boolean;
+}
+
+/** Recorrido ya hecho en el asalto; el de la línea actual se dibuja a medida que avanza. */
+export interface Estela {
+  id: string;
+  equipo: 'A' | 'B';
+  celdas: Celda[];
+  actual: boolean;
+}
+
 interface Arrastre {
   id: string;
   x: number;
@@ -37,9 +55,13 @@ export class Tablero {
   fichas: FichaTablero[] = [];
   /** En "ver" no se puede editar. */
   modo: 'editar' | 'ver' = 'editar';
-  /** Al ver: quién actúa y a quién, para resaltarlos. */
-  actor: string | null = null;
-  objetivo: string | null = null;
+  /** Al ver: de quién es el turno. */
+  turno: string | null = null;
+  /** Al ver: de quién habla la línea, cuando no es un ataque. */
+  sujeto: string | null = null;
+  flecha: FlechaAtaque | null = null;
+  dano: { id: string; cantidad: number } | null = null;
+  estelas: Estela[] = [];
   /** Al pintar o borrar una pared. */
   alCambiarPared: (c: Celda, pared: boolean) => void = () => {};
   /** Al soltar una ficha en otra celda. */
@@ -49,8 +71,11 @@ export class Tablero {
   private arrastre: Arrastre | null = null;
   private pintando: boolean | null = null;
   private ultimaPintada: Celda | null = null;
-  private desde: Map<string, { x: number; y: number }> | null = null;
+  /** Animación en curso: de dónde sale cada ficha y por qué celdas pasa. */
+  private desde: Map<string, Celda> | null = null;
+  private caminos = new Map<string, Celda[]>();
   private progreso = 1;
+  private animacion = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -58,17 +83,21 @@ export class Tablero {
     canvas.addEventListener('pointermove', (e) => this.mover(e));
     canvas.addEventListener('pointerup', (e) => this.soltar(e));
     canvas.addEventListener('pointercancel', () => this.cancelar());
+    // El clic derecho borra paredes: sin menú contextual sobre el mapa.
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     new ResizeObserver(() => this.dibujar()).observe(canvas.parentElement!);
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.dibujar());
   }
 
   /**
-   * Mueve las fichas desde donde estaban hasta las posiciones nuevas en `ms` milisegundos. Las que
-   * aparecen o no se movieron quedan quietas.
+   * Lleva las fichas a sus posiciones nuevas en `ms` milisegundos: por las celdas de `caminos` si
+   * las hay, si no en línea recta. Las que no se mueven quedan quietas.
    */
-  animar(nuevas: FichaTablero[], ms: number) {
+  animar(nuevas: FichaTablero[], ms: number, caminos = new Map<string, Celda[]>()) {
     const antes = new Map(this.fichas.map((f) => [f.id, { x: f.x, y: f.y }]));
     this.fichas = nuevas;
+    this.caminos = caminos;
+    cancelAnimationFrame(this.animacion);
     const seMueve = nuevas.some((f) => {
       const a = antes.get(f.id);
       return a && (a.x !== f.x || a.y !== f.y);
@@ -80,13 +109,14 @@ export class Tablero {
       return;
     }
     this.desde = antes;
+    this.progreso = 0;
     const inicio = performance.now();
     const paso = (t: number) => {
       this.progreso = Math.min(1, (t - inicio) / ms);
       this.dibujar();
-      if (this.progreso < 1 && this.desde === antes) requestAnimationFrame(paso);
+      if (this.progreso < 1) this.animacion = requestAnimationFrame(paso);
     };
-    requestAnimationFrame(paso);
+    this.animacion = requestAnimationFrame(paso);
   }
 
   // ---------- Dibujo ----------
@@ -130,31 +160,87 @@ export class Tablero {
       if (x < ancho && y < alto) g.fillRect(x * c, y * c, c, c);
     }
 
+    for (const e of this.estelas) this.dibujarEstela(g, e, color);
     // Los caídos abajo, así no tapan a los que siguen en pie.
     const orden = [...this.fichas].sort((a, b) => Number(!!b.caido) - Number(!!a.caido));
     for (const f of orden) this.dibujarFicha(g, f, color);
+    if (this.flecha) this.dibujarFlecha(g, this.flecha, color);
+    if (this.dano) this.dibujarDano(g, this.dano, color);
+    const t = this.turno && this.fichas.find((f) => f.id === this.turno);
+    if (t) this.dibujarTurno(g, t, color);
+  }
+
+  /** Dónde se dibuja una ficha ahora (en celdas, con decimales si se está moviendo). */
+  private dondeEsta(f: FichaTablero): { x: number; y: number } {
+    if (this.arrastre?.id === f.id) return this.arrastre;
+    if (!this.desde || this.progreso >= 1) return f;
+    const t = suave(this.progreso);
+    const camino = this.caminos.get(f.id);
+    if (camino && camino.length > 1) return puntoEn(camino, t);
+    const a = this.desde.get(f.id);
+    if (!a) return f;
+    return { x: a.x + (f.x - a.x) * t, y: a.y + (f.y - a.y) * t };
+  }
+
+  private centro(p: { x: number; y: number }) {
+    return { x: p.x * this.celda + this.celda / 2, y: p.y * this.celda + this.celda / 2 };
+  }
+
+  private dibujarEstela(g: CanvasRenderingContext2D, e: Estela, color: (v: string) => string) {
+    let puntos: { x: number; y: number }[] = e.celdas;
+    // La del movimiento actual crece con la ficha.
+    if (e.actual && this.desde && this.progreso < 1) {
+      const f = this.fichas.find((x) => x.id === e.id);
+      if (f) puntos = [...hastaProgreso(e.celdas, suave(this.progreso)), this.dondeEsta(f)];
+    }
+    if (puntos.length < 2) return;
+    g.save();
+    g.globalAlpha = e.actual ? 0.75 : 0.35;
+    g.strokeStyle = color(e.equipo === 'A' ? '--equipo-a' : '--equipo-b');
+    g.lineWidth = Math.max(2, this.celda * 0.14);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.setLineDash([this.celda * 0.25, this.celda * 0.2]);
+    g.beginPath();
+    puntos.forEach((p, i) => {
+      const q = this.centro(p);
+      if (i === 0) g.moveTo(q.x, q.y);
+      else g.lineTo(q.x, q.y);
+    });
+    g.stroke();
+    g.setLineDash([]);
+    // Un punto en cada celda pisada.
+    g.fillStyle = g.strokeStyle;
+    for (const p of puntos.slice(0, -1)) {
+      const q = this.centro(p);
+      g.beginPath();
+      g.arc(q.x, q.y, Math.max(1.5, this.celda * 0.07), 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
   }
 
   private dibujarFicha(g: CanvasRenderingContext2D, f: FichaTablero, color: (v: string) => string) {
     const c = this.celda;
-    let x = f.x, y = f.y;
-    if (this.arrastre?.id === f.id) ({ x, y } = this.arrastre);
-    else if (this.desde && this.progreso < 1) {
-      const a = this.desde.get(f.id);
-      if (a) {
-        const t = 1 - (1 - this.progreso) ** 2;
-        x = a.x + (f.x - a.x) * t;
-        y = a.y + (f.y - a.y) * t;
-      }
-    }
-    const cx = x * c + c / 2, cy = y * c + c / 2, r = c * 0.4;
+    const p = this.dondeEsta(f);
+    const { x: cx, y: cy } = this.centro(p);
+    const r = c * 0.4;
     const equipo = color(f.equipo === 'A' ? '--equipo-a' : '--equipo-b');
     g.globalAlpha = f.caido ? 0.35 : 1;
-    if (f.id === this.actor || f.id === this.objetivo) {
+    // A quien habla la línea (cuando no es un ataque) se lo marca suave.
+    if (f.id === this.sujeto && !this.flecha) {
       g.beginPath();
       g.arc(cx, cy, r + 4, 0, Math.PI * 2);
-      g.fillStyle = f.id === this.actor ? color('--resalte-actor') : color('--resalte-objetivo');
+      g.fillStyle = color('--resalte-actor');
       g.fill();
+    }
+    if (this.flecha && f.id === this.flecha.a) {
+      // Quien recibe el ataque: aro grueso del color del resultado.
+      g.beginPath();
+      g.arc(cx, cy, r + Math.max(3, c * 0.13), 0, Math.PI * 2);
+      g.lineWidth = Math.max(3, c * 0.13);
+      g.strokeStyle = color(this.flecha.contra ? '--flecha-contra' : this.flecha.tipo === 'impacto' ? '--flecha-impacto' : '--flecha-falla');
+      g.stroke();
     }
     g.beginPath();
     g.arc(cx, cy, r, 0, Math.PI * 2);
@@ -184,7 +270,7 @@ export class Tablero {
     }
     if (f.pv !== undefined && f.pvMax) {
       const w = c * 0.84, h = Math.max(3, c * 0.1);
-      const bx = cx - w / 2, by = y * c + c - h - 1;
+      const bx = cx - w / 2, by = cy + c / 2 - h - 1;
       g.fillStyle = color('--barra-fondo');
       g.fillRect(bx, by, w, h);
       const parte = Math.max(0, Math.min(1, f.pv / f.pvMax));
@@ -192,6 +278,96 @@ export class Tablero {
       g.fillRect(bx, by, w * parte, h);
     }
     g.globalAlpha = 1;
+  }
+
+  /** Marca de turno: un aro y un triángulo sobre la ficha. */
+  private dibujarTurno(g: CanvasRenderingContext2D, f: FichaTablero, color: (v: string) => string) {
+    const c = this.celda;
+    const { x: cx, y: cy } = this.centro(this.dondeEsta(f));
+    const r = c * 0.4;
+    g.save();
+    g.strokeStyle = color('--turno');
+    g.lineWidth = Math.max(2, c * 0.09);
+    g.beginPath();
+    g.arc(cx, cy, r + Math.max(3, c * 0.12), 0, Math.PI * 2);
+    g.stroke();
+    const t = Math.max(5, c * 0.22);
+    const arriba = cy - r - Math.max(5, c * 0.18);
+    g.fillStyle = color('--turno');
+    g.beginPath();
+    g.moveTo(cx - t, arriba - t);
+    g.lineTo(cx + t, arriba - t);
+    g.lineTo(cx, arriba);
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+
+  /** Flecha de quien ataca a quien defiende: sale de su centro y llega al borde del otro, con contorno. */
+  private dibujarFlecha(g: CanvasRenderingContext2D, fl: FlechaAtaque, color: (v: string) => string) {
+    const de = this.fichas.find((f) => f.id === fl.de);
+    const a = this.fichas.find((f) => f.id === fl.a);
+    if (!de || !a) return;
+    const p = this.centro(this.dondeEsta(de)), q = this.centro(this.dondeEsta(a));
+    const dx = q.x - p.x, dy = q.y - p.y, largo = Math.hypot(dx, dy);
+    if (largo < 1) return;
+    const ux = dx / largo, uy = dy / largo;
+    const r = this.celda * 0.48;
+    const x1 = p.x + ux * r * 0.3, y1 = p.y + uy * r * 0.3;
+    const x2 = q.x - ux * (r + 1), y2 = q.y - uy * (r + 1);
+    const tono = color(fl.contra ? '--flecha-contra' : fl.tipo === 'impacto' ? '--flecha-impacto' : '--flecha-falla');
+    const punta = Math.max(7, this.celda * 0.3);
+    const ancho = Math.max(3, this.celda * 0.14);
+    const trazar = () => {
+      g.beginPath();
+      g.moveTo(x1, y1);
+      g.lineTo(x2 - ux * punta * 0.6, y2 - uy * punta * 0.6);
+      g.stroke();
+    };
+    const cabeza = () => {
+      g.beginPath();
+      g.moveTo(x2, y2);
+      g.lineTo(x2 - ux * punta - uy * punta * 0.6, y2 - uy * punta + ux * punta * 0.6);
+      g.lineTo(x2 - ux * punta + uy * punta * 0.6, y2 - uy * punta - ux * punta * 0.6);
+      g.closePath();
+    };
+    g.save();
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    // Contorno oscuro debajo, para que se vea sobre las fichas y el suelo.
+    g.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    g.lineWidth = ancho + 3;
+    trazar();
+    cabeza();
+    g.stroke();
+    g.strokeStyle = tono;
+    g.fillStyle = tono;
+    g.lineWidth = ancho;
+    if (fl.tipo === 'pifia') g.setLineDash([5, 4]);
+    trazar();
+    g.setLineDash([]);
+    cabeza();
+    g.fill();
+    g.restore();
+  }
+
+  /** Daño flotando sobre quien lo recibe. */
+  private dibujarDano(g: CanvasRenderingContext2D, d: { id: string; cantidad: number }, color: (v: string) => string) {
+    const f = this.fichas.find((x) => x.id === d.id);
+    if (!f) return;
+    const { x: cx, y: cy } = this.centro(this.dondeEsta(f));
+    const texto = `−${d.cantidad}`;
+    g.save();
+    g.font = `800 ${Math.max(12, Math.round(this.celda * 0.55))}px system-ui, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    const y = cy - this.celda * 0.5;
+    g.lineWidth = 4;
+    g.strokeStyle = color('--suelo');
+    g.strokeText(texto, cx, y);
+    g.fillStyle = color('--vida-baja');
+    g.fillText(texto, cx, y);
+    g.restore();
   }
 
   // ---------- Edición ----------
@@ -213,12 +389,13 @@ export class Tablero {
     if (!c) return;
     this.canvas.setPointerCapture(e.pointerId);
     const f = this.fichaEn(c);
-    if (f) {
+    if (f && e.button === 0) {
       this.arrastre = { id: f.id, x: c.x, y: c.y };
       return;
     }
-    // Sobre una celda vacía: si era pared se borra, si no se pinta; arrastrando sigue igual.
-    this.pintando = !this.mapa.paredes.has(clave(c));
+    // Clic izquierdo pone paredes y clic derecho las saca; arrastrando sigue igual.
+    if (e.button !== 0 && e.button !== 2) return;
+    this.pintando = e.button === 0;
     this.ultimaPintada = c;
     this.pintar(c);
   }
@@ -263,6 +440,39 @@ export class Tablero {
     if (tiene === this.pintando) return;
     this.alCambiarPared(c, this.pintando!);
   }
+}
+
+/** Arranca y frena suave. */
+function suave(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+}
+
+/** Largos acumulados de un recorrido. */
+function largos(camino: Celda[]): number[] {
+  const res = [0];
+  for (let i = 1; i < camino.length; i++)
+    res.push(res[i - 1] + Math.hypot(camino[i].x - camino[i - 1].x, camino[i].y - camino[i - 1].y));
+  return res;
+}
+
+/** Punto del recorrido a la fracción `t` de su largo. */
+function puntoEn(camino: Celda[], t: number): { x: number; y: number } {
+  const l = largos(camino);
+  const objetivo = t * l[l.length - 1];
+  for (let i = 1; i < camino.length; i++) {
+    if (l[i] >= objetivo) {
+      const parte = l[i] === l[i - 1] ? 1 : (objetivo - l[i - 1]) / (l[i] - l[i - 1]);
+      return { x: camino[i - 1].x + (camino[i].x - camino[i - 1].x) * parte, y: camino[i - 1].y + (camino[i].y - camino[i - 1].y) * parte };
+    }
+  }
+  return camino[camino.length - 1];
+}
+
+/** Celdas del recorrido ya pasadas a la fracción `t` de su largo. */
+function hastaProgreso(camino: Celda[], t: number): Celda[] {
+  const l = largos(camino);
+  const objetivo = t * l[l.length - 1];
+  return camino.filter((_, i) => l[i] <= objetivo);
 }
 
 /** Celdas de la recta entre dos celdas (Bresenham), extremos incluidos. */

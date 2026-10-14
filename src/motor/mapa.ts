@@ -205,6 +205,37 @@ export function buscarCamino(m: MapaListo, desde: Celda, ocupadas: Uint8Array, t
   return dijkstra(m, m.costos, [indice(m, desde)], ocupadas, tope, listo);
 }
 
+/**
+ * Camino de `desde` a `hasta` según los costos de la última `buscarCamino` (que tiene que haber
+ * llegado a `hasta`): se vuelve por las celdas vecinas cuyo costo más el paso da el de la actual.
+ */
+export function caminoHasta(m: MapaListo, desde: Celda, hasta: Celda): Celda[] {
+  const costo = m.costos;
+  const inicio = indice(m, desde);
+  const res: Celda[] = [hasta];
+  let i = indice(m, hasta);
+  for (let vueltas = 0; i !== inicio && vueltas < costo.length; vueltas++) {
+    const x = i % m.ancho, y = (i - x) / m.ancho;
+    let previo = -1;
+    for (const [dx, dy, paso] of PASOS) {
+      const nx = x - dx, ny = y - dy;
+      if (nx < 0 || ny < 0 || nx >= m.ancho || ny >= m.alto) continue;
+      const j = ny * m.ancho + nx;
+      if (costo[j] === Infinity || m.muro[j]) continue;
+      if (dx && dy && (m.muro[ny * m.ancho + x] || m.muro[y * m.ancho + nx])) continue;
+      if (Math.abs(costo[j] + paso - costo[i]) < 1e-3) {
+        previo = j;
+        break;
+      }
+    }
+    if (previo < 0) break;
+    i = previo;
+    res.push(celdaDe(m, i));
+  }
+  if (res[res.length - 1].x !== desde.x || res[res.length - 1].y !== desde.y) res.push(desde);
+  return res.reverse();
+}
+
 /** Dos celdas están trabadas si se tocan, también en diagonal, sin un muro en la esquina entre ellas. */
 export function adyacentes(m: MapaListo | null, a: Celda, b: Celda): boolean {
   const dx = b.x - a.x, dy = b.y - a.y;

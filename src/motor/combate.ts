@@ -1,6 +1,6 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
-import type { Contexto, Equipo, Ficha, Luchador, OpcionesEscenario } from './modelo';
+import type { Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario } from './modelo';
 import { crearRng, dado, type Rng } from './rng';
 import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
@@ -19,7 +19,7 @@ import {
 } from './maniobras';
 import * as ia from './ia';
 import {
-  buscarCamino, campoHacia, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
+  buscarCamino, campoHacia, caminoHasta, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
   type Celda, type MapaListo,
 } from './mapa';
 import {
@@ -78,11 +78,15 @@ function tirar(ctx: Contexto, umbral: number): TiradaD100 {
   return tirarD100(ctx.rng, umbral);
 }
 
-function log(ctx: Contexto, texto: string | (() => string)) {
+function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>) {
   if (!ctx.registro) return;
   const foto = ctx.luchadores.map((l) => ({ x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: l.aLaDefensiva }));
-  ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto(), foto });
+  const turno = ctx.turnoDe ? ctx.luchadores.indexOf(ctx.turnoDe) : undefined;
+  ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto(), foto, turno, ...extra?.() });
 }
+
+/** Índice de un luchador, para el registro. */
+const nro = (ctx: Contexto, l: Luchador) => ctx.luchadores.indexOf(l);
 
 function equipoVivo(ctx: Contexto, equipo: Equipo): boolean {
   return ctx.luchadores.some((l) => l.equipo === equipo && activo(l));
@@ -251,7 +255,8 @@ function jugarAsalto(ctx: Contexto) {
       Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
       b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
   );
-  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`);
+  log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`,
+    () => ({ orden: orden.map((l) => nro(ctx, l)) }));
   for (const a of vivos)
     for (const b of vivos)
       // Uroboros sorprende con 100 de diferencia en vez de 150 (Dominus p.79).
@@ -266,8 +271,10 @@ function jugarAsalto(ctx: Contexto) {
   // 3. Acciones en orden.
   for (const l of orden) {
     if (terminado(ctx)) break;
+    ctx.turnoDe = l;
     turno(ctx, l);
   }
+  ctx.turnoDe = null;
 
   // 4. Fin del asalto.
   for (const l of ctx.luchadores) {
@@ -374,7 +381,10 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
   const total = metrosTotales(l);
   const disponible = total - l.metrosMovidos;
   if (disponible <= 0) return;
-  const paso = l.mapa ? moverEnMapa(ctx, l, obj, l.mapa, disponible) : moverEnLinea(l, obj, disponible);
+  const desde = { ...l.pos };
+  const celdas: { x: number; y: number }[] = [];
+  const paso = l.mapa ? moverEnMapa(ctx, l, obj, l.mapa, disponible, celdas) : moverEnLinea(l, obj, disponible);
+  if (!celdas.length) celdas.push(desde, { ...l.pos });
   if (paso <= 0) return;
   l.metrosMovidos += paso;
   ctx.movimientosEnAsalto++;
@@ -385,7 +395,7 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
     if (!l.cargando) l.accionesActivas++;
   }
   const nota = l.movioActivo && !yaActivo ? (l.cargando ? ' (a la carga)' : ' (acción activa, −25)') : '';
-  log(ctx, () => `${l.ficha.nombre} avanza ${paso.toFixed(1)} m${nota}.`);
+  log(ctx, () => `${l.ficha.nombre} avanza ${paso.toFixed(1)} m${nota}.`, () => ({ camino: { quien: nro(ctx, l), celdas } }));
   for (const e of ctx.luchadores) {
     if (e.equipo === l.equipo || !activo(e) || !enAlcance(l, e)) continue;
     if (!e.trabados.includes(l)) e.trabados.push(l);
@@ -398,7 +408,7 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
  * ni a otros, va a la que lo deja más cerca de trabarse con `obj` (y, a igual distancia, a la que
  * le cuesta menos). Devuelve los metros caminados.
  */
-function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, disponible: number): number {
+function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, disponible: number, camino: Celda[]): number {
   const ocupadas = m.ocupadas.fill(0);
   for (const x of ctx.luchadores) if (x !== l && activo(x)) ocupadas[indice(m, x.pos)] = 1;
   const falta = campoHacia(m, obj.pos);
@@ -414,7 +424,10 @@ function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, di
     }
   }
   if (mejor === indice(m, l.pos)) return 0;
-  l.pos = celdaDe(m, mejor);
+  const hasta = celdaDe(m, mejor);
+  // El recorrido sólo hace falta para verlo en vivo.
+  if (ctx.registro) camino.push(...caminoHasta(m, l.pos, hasta));
+  l.pos = hasta;
   return costo[mejor];
 }
 
@@ -504,7 +517,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     if (tA.pifia) {
       atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
       atk.sorprendeA.clear();
-      log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+      log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`,
+        () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: a.esContra, resultado: null } }));
       avisarPifia(ctx, atk);
       ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
@@ -554,7 +568,8 @@ function disparoCombinado(ctx: Contexto, atk: Luchador, def: Luchador) {
   const etiqueta = `${atk.ficha.nombre} dispara a bocajarro a ${def.ficha.nombre}`;
   if (tA.pifia) {
     atk.aLaDefensiva = true;
-    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`,
+      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: false, resultado: null } }));
     avisarPifia(ctx, atk);
     ofrecerContra(ctx, def, atk, tA.nivelPifia);
     return;
@@ -630,7 +645,8 @@ function resolverDefensa(
   let resultado: number;
   if (quienDefiende.ficha.acumulacion) {
     resultado = habAtk + tA.valor;
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`);
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`,
+      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
   } else {
     // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53).
     const fija = kiDef?.defensaFija ?? 0;
@@ -642,7 +658,8 @@ function resolverDefensa(
     resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
     const conTecnica = tecnica ? ` con ${tecnica.nombre}` : '';
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
+      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
     if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
@@ -752,7 +769,8 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   limitePorDano(ctx, def, 2 * fallo);
   atk.stats.danoCausado += 2 * fallo;
   def.stats.danoRecibido += 2 * fallo;
-  log(ctx, () => `  ${def.ficha.nombre} falla la RF (${res} [${baseRf}+${dadoRf}] contra ${dif}) por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`);
+  log(ctx, () => `  ${def.ficha.nombre} falla la RF (${res} [${baseRf}+${dadoRf}] contra ${dif}) por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`,
+    () => ({ dano: { quien: nro(ctx, def), cantidad: 2 * fallo } }));
   if (estado) {
     // Estados de la Tabla del Mushin arcano. Las parálisis duran tantos asaltos como el fracaso.
     if (estado === 'dolor') def.penDolor += 40;
@@ -977,7 +995,7 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: num
   def.stats.danoRecibido += dano;
   // Samiel: el daño recibido de este enemigo se acumula como bono contra él (Dominus p.92).
   if (def.cap.est.samiel && !def.ficha.acumulacion) def.samiel.set(atk, (def.samiel.get(atk) ?? 0) + dano);
-  log(ctx, () => `  ${def.ficha.nombre} pierde ${dano} PV (${def.pv}/${def.ficha.pv}).`);
+  log(ctx, () => `  ${def.ficha.nombre} pierde ${dano} PV (${def.pv}/${def.ficha.pv}).`, () => ({ dano: { quien: nro(ctx, def), cantidad: dano } }));
   limitePorDano(ctx, def, dano);
   // Puntos vulnerables: un ataque apuntado a cabeza, corazón o (para inutilizar) una extremidad
   // critica con 1/10 de los PV actuales (Core p.91, p.97). Inutilizar no funciona con acumulación.

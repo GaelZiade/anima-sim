@@ -309,6 +309,17 @@ export interface Evento {
   texto: string;
   /** Cómo quedó cada luchador (en el orden de `luchadores`) al narrarse esta línea: para verlo en vivo. */
   foto?: FotoLuchador[];
+  // Lo que sigue usa índices en `luchadores`.
+  /** De quién es el turno, si alguien está actuando. */
+  turno?: number;
+  /** Orden de iniciativa del asalto, en la línea de la iniciativa. */
+  orden?: number[];
+  /** Un ataque: quién a quién, si es una contra y el resultado del asalto (null si pifió). */
+  ataque?: { de: number; a: number; contra: boolean; resultado: number | null };
+  /** Un movimiento: las celdas que recorrió, desde donde estaba. */
+  camino?: { quien: number; celdas: Punto[] };
+  /** PV que perdió alguien. */
+  dano?: { quien: number; cantidad: number };
 }
 
 export interface FotoLuchador {
@@ -367,4 +378,6 @@ export interface Contexto {
    * pierde los suyos). Se calcula al inicio de cada asalto.
    */
   ventaja: Record<Equipo, number>;
+  /** Quién está jugando su turno (para el registro). */
+  turnoDe?: Luchador | null;
 }

@@ -7,7 +7,7 @@ import type { HojaJson } from '../src/hoja/hojaAJson';
 import { simularCombate, type ResultadoCombate } from '../src/motor/combate';
 import { estilos } from '../src/motor/estilos';
 import type { Celda } from '../src/motor/mapa';
-import type { Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
+import type { Evento, Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import abel from '../ejemplos/arquetipos-abel.json';
 import duelo from '../ejemplos/duelo.json';
@@ -251,7 +251,10 @@ function dibujarMapa() {
   tablero.mapa = { ancho: m.ancho, alto: m.alto, paredes: paredes() };
   if (tablero.modo === 'editar') {
     tablero.fichas = fichasDelTablero();
-    tablero.actor = tablero.objetivo = null;
+    tablero.turno = tablero.sujeto = null;
+    tablero.flecha = null;
+    tablero.dano = null;
+    tablero.estelas = [];
   }
   tablero.dibujar();
 }
@@ -634,11 +637,19 @@ function paredesDe(r: ResultadoCombate): Set<string> {
   return s;
 }
 
-/** Cuánto dura cada línea, según lo que pasa en ella. */
-function duracion(texto: string): number {
+/** Metros de un recorrido. */
+function metros(celdas: Celda[]): number {
+  let m = 0;
+  for (let i = 1; i < celdas.length; i++) m += Math.hypot(celdas[i].x - celdas[i - 1].x, celdas[i].y - celdas[i - 1].y);
+  return m;
+}
+
+/** Cuánto dura cada línea, según lo que pasa en ella. Un recorrido tarda según su largo. */
+function duracion(e: Evento): number {
   const vel = Number(($('velocidad') as HTMLSelectElement).value) || 1;
-  const base = texto.startsWith('Iniciativa') ? 1500 : texto.startsWith('  ') ? 800 : / avanza /.test(texto) ? 700 : 1200;
-  return base / vel;
+  const base = e.camino ? 500 + 140 * metros(e.camino.celdas)
+    : e.texto.startsWith('Iniciativa') ? 1600 : e.ataque ? 1500 : e.texto.startsWith('  ') ? 900 : 1100;
+  return Math.min(4000, base) / vel;
 }
 
 function irA(k: number) {
@@ -657,29 +668,68 @@ function irA(k: number) {
       caido: s.estado !== 'activo', aLaDefensiva: s.aLaDefensiva,
     };
   });
-  // Quién actúa y a quién: los dos primeros nombres que aparecen en la línea.
+
+  // Turno, ataque y daño de esta línea.
+  tablero.turno = e.turno !== undefined ? f.ids[e.turno] : null;
+  tablero.flecha = e.ataque
+    ? {
+      de: f.ids[e.ataque.de], a: f.ids[e.ataque.a], contra: e.ataque.contra,
+      tipo: e.ataque.resultado === null ? 'pifia' : e.ataque.resultado > 0 ? 'impacto' : 'falla',
+    }
+    : null;
+  tablero.dano = e.dano ? { id: f.ids[e.dano.quien], cantidad: e.dano.cantidad } : null;
+  // De quién habla una línea que no es un ataque: el primer nombre que aparece (los más largos
+  // primero: "Soldado (2)" tapa al "Soldado" que lleva adentro).
   const texto = e.texto.trim();
-  // Los nombres más largos primero: "Soldado (2)" tapa al "Soldado" que lleva adentro.
   const tapado = new Array<boolean>(texto.length).fill(false);
-  const apariciones: { id: string; pos: number }[] = [];
+  let primero: { id: string; pos: number } | null = null;
   for (const n of f.nombres) {
     for (let pos = texto.indexOf(n.nombre); pos >= 0; pos = texto.indexOf(n.nombre, pos + 1)) {
       if (tapado[pos] || tapado[pos + n.nombre.length - 1]) continue;
       tapado.fill(true, pos, pos + n.nombre.length);
-      if (!apariciones.some((a) => a.id === n.id)) apariciones.push({ id: n.id, pos });
+      if (!primero || pos < primero.pos) primero = { id: n.id, pos };
     }
   }
-  apariciones.sort((a, b) => a.pos - b.pos);
-  tablero.actor = apariciones[0]?.id ?? null;
-  tablero.objetivo = apariciones[1]?.id ?? null;
-  tablero.animar(fichas, k === anterior + 1 ? Math.min(600, duracion(e.texto) * 0.6) : 0);
+  tablero.sujeto = primero?.id ?? null;
+
+  // Estelas: los recorridos del asalto hasta esta línea; el de esta línea se dibuja mientras avanza.
+  let inicioAsalto = k;
+  while (inicioAsalto > 0 && !registro[inicioAsalto].orden) inicioAsalto--;
+  tablero.estelas = [];
+  for (let j = inicioAsalto; j <= k; j++) {
+    const c = registro[j].camino;
+    if (c) tablero.estelas.push({ id: f.ids[c.quien], equipo: f.r.luchadores[c.quien].equipo, celdas: c.celdas, actual: j === k });
+  }
+  const caminos = new Map<string, Celda[]>();
+  if (e.camino) caminos.set(f.ids[e.camino.quien], e.camino.celdas);
+  const seguida = k === anterior + 1;
+  tablero.animar(fichas, seguida ? (e.camino ? duracion(e) * 0.85 : Math.min(500, duracion(e) * 0.5)) : 0, caminos);
+
+  // Orden de iniciativa del asalto, con quien tiene el turno destacado.
+  const orden = registro[inicioAsalto].orden ?? [];
+  $('ordenTurno').replaceChildren(...orden.map((j) => {
+    const l = f.r.luchadores[j];
+    const s = foto[j];
+    const clases = ['ficha-turno', l.equipo === 'A' ? 'a' : 'b'];
+    if (e.turno === j) clases.push('activo');
+    if (s && s.estado !== 'activo') clases.push('caido');
+    else if (s?.aLaDefensiva) clases.push('defensiva');
+    return crear('span', { className: clases.join(' '), title: `${l.ficha.nombre}: ${s?.pv ?? l.pv}/${l.ficha.pv} PV` },
+      crear('span', { className: `marca ${l.equipo.toLowerCase()}` }), ` ${l.ficha.nombre}`,
+      crear('small', {}, ` ${Math.max(0, s?.pv ?? l.pv)}`));
+  }));
 
   f.lineas[anterior]?.classList.remove('actual');
   const linea = f.lineas[k];
   linea.classList.add('actual');
   const contenedor = $('registro');
   contenedor.scrollTop = linea.offsetTop - contenedor.offsetTop - contenedor.clientHeight / 2;
-  $('cartel').replaceChildren(crear('strong', {}, e.asalto === 0 ? 'Inicio' : `Asalto ${e.asalto}`), ' ', ...resaltarTiradas(texto));
+  const quien = e.turno !== undefined ? f.r.luchadores[e.turno] : null;
+  $('cartel').replaceChildren(
+    crear('span', { className: 'cartel-turno' },
+      crear('strong', {}, e.asalto === 0 ? 'Inicio' : `Asalto ${e.asalto}`),
+      ...(quien ? [' · Turno de ', crear('span', { className: `marca ${quien.equipo.toLowerCase()}` }), ` ${quien.ficha.nombre}`] : [])),
+    crear('span', { className: 'cartel-linea' }, ...resaltarTiradas(texto)));
   $('posicion').textContent = `${k + 1} / ${registro.length}`;
 }
 
@@ -698,9 +748,9 @@ function reproducir(si: boolean) {
       return;
     }
     irA(f.indice + 1);
-    f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice].texto));
+    f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice]));
   };
-  f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice].texto));
+  f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice]));
 }
 
 function pararFuncion() {
@@ -714,6 +764,11 @@ function volverAEditar() {
   $('editor').hidden = false;
   $('controles').hidden = true;
   $('cartel').replaceChildren();
+  $('ordenTurno').replaceChildren();
+  tablero.turno = tablero.sujeto = null;
+  tablero.flecha = null;
+  tablero.dano = null;
+  tablero.estelas = [];
   dibujarMapa();
 }
 

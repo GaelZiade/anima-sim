@@ -36,7 +36,7 @@
           <label>Alto (m) <input type="number" id="mapaAlto" min="4" max="80"></label>
           <button type="button" id="reubicar" class="chico">Reubicar fichas</button>
           <button type="button" id="limpiarParedes" class="chico">Sacar paredes</button>
-          <span class="nota">Arrastrá las fichas para ubicarlas. Clic o arrastre en una celda vacía pinta o borra paredes. Cada celda es 1 m.</span>
+          <span class="nota">Arrastrá las fichas para ubicarlas. Clic izquierdo pone paredes y clic derecho las saca (también arrastrando). Cada celda es 1 m.</span>
         </div>
         <div class="barra" id="controles" hidden>
           <button type="button" id="reiniciar" class="chico" title="Desde el principio">⏮</button>
@@ -54,6 +54,7 @@
           <span class="nota" id="posicion"></span>
           <button type="button" id="editarMapa" class="chico">Volver a editar</button>
         </div>
+        <div class="orden-turno" id="ordenTurno" aria-label="Orden de iniciativa"></div>
         <div class="lienzo"><canvas id="mapa"></canvas></div>
         <p class="cartel" id="cartel" aria-live="polite"></p>
       </section>
