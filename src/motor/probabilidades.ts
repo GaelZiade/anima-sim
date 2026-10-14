@@ -156,3 +156,47 @@ export function tabla(umbralAtaque: number, umbralDefensa: number, sinDefensa: b
   const clave = umbralAtaque * 4 + (sinDefensa ? 0 : umbralDefensa);
   return (cache[clave] ??= new TablaEnfrentamiento(umbralAtaque, umbralDefensa, sinDefensa));
 }
+
+// Ataque en área: una sola tirada de ataque contra varios defensores (Core p.92).
+const cdfDefensa: (Float64Array | undefined)[] = [];
+const ataqueSinPifia: ({ pmf: Float64Array; pPifia: number } | undefined)[] = [];
+
+/** P(tirada de defensa ≤ x), con pifias (natural − nivel). */
+function cdf(umbral: number): Float64Array {
+  let c = cdfDefensa[umbral];
+  if (!c) {
+    const d = tiradaDefensa(umbral);
+    c = new Float64Array(d.length);
+    let acum = 0;
+    for (let i = 0; i < d.length; i++) c[i] = acum += d[i];
+    cdfDefensa[umbral] = c;
+  }
+  return c;
+}
+
+/**
+ * Probabilidad de que un ataque en área llegue a cada blanco, en orden: un blanco que para y le
+ * queda contra (resultado negativo) lo intercepta, y los siguientes no se defienden. La tirada de
+ * ataque es la misma para todos, así que no son independientes: se suma sobre cada valor de la
+ * tirada. `s` = ataque final − defensa final de cada uno. Condicionado a que el ataque no se pifie.
+ */
+export function pLlegaArea(umbralAtaque: number, blancos: { s: number; umbralDefensa: number; para: boolean }[]): number[] {
+  const atk = (ataqueSinPifia[umbralAtaque] ??= tiradaSinPifia(umbralAtaque));
+  const masa = 1 - atk.pPifia;
+  const cdfs = blancos.map((b) => cdf(b.umbralDefensa));
+  const llega = new Array<number>(blancos.length).fill(0);
+  for (let a = 0; a <= MAXV; a++) {
+    const pa = atk.pmf[a];
+    if (pa < 1e-12) continue;
+    let sigue = pa / masa;
+    for (let k = 0; k < blancos.length; k++) {
+      llega[k] += sigue;
+      if (!blancos[k].para) continue;
+      // No hay contra si la defensa no supera ataque + ventaja: D ≤ a + s.
+      const i = Math.floor(a + blancos[k].s) + OFF_DEF;
+      const c = cdfs[k];
+      sigue *= i < 0 ? 0 : i >= c.length ? 1 : c[i];
+    }
+  }
+  return llega;
+}

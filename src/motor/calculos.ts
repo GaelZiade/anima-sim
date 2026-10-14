@@ -174,6 +174,8 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
 
 export interface OpcionesDefensa {
   defensasPrevias?: number;
+  /** Suponer que lo atacan desde esta posición (la IA, para quien todavía no se trabó). */
+  posicion?: Posicion;
   cansancio?: number;
   resistir?: boolean;
   defensaTotal?: boolean;
@@ -198,7 +200,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   const previas = Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
   const total = o.defensaTotal ?? def.defensaTotal;
   // Al retirarse, quien lo ataca lo tiene de flanco, salvo Uroboros (Core p.94, Dominus p.79).
-  const pos = def.huyendo && !e.retiradaSinFlanco ? 'flanco' : posicionDe(atk, def);
+  const pos = def.huyendo && !e.retiradaSinFlanco ? 'flanco' : o.posicion ?? posicionDe(atk, def);
   const factorPos = pos === 'flanco' ? e.factorFlanco : pos === 'espalda' ? e.factorEspalda : 1;
   const est = modEstados(def);
   const campo = (def.ficha.tipoDefensa ?? 'parada') === 'parada' ? 'parada' : 'esquiva';

@@ -71,8 +71,21 @@ negativo = lo que deja de pegar (este asalto si no actuó, el próximo si sigue 
 - Ningún efecto cuenta daño sobre un rival que ya iba a caer con los golpes normales.
 - `λ` sale del perfil: agresivo 0.5, equilibrado 0.9, cauto 1.4. Las bestias (inteligencia ≤ 4)
   atacan al más cercano.
-- `sinManiobras` en las opciones del escenario: todos atacan normal. Sirve para medir cuánto
-  aporta cada decisión (`test/decisiones.test.ts`).
+- **Amenaza** (lo que un enemigo hará en su asalto): si al blanco pueden llegarle varios, se
+  supone que la mitad de los demás ya lo atacó: con esas defensas adicionales y la posición que le
+  toca por orden de llegada (frente, flanco o espalda, Tabla 43).
+- **Ataque en área**: una sola tirada contra todos; un blanco que para y le queda contra lo
+  intercepta. La probabilidad de llegar a cada blanco es exacta (`pLlegaArea`, suma sobre cada valor
+  de la tirada de ataque, probada contra dados).
+- `sinManiobras` en las opciones del escenario: `'A'` o `'B'` le quita las maniobras a un equipo
+  (para medir cuánto le aportan, el rival no tiene que cambiar), `true` a los dos.
+
+### Pendiente: la moneda del puntaje
+
+Dejar a un enemigo fuera de combate se valora como sus PV restantes; frenar su ataque, como el daño
+que iba a hacer. Son escalas distintas: un enemigo con muchos PV que casi no lastima vale mucho más
+muerto que frenado. Contra 12 soldados de élite, Kiran remata de a uno (gana 41%) cuando frenar a
+varios con el área rinde más (forzando el área gana 54%).
 
 ### Reglas de la IA que salieron de probar
 

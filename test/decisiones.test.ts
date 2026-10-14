@@ -32,7 +32,7 @@ describe('decisiones de la IA', () => {
   it.skipIf(!teseo)('contra muchos usa el ataque en área y le rinde', () => {
     const o = { semilla: 2, distanciaInicial: 10 };
     const con = monteCarlo([teseo!], copias(abel.oficial, 10), 300, o);
-    const sin = monteCarlo([teseo!], copias(abel.oficial, 10), 300, { ...o, escenario: { sinManiobras: true } });
+    const sin = monteCarlo([teseo!], copias(abel.oficial, 10), 300, { ...o, escenario: { sinManiobras: 'A' } });
     expect(con.luchadores[0].maniobras.area ?? 0).toBeGreaterThan(5);
     expect(con.victoriasA).toBeGreaterThan(sin.victoriasA * 3);
   });

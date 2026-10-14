@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tabla } from '../src/motor/probabilidades';
+import { pLlegaArea, tabla } from '../src/motor/probabilidades';
 import { tirarD100 } from '../src/motor/dados';
 import { crearRng } from '../src/motor/rng';
 import { bonoContraataque, porcentajeDano } from '../src/motor/reglas';
@@ -59,5 +59,28 @@ describe('tabla precalculada contra dados reales', () => {
 
   it('sin defensa (acumulación): ventaja 0 siempre impacta salvo pifia', () => {
     expect(tabla(3, 3, true).pImpacto(0)).toBeCloseTo(0.97, 5);
+  });
+});
+
+describe('ataque en área: una sola tirada contra varios', () => {
+  it('la probabilidad de llegar a cada blanco coincide con dados reales', () => {
+    const blancos = [{ s: 20, umbralDefensa: 3, para: true }, { s: -10, umbralDefensa: 3, para: false }, { s: 40, umbralDefensa: 2, para: true }];
+    const exacto = pLlegaArea(3, blancos);
+    const rng = crearRng(4);
+    const n = 300_000;
+    const llega = [0, 0, 0];
+    let validos = 0;
+    for (let i = 0; i < n; i++) {
+      const a = tirarD100(rng);
+      if (a.pifia) continue;
+      validos++;
+      for (let k = 0; k < blancos.length; k++) {
+        llega[k]++;
+        const d = tirarD100(rng, blancos[k].umbralDefensa);
+        const defensa = d.pifia ? d.natural - d.nivelPifia : d.valor;
+        if (blancos[k].para && blancos[k].s + a.valor - defensa < 0) break;
+      }
+    }
+    for (let k = 0; k < blancos.length; k++) expect(exacto[k]).toBeCloseTo(llega[k] / validos, 2);
   });
 });

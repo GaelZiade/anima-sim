@@ -6,8 +6,8 @@ import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
   danoEsperado, pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
-import { tabla } from './probabilidades';
-import { MAX_CANSANCIO_ASALTO, negativoCansancio, umbralPifia, type TipoAtaque } from './reglas';
+import { pLlegaArea, tabla } from './probabilidades';
+import { MAX_CANSANCIO_ASALTO, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { Localizacion } from './reglas';
@@ -61,11 +61,27 @@ interface Base {
   hab: number;
   def: number;
   golpe: number;
+  /** Amenaza de `e` sobre `l` en el asalto (ver `amenaza`), calculada al pedirla. */
+  amen?: number;
 }
 const memo = new Map<Luchador, Map<Luchador, Base>>();
+/** Enemigos que pueden atacar a cada luchador este asalto (para la amenaza), por decisión. */
+const rodean = new Map<Luchador, Luchador[]>();
+let ctxActual: Contexto | null = null;
 
-function nuevaDecision() {
+function nuevaDecision(ctx?: Contexto) {
   memo.clear();
+  rodean.clear();
+  if (ctx) ctxActual = ctx;
+}
+
+function quienesLlegan(l: Luchador): Luchador[] {
+  let r = rodean.get(l);
+  if (!r) {
+    r = ctxActual ? ctxActual.luchadores.filter((x) => x.equipo !== l.equipo && activo(x) && faltaParaLlegar(x, l) <= metrosTotales(x)) : [];
+    rodean.set(l, r);
+  }
+  return r;
 }
 
 function base(e: Luchador, l: Luchador): Base {
@@ -86,9 +102,27 @@ function golpeDe(e: Luchador, l: Luchador): number {
   return base(e, l).golpe;
 }
 
-/** Daño esperado de `e` en todo el asalto contra `l` (amenaza). */
+/**
+ * Daño esperado de `e` en todo el asalto contra `l` (amenaza). Si `l` está rodeado, `e` no lo
+ * encuentra con la defensa entera: en promedio la mitad de los demás que llegan a él ya lo atacó,
+ * y cada defensa adicional le resta (−30, −50, −70, −90). Sin esto, uno de muchos parece inofensivo.
+ */
 function amenaza(e: Luchador, l: Luchador): number {
-  return golpeDe(e, l) * Math.max(1, e.ataquesDeclarados || 1);
+  const b = base(e, l);
+  return (b.amen ??= calcularAmenaza(e, l, b));
+}
+
+function calcularAmenaza(e: Luchador, l: Luchador, b: Base): number {
+  let otros = 0;
+  for (const x of quienesLlegan(l)) if (x !== e) otros++;
+  if (otros < 2) return b.golpe * Math.max(1, e.ataquesDeclarados || 1);
+  // Llega en promedio después de la mitad de los demás: con esa posición (frente, flanco o
+  // espalda, Tabla 43) y esas defensas adicionales, si ya no está trabado en otro lugar.
+  const antes = Math.floor(otros / 2);
+  const trabado = l.trabados.indexOf(e);
+  const posicion = trabado >= 0 ? posicionPorOrden(trabado) : posicionPorOrden(Math.max(antes, l.trabados.length));
+  const golpe = danoEsperado(e, l, b.hab, defensaFinal(l, e, { defensasPrevias: l.defensasHechas + antes, posicion }));
+  return golpe * Math.max(1, e.ataquesDeclarados || 1);
 }
 
 /**
@@ -180,7 +214,7 @@ function tasaDano(ctx: Contexto, l: Luchador): number {
 
 /** Intercambio de daño relativo a los PV de cada bando. */
 export function ventajaEquipos(ctx: Contexto): Record<'A' | 'B', number> {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const tasa = { A: 0, B: 0 };
   const pv = { A: 0, B: 0 };
   for (const l of ctx.luchadores) {
@@ -222,7 +256,7 @@ const SIN_MODOS = {
 };
 
 export function declarar(ctx: Contexto, l: Luchador): Declaracion {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const max = l.cap.maxAtaques;
   const objetivos = enemigos(ctx, l).filter((e) => alcanzable(l, e));
   // Quién puede atacarlo a él, repartido entre los blancos que tiene cada uno.
@@ -402,7 +436,7 @@ function elegirModos(
  * Si nadie está al alcance devuelve el enemigo hacia el que conviene moverse.
  */
 export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const todos = enemigos(ctx, l);
   if (todos.length === 0) return null;
   const cercano = todos.reduce((a, b) => (distancia(l, b) < distancia(l, a) ? b : a));
@@ -436,7 +470,7 @@ export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
 
 /** ¿Usa ya la Acción Respuesta contra `atk` o guarda el ataque? */
 export function usarContra(ctx: Contexto, l: Luchador, atk: Luchador, bono: number): boolean {
-  nuevaDecision();
+  nuevaDecision(ctx);
   if (perfil(l) === 'bestia') return true;
   const ahora = valorAtaque(l, atk, { bono });
   if (ahora <= 0) return false;
@@ -454,7 +488,7 @@ export function usarContra(ctx: Contexto, l: Luchador, atk: Luchador, bono: numb
  * se mantiene hasta que actúe.
  */
 export function resistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
-  nuevaDecision();
+  nuevaDecision(ctx);
   if (l.ficha.acumulacion || l.haActuado || !puedeActuar(l) || perfil(l) === 'bestia') return false;
   l.planResistir ??= convieneResistir(ctx, l, atk);
   return l.planResistir;
@@ -518,7 +552,7 @@ function decidirCansancio(l: Luchador, ganancia: (k: number) => number, referenc
 }
 
 export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bono: number, plan: PlanAtaque = NORMAL): number {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const defensa = defensaFinal(def, atk);
   const valor = (k: number) => {
     const o = { bono, cansancio: k, maniobra: plan.maniobra, tipo: plan.tipo, especial: plan.especial };
@@ -530,7 +564,7 @@ export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bon
 }
 
 export function cansancioDefensa(ctx: Contexto, def: Luchador, atk: Luchador, habAtaque: number, resistiendo: boolean): number {
-  nuevaDecision();
+  nuevaDecision(ctx);
   if (def.ficha.acumulacion) return 0;
   const pron = (k: number) =>
     pronostico(atk, def, habAtaque, defensaFinal(def, atk, { cansancio: k, resistir: resistiendo }));
@@ -580,7 +614,7 @@ function pDiferenciaD100(kReal: number): number {
 
 /** Enemigos al alcance que un ataque en área alcanzaría, empezando por el elegido. */
 export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchador[] {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const otros = enemigos(ctx, atk).filter((e) => e !== def && enAlcance(atk, e));
   return [def, ...otros].slice(0, atk.cap.est.blancosArea);
 }
@@ -591,8 +625,9 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  * la maniobra: un rival derribado o apresado pega y defiende peor, uno desarmado amenaza menos.
  */
 export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number): PlanAtaque {
-  nuevaDecision();
-  if (perfil(atk) === 'bestia' || ctx.opciones.sinManiobras) return NORMAL;
+  nuevaDecision(ctx);
+  const sin = ctx.opciones.sinManiobras;
+  if (perfil(atk) === 'bestia' || sin === true || sin === atk.equipo) return NORMAL;
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
   const habDef = defensaFinal(def, atk);
@@ -694,12 +729,20 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
     let v = 0;
     if (m === 'area') {
       // Cada blanco con la misma cuenta que un golpe normal: daño, baja, crítico, tempo y su contra.
-      for (const b of area) {
-        const p = pronostico(atk, b, ataqueFinal(atk, b, { bono, maniobra: 'area', tipo }), defensaFinal(b, atk), { tipo });
-        v += valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
-        if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) v += p.pImpacto * amenaza(b, atk);
-        if (b.ataquesRestantes > 0 && puedeActuar(b)) v -= lambda(atk) * p.pContra * golpeDe(b, atk);
-      }
+      // Si uno que para lo desvía (le queda contra), lo intercepta: los siguientes no reciben nada,
+      // así que cada blanco cuenta con la probabilidad de que el ataque llegue hasta él (Core p.92).
+      const habs = area.map((b) => ({ hab: ataqueFinal(atk, b, { bono, maniobra: 'area', tipo }), def: defensaFinal(b, atk) }));
+      const llega = pLlegaArea(atk.cap.umbralAtaque, area.map((b, i) => ({
+        s: habs[i].hab - habs[i].def, umbralDefensa: b.cap.umbralDefensa,
+        para: (b.ficha.tipoDefensa ?? 'parada') === 'parada' && !b.ficha.acumulacion,
+      })));
+      area.forEach((b, i) => {
+        const p = pronostico(atk, b, habs[i].hab, habs[i].def, { tipo });
+        let vb = valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
+        if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) vb += p.pImpacto * amenaza(b, atk);
+        if (b.ataquesRestantes > 0 && puedeActuar(b)) vb -= lambda(atk) * p.pContra * golpeDe(b, atk);
+        v += llega[i] * vb;
+      });
     } else if (m === 'puntosPresion' && e.mushin >= 3) {
       // Mushin arcano: se prueba cada estado con su penalizador al ataque.
       for (const estado of [null, ...(Object.keys(ESTADOS_MUSHIN) as EstadoMushin[])]) {
@@ -731,7 +774,7 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
  * daño (arcano +60 / +100). Conviene si el golpe potenciado vale más que el ataque que se pierde.
  */
 export function prepararGodhand(ctx: Contexto, l: Luchador) {
-  nuevaDecision();
+  nuevaDecision(ctx);
   const g = l.cap.est.godhand;
   if (!g || l.godhandPreparado || l.ataquesRestantes < 1 || !puedeActuar(l)) return;
   let normal = 0;
@@ -775,7 +818,7 @@ export interface Proteccion {
  *   activa: necesita haber ganado el turno al atacante y tener reservado un ataque sin usar.
  */
 export function protectorPara(ctx: Contexto, def: Luchador, atk: Luchador): Proteccion | null {
-  nuevaDecision();
+  nuevaDecision(ctx);
   let mejor: Proteccion | null = null;
   let mejorDefensa = defensaFinal(def, atk) + 10;
   for (const g of ctx.luchadores) {
@@ -817,7 +860,7 @@ export function sacrificioHaima(def: Luchador, atk: Luchador, habAtk: number): n
  * claramente el intercambio de daño. Los agresivos no huyen.
  */
 export function quiereHuir(ctx: Contexto, l: Luchador): boolean {
-  nuevaDecision();
+  nuevaDecision(ctx);
   if (perfil(l) === 'agresivo') return false;
   return l.pv < l.ficha.pv / 4 && ctx.ventaja[l.equipo] < 0.5;
 }

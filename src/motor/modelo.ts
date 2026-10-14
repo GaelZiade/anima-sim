@@ -238,8 +238,11 @@ export interface OpcionesEscenario {
   faseLunar?: 'llena' | 'menguante' | 'creciente' | 'nueva' | 'eclipse';
   /** Permite huir del combate a quien va perdiendo (Core p.94). Por defecto se pelea hasta el final. */
   huida?: boolean;
-  /** Para análisis: todos atacan normal, sin maniobras. Sirve para medir cuánto aportan. */
-  sinManiobras?: boolean;
+  /**
+   * Para análisis: atacan normal, sin maniobras. `true` para los dos equipos, o el equipo ('A' o
+   * 'B') al que se le quitan; para medir cuánto le aportan a uno, el rival no tiene que cambiar.
+   */
+  sinManiobras?: boolean | Equipo;
 }
 
 export interface Contexto {
