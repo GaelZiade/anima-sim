@@ -3,6 +3,24 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 14/10/2026 (noche): proyectiles y línea de visión
+
+- **Mapa**: paredes (no se pasa ni se ve) y terreno infranqueable (no se pasa, pero se ve: abismo,
+  agua, lava). El editor tiene pincel de pared o de terreno; el tablero dibuja el terreno rayado.
+- **Línea de visión**: una pared la corta; un cuerpo en medio o la esquina de una pared dan
+  cobertura (−40).
+- **Armas a distancia** (Core p.80-81, p.94-96): arcos, ballestas, armas de fuego y arrojadizas, con
+  recarga y cadencia, munición, alcance efectivo, tope de 280, Tablas 47, 48 y 49, contra sin bono y
+  armas de fuego que se encasquillan o estallan. Se leen de la planilla (Teseo: hacha arrojadiza;
+  Kael: revólver de Leo; Stéphan: daga) y hay tiradores genéricos.
+- **IA**: dispara, recarga o apunta cuando rinde más que pelear cuerpo a cuerpo (con sus técnicas de
+  Ki en la cuenta).
+- **Medición** (1.000 combates, misma semilla, % de victorias): Kael vs Teseo a 10 m 9,9 → 12,4 y a
+  30 m 8,2 → 38,9 (el revólver de Leo lo deja a la defensiva mientras se acerca); Kael vs Kiran a
+  30 m 18,5 → 24,5; Kaito vs Teseo y Teseo vs Kiran sin cambios.
+
+Interpretaciones a confirmar en DISENO.md, "Proyectiles".
+
 ## 14/10/2026 (noche): Ki completo
 
 ### Habilidades del Ki (`0afccd1`, `e63782c`)

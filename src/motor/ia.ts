@@ -1278,14 +1278,34 @@ function formasDeDisparar(l: Luchador, i: number): { disparos: number; pen: numb
   return res;
 }
 
-/** El valor de un disparo de `l` a `e` con esa arma y ese penalizador, y la Tabla 47. */
-function valorDisparo(ctx: Contexto, l: Luchador, e: Luchador, i: number, pen: number): number | null {
+/** Si puede dispararle a `e` con esa arma (lo alcanza y lo ve), la Tabla 47 de ese disparo. */
+function tabla47(ctx: Contexto, l: Luchador, e: Luchador, i: number): { bono: number; lejos: boolean } | null {
   const a = l.ficha.armasDistancia![i];
   if (distancia(l, e) > alcanceMaximo(a) + 1e-6) return null;
   const vision = enAlcance(l, e) ? 'libre' : visionEntre(ctx.luchadores, l, e);
   if (vision === 'bloqueada') return null;
-  const { bono, lejos } = modProyectil(l, e, a, vision);
-  return mejorManiobra(ctx, l, e, false, bono, modDeAccion(l, 'ataque', false), false, true, { pen, sinArmas: false, proyectil: a, lejos }).valor;
+  return modProyectil(l, e, a, vision);
+}
+
+/** El valor de un disparo de `l` a `e` con esa arma y ese penalizador (null si no puede). */
+function valorDisparo(ctx: Contexto, l: Luchador, e: Luchador, i: number, pen: number, t = tabla47(ctx, l, e, i)): number | null {
+  if (!t) return null;
+  const ranura: Ranura = { pen, sinArmas: false, proyectil: l.ficha.armasDistancia![i], lejos: t.lejos };
+  return mejorManiobra(ctx, l, e, false, t.bono, modDeAccion(l, 'ataque', false), false, true, ranura).valor;
+}
+
+/**
+ * Lo que agrega su mejor técnica de Ki a un golpe contra `e`, descontado el Ki (0 sin técnicas): con
+ * un arma a distancia no se ejecutan, así que dejar de pegar también es dejar de usarlas.
+ */
+function gananciaTecnica(ctx: Contexto, l: Luchador, e: Luchador): number {
+  if (!l.ki) return 0;
+  const tecnicas = tecnicasPara(l, 'ataque');
+  if (!tecnicas.length) return 0;
+  const sin = mejorManiobra(ctx, l, e, false, 0, modDeAccion(l, 'ataque', false), false).valor;
+  let mejor = 0;
+  for (const t of tecnicas) mejor = Math.max(mejor, mejorManiobra(ctx, l, e, false, 0, vistaPrevia(l, t), false).valor - precioKi(l) * costeKi(t) - sin);
+  return mejor;
 }
 
 /**
@@ -1298,9 +1318,16 @@ export function accionADistancia(ctx: Contexto, l: Luchador): AccionDistancia | 
   const armas = l.ficha.armasDistancia;
   if (!armas?.length || perfil(l) === 'bestia' || l.apresadoPor || l.apresando) return null;
   nuevaDecision(ctx);
-  let cuerpo = 0;
-  for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) cuerpo = Math.max(cuerpo, valorAtaque(l, e, {}));
-  cuerpo *= Math.max(1, l.ataquesDeclarados);
+  // Lo que rinde pelear cuerpo a cuerpo este asalto: se calcula sólo si hay algo con qué compararlo.
+  let cuerpoMemo: number | undefined;
+  const cuerpo = () => {
+    if (cuerpoMemo === undefined) {
+      cuerpoMemo = 0;
+      for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) cuerpoMemo = Math.max(cuerpoMemo, valorAtaque(l, e, {}) + gananciaTecnica(ctx, l, e));
+      cuerpoMemo *= Math.max(1, l.ataquesDeclarados);
+    }
+    return cuerpoMemo;
+  };
   let mejor: { accion: AccionDistancia; valor: number } | null = null;
   let recargar: number | null = null;
   let cargada: number | null = null;
@@ -1311,24 +1338,27 @@ export function accionADistancia(ctx: Contexto, l: Luchador): AccionDistancia | 
       continue;
     }
     cargada ??= i;
-    for (const forma of formasDeDisparar(l, i))
-      for (const e of enemigos(ctx, l)) {
-        const v = valorDisparo(ctx, l, e, i, forma.pen);
-        if (v === null) continue;
+    const formas = formasDeDisparar(l, i);
+    for (const e of enemigos(ctx, l)) {
+      const t = tabla47(ctx, l, e, i);
+      if (!t) continue;
+      for (const forma of formas) {
+        const v = valorDisparo(ctx, l, e, i, forma.pen, t)!;
         const valor = (forma.disparos * v) / (1 + forma.recargaFalta);
         if (!mejor || valor > mejor.valor) mejor = { accion: { tipo: 'disparar', arma: i, objetivo: e, ...forma }, valor };
       }
+    }
   }
-  if (mejor && mejor.valor > 0 && mejor.valor >= cuerpo) return mejor.accion;
+  if (mejor && mejor.valor > 0 && mejor.valor >= cuerpo()) return mejor.accion;
   if (trabadoConAlguien(l)) return null;
   // Recargar vale el disparo que podrá hacer, repartido entre los asaltos que le faltan (contra los
   // enemigos tal como están ahora).
   if (recargar !== null) {
     let disparo = 0;
     for (const e of enemigos(ctx, l)) disparo = Math.max(disparo, valorDisparo(ctx, l, e, recargar, 0) ?? 0);
-    if (disparo / l.proyectiles[recargar].recargaFalta >= cuerpo) return { tipo: 'recargar', arma: recargar };
+    if (disparo / l.proyectiles[recargar].recargaFalta >= cuerpo()) return { tipo: 'recargar', arma: recargar };
   }
-  if (cuerpo > 0) return null;
+  if (cuerpo() > 0) return null;
   // Nadie al alcance: apunta al que llegará antes, si lo ve.
   if (cargada !== null && !mejor) {
     const a = armas[cargada];

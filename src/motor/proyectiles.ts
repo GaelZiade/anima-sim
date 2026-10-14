@@ -61,7 +61,15 @@ export function datosProyectil(nombre: string): DatosTabla34 | null {
 const CADENCIA_SIN_TABLA = 80;
 
 /** El arma con lo que le falte completado de la Tabla 34. */
+const completas = new WeakMap<ArmaDistancia, Required<Pick<ArmaDistancia, 'recarga' | 'cadencia'>> & ArmaDistancia>();
+
 export function completarArma(a: ArmaDistancia): Required<Pick<ArmaDistancia, 'recarga' | 'cadencia'>> & ArmaDistancia {
+  let c = completas.get(a);
+  if (!c) completas.set(a, (c = completar(a)));
+  return c;
+}
+
+function completar(a: ArmaDistancia): Required<Pick<ArmaDistancia, 'recarga' | 'cadencia'>> & ArmaDistancia {
   const t = datosProyectil(a.nombre);
   return {
     ...a,

@@ -329,21 +329,79 @@ y en el CLI (`src/paralelo-node.ts`, `--hilos=N`).
 
 ## Mapa
 
-Grilla de celdas de 1 m (`motor/mapa.ts`), al estilo BattleCast, con celdas no transitables. Cada
-luchador ocupa una celda y está trabado con los de las 8 vecinas (en diagonal no, si un muro tapa la
-esquina). Se mueve en 8 direcciones (la diagonal mide √2 m) sin atravesar muros ni cuerpos: Dijkstra
+Grilla de celdas de 1 m (`motor/mapa.ts`), al estilo BattleCast. Hay dos clases de celdas no
+transitables: **paredes** (`bloqueadas`: no se pasa ni se ve a través) y **terreno infranqueable**
+(`infranqueables`: abismo, agua, lava; no se pisa, pero se ve y se dispara por encima, y se puede
+rodear en diagonal). Los mapas guardados antes sólo tienen paredes. Cada luchador ocupa una celda y
+está trabado con los de las 8 vecinas (en diagonal no, si una pared tapa la esquina). Se mueve en 8 direcciones (la diagonal mide √2 m) sin atravesar muros ni cuerpos: Dijkstra
 con corte al llegar, y un campo de distancias por celda de destino (sólo terreno) que la IA usa para
 medir cuánto le falta a cada uno y que queda guardado con el mapa para todos los combates. Sin mapa
 se arma uno abierto con los bandos a la distancia inicial. Trabarse con alguien lo agrega a una
 lista ordenada por llegada: el orden define frente/flanco/espalda (Core p.90).
+
+**Línea de visión** (`lineaDeVision`): recorre las celdas que cruza el segmento entre los centros. Una
+pared la corta; pasar justo por la esquina de dos paredes también, y por la de una sola o por una
+celda con otro luchador da **cobertura** (−40, Tabla 47).
 
 ## Fases
 
 1. **Motor físico + IA + Monte Carlo por consola** ← hecho (auditado contra los manuales, ver AUDITORIA.md)
 2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
 3. **Ki** ← hecho (lo que no se simula, en "Pendiente del Ki")
-4. Proyectiles y línea de visión ← siguiente
-5. Magia (zeon, ACT, escudos) y psíquica
+4. **Proyectiles y línea de visión** ← hecho (ver "Proyectiles")
+5. Magia (zeon, ACT, escudos) y psíquica ← siguiente
+
+## Proyectiles (fase 4)
+
+Arcos, ballestas, armas de fuego y arrojadizas (`motor/proyectiles.ts`, Core p.80-81 y p.94-96).
+
+### Datos
+
+`Ficha.armasDistancia`: nombre, disparo o lanzamiento, habilidad y daño finales, crítico, alcance
+efectivo (ya con la Tabla 46), recarga o cadencia, munición, si es de fuego y calidad. De la planilla
+se leen las armas con munición y las "Lanzable (CF/alcance)"; lo que falte sale de la Tabla 34 por
+el nombre. Sin munición declarada: sin límite al disparar, una unidad al lanzar. Las armas Leo
+disparan con su revólver (alcance de Dominus p.101, sin recargar). Genéricos con arco, ballesta y
+arcabuz en `ejemplos/tiradores.json`.
+
+### Reglas
+
+| Regla | Fuente |
+|---|---|
+| Un disparo es un ataque con la ranura del arma: su habilidad, daño y crítico; la calidad del arma resta la TA | Core p.94 |
+| Recarga: por cada 100 de habilidad baja un asalto con −30 acumulable a todos los disparos; por debajo de 1 dispara de más (arco con 100: dos flechas a −30) | Core p.96 |
+| Cadencia (arrojadizas): una por cada CF de habilidad, mínimo una, −10 a todas por cada una de más | Core p.96 |
+| Alcance efectivo; hasta el doble con −30 y la mitad de daño | Core p.95 |
+| Tope de 280 al resultado final, salvo Extensión del aura | Core p.95 |
+| Tabla 47: moverse −10 (correr al máximo −50), cobertura −40, cambiar de blanco −10, blanco que se mueve rápido −20/−40/−60, haberse defendido −40, apuntar +10 por asalto (hasta +30), bocajarro +30 | Core p.95-96 |
+| Tabla 48: dificultad por distancia | Core p.96 |
+| Tabla 49: disparo parada −80 (maestro −20), esquiva −30 (maestro 0); lanzamiento parada −50 (maestro 0); a bocajarro, nada; un escudo sobrenatural, nada | Core p.96, p.100 |
+| Contra desde lejos: sólo con un arma a distancia y sin el bono | Core p.95 |
+| Armas de fuego: pifia de nivel menor al umbral (80, +15 por cada +5) se encasquilla; mayor, estalla | Core p.80-81 |
+| Sin línea de visión no se dispara (tampoco con técnicas de Ki a distancia) | |
+
+**IA**: al empezar su turno compara disparar (cada forma de recarga o cadencia, contra cada enemigo
+que alcance y vea, repartida entre los asaltos de recarga que deja) con su mejor ataque cuerpo a
+cuerpo; recarga si el próximo disparo, repartido entre los asaltos que faltan, rinde más que pelear;
+si nadie está al alcance pero alguien llegará, le apunta. Quien usa un arma a distancia no se acerca
+ese asalto. Si el blanco cae a mitad de los disparos, sigue con el que más rinda.
+
+**Interpretaciones a confirmar:**
+
+1. Disparar, recargar o apuntar ocupa todo el turno: no se mezclan disparos y golpes en un asalto.
+2. Los asaltos de recarga se gastan recargando (el turno); si hace otra cosa, la recarga no avanza.
+3. Una arrojadiza lanzada se pierde: no se recoge durante el combate.
+4. Un arma encasquillada no se vuelve a usar en el combate.
+5. El turno es siempre el del arma principal: usar el arma a distancia no lo cambia ni cuesta
+   desenfundar.
+6. La cobertura (−40) sale de la geometría: un cuerpo en la línea o la esquina de una pared. También
+   resta a las técnicas de Ki a distancia, que no tienen los demás modificadores de la Tabla 47.
+7. La velocidad del blanco cuenta si se movió en el asalto, por su Tipo de movimiento.
+
+**No se simula todavía:** disparos paralelos (regla opcional, Core p.95), "preparado para disparar"
+(el texto del turno está cortado en el manual), lluvia de proyectiles, escudos físicos contra
+proyectiles (−30), blanco grande, atrapar con Trucos de manos, recuperar arrojadizas y alejarse para
+seguir disparando.
 
 ## Ki (fase 3)
 
