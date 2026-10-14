@@ -248,3 +248,16 @@ td:last-child { white-space: normal; min-width: 160px; }
 .resumen-corto .b { color: var(--equipo-b); }
 .resumen-corto .e { color: var(--tenue); }
 .acciones-fijas ~ .panel:first-of-type { margin-top: 12px; }
+
+/* Diálogo de opciones de "Simular muchos". */
+.dialogo {
+  width: min(760px, calc(100vw - 32px));
+  background: var(--panel);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.dialogo::backdrop { background: rgba(0, 0, 0, 0.5); }
+.dialogo h2 { margin: 0 0 4px; font-size: 18px; }
+.dialogo .acciones { justify-content: flex-end; }

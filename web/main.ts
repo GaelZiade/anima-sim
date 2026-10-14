@@ -44,7 +44,21 @@ interface Estado {
   equipoB: Integrante[];
   mapa?: MapaGuardado;
   pestana?: 'propios' | 'genericos';
+  /** Los últimos valores del diálogo de opciones. */
+  opciones?: OpcionesGuardadas;
 }
+
+/** Lo que se elige en el diálogo de "Simular muchos" (también vale para ver en vivo). */
+interface OpcionesGuardadas {
+  combates: number;
+  hilos: number;
+  semilla: number;
+  oscuridad: string;
+  faseLunar: string;
+  casillas: Record<string, boolean>;
+}
+
+const CASILLAS = ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const;
 
 /** Lo que trae un escenario .json (el mismo formato que usa el CLI). */
 interface EscenarioJson {
@@ -364,9 +378,10 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
     columna(estado.equipoB, 2 + d);
   }
   completarPosiciones();
-  for (const id of ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const) ($(id) as HTMLInputElement).checked = !!o[id];
+  for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o[id];
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
   ($('oscuridad') as HTMLSelectElement).value = o.oscuridad ?? '';
+  estado.opciones = leerOpciones();
   return errores;
 }
 
@@ -817,7 +832,7 @@ $('reubicar').addEventListener('click', () => {
   guardar();
   dibujarMapa();
 });
-$('simular').addEventListener('click', () => void simular());
+
 $('cancelar').addEventListener('click', () => corrida?.cancelar());
 $('enVivo').addEventListener('click', verEnVivo);
 $('play').addEventListener('click', () => reproducir(!funcion?.reproduciendo));
@@ -847,7 +862,60 @@ document.addEventListener('keydown', (e) => {
     irA(funcion.indice - 1);
   }
 });
-($('hilos') as HTMLInputElement).value = String(navigator.hardwareConcurrency || 4);
+
+// ---------- Opciones ----------
+
+function leerOpciones(): OpcionesGuardadas {
+  return {
+    combates: Math.max(1, Math.round(numeroDe('combates')) || 10000),
+    hilos: Math.max(1, Math.round(numeroDe('hilos')) || 1),
+    semilla: Math.max(1, Math.round(numeroDe('semilla')) || 1),
+    oscuridad: $<HTMLSelectElement>('oscuridad').value,
+    faseLunar: $<HTMLSelectElement>('faseLunar').value,
+    casillas: Object.fromEntries(CASILLAS.map((id) => [id, marcado(id)])),
+  };
+}
+
+function mostrarOpciones(o: OpcionesGuardadas) {
+  ($('combates') as HTMLInputElement).value = String(o.combates);
+  ($('hilos') as HTMLInputElement).value = String(o.hilos);
+  ($('semilla') as HTMLInputElement).value = String(o.semilla);
+  $<HTMLSelectElement>('oscuridad').value = o.oscuridad;
+  $<HTMLSelectElement>('faseLunar').value = o.faseLunar;
+  for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o.casillas[id];
+}
+
+const dialogo = $<HTMLDialogElement>('dialogoSimular');
+// "Simular muchos…" abre las opciones con los últimos valores; "Simular" las guarda y corre.
+$('simular').addEventListener('click', () => {
+  if (estado.opciones) mostrarOpciones(estado.opciones);
+  dialogo.returnValue = '';
+  dialogo.showModal();
+  $('confirmarSimular').focus();
+});
+// Se atiende el envío del formulario (inmediato) y no el "close" del diálogo, que llega después.
+$('formSimular').addEventListener('submit', (e) => {
+  const boton = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+  if (boton?.value === 'simular') {
+    estado.opciones = leerOpciones();
+    guardar();
+    void simular();
+  } else if (estado.opciones) {
+    // Cancelar deja todo como estaba.
+    mostrarOpciones(estado.opciones);
+  }
+});
+dialogo.addEventListener('cancel', () => {
+  // Escape: lo mismo que Cancelar.
+  if (estado.opciones) mostrarOpciones(estado.opciones);
+});
+
+if (estado.opciones) mostrarOpciones(estado.opciones);
+else {
+  ($('hilos') as HTMLInputElement).value = String(navigator.hardwareConcurrency || 4);
+  estado.opciones = leerOpciones();
+  guardar();
+}
 
 completarPosiciones();
 dibujar();

@@ -253,9 +253,12 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   B desde la derecha) y se arrastran a otra celda. Mapa y posiciones viajan en
   `OpcionesEscenario` (`mapa`, `posiciones`), así el Monte Carlo usa el mismo mapa.
 - **Combate:** dos equipos, con arma, perfil y estado inicial por luchador; una ficha repetida se
-  numera. Opciones del escenario (luz, rotura, huida, espacio reducido, armas enfundadas, fase
-  lunar), cantidad de combates, hilos y semilla. La fase lunar sólo se habilita si alguien tiene el
-  Legado de la Luna.
+  numera.
+- **Botones siempre a mano:** una barra fija arriba con "Ver un combate en vivo", "Simular muchos…",
+  el progreso y el resultado resumido. "Simular muchos…" abre un diálogo con las opciones (cantidad
+  de combates, hilos, semilla, luz, fase lunar y reglas opcionales) con los últimos valores usados:
+  "Simular" los guarda y corre; "Cancelar" o Escape no cambian nada. Ver en vivo usa las mismas. La
+  fase lunar sólo se habilita si alguien tiene el Legado de la Luna.
 - **En vivo:** corre un combate con la semilla elegida y lo reproduce sobre el mapa, una línea del
   registro por vez. Las fichas recorren el camino real celda por celda (`Evento.camino`) y dejan
   una estela punteada de su color, que dura todo el asalto. Quien tiene el turno lleva un aro
