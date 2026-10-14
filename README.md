@@ -131,25 +131,26 @@ fichas/         planillas reales de la mesa
 ## Estado y próximos pasos
 
 **Hecho:** combate cuerpo a cuerpo completo (maniobras, estilos, Ars Magnus, ventajas de combate,
-Tabla 43 entera con la Tabla 1 del Dominus), Ki (técnicas, mantener, espera, Límites, Leo), auditoría
-contra los manuales, mapa en grilla con terreno, página con compendio, editor de mapa, Monte Carlo en
-paralelo y combate en vivo animado.
+Tabla 43 entera con la Tabla 1 del Dominus), Ki completo (técnicas con sus efectos sobrenaturales,
+Combinables, Forzar, desventajas, técnicas a distancia, habilidades activas del Ki, Límites, Leo),
+auditoría contra los manuales, mapa en grilla con terreno, página con compendio, editor de mapa,
+Monte Carlo en paralelo y combate en vivo animado.
 
 **Personajes de la mesa** (`fichas/`): Kaito, Teseo, Kiran, Kael, Isana (tao), Stéphan, Rita (planilla
-Akuma Exxet, mentalista). Kael está simulado completo (Ki, Leo, Límites).
+Akuma Exxet, mentalista). Kael está simulado completo (Ki, Leo, Límites); Kiran e Isana, con sus
+habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 
 **Próximos pasos, en orden:**
 
-1. **Ki pendiente:** técnicas Combinables usadas juntas; habilidades activas (Aura de combate de
-   Isana, Aumento de características, Destrucción por Ki, Armadura de energía mayor, Forzar
-   Técnicas, Absorción de energía); efectos sobrenaturales (estados, apresamiento, escudo de
-   energía) y técnicas a distancia. Ver DISENO.md, "Pendiente del Ki".
+1. **Proyectiles** (Tablas 47-49, recarga, armas de fuego) y **línea de visión** en el mapa. Las
+   técnicas de Ki a distancia ya usan las Tablas 48 y 49; les falta mirar la línea de visión.
 2. **Magia** (zeon, ACT, conjuros, escudos; Arcana) **y psíquica** (CV, potencial; Rita).
-3. **Proyectiles** (Tablas 47-49) y línea de visión en el mapa.
+3. **Confirmar las interpretaciones del Ki** (DISENO.md, "Interpretaciones a confirmar").
 4. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.
 5. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
-   desde parado); Erudición del Ki (localizar sin ver) supone la tirada; ver AUDITORIA.md sección 3.
+   desde parado); Erudición del Ki (localizar sin ver) supone la tirada; lo que no se simula del Ki
+   (DISENO.md, "Pendiente del Ki"); ver AUDITORIA.md sección 3.
 
 **Decisiones del usuario que conviene no reabrir:** el combate desarmado es Precisa y apunta a la
 cabeza con −30 (Core p.76-77); Defensa adicional de Ki = +N defensas libres; técnicas en espera se

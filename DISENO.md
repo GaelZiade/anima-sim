@@ -341,9 +341,9 @@ lista ordenada por llegada: el orden define frente/flanco/espalda (Core p.90).
 
 1. **Motor físico + IA + Monte Carlo por consola** ← hecho (auditado contra los manuales, ver AUDITORIA.md)
 2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
-3. **Ki** ← casi completo (ver "Pendiente del Ki")
-4. Magia (zeon, ACT, escudos) y psíquica ← siguiente
-5. Proyectiles y línea de visión
+3. **Ki** ← hecho (lo que no se simula, en "Pendiente del Ki")
+4. Proyectiles y línea de visión ← siguiente
+5. Magia (zeon, ACT, escudos) y psíquica
 
 ## Ki (fase 3)
 
@@ -383,8 +383,82 @@ opciones. Se leen de los bloques de la hoja Ki desde el título "Técnicas de Do
 
 Efectos que entiende: Habilidad de ataque, de contraataque, de parada y de esquiva (normal, completa
 y limitada), Ataque y Defensa predeterminados, Aumento, Multiplicador y Sustitución de Daño (y sus
-versiones reales), Ataque y Defensa adicional, Incrementar Turno, Ataque con área, Destruir armadura,
-Armadura, Incremento de RF, Dañar energía, Maniobras de combate y apuntar. Los demás se ignoran.
+versiones reales), Ataque y Defensa adicional, Incrementar Turno, Ataque con área, Ataque a
+distancia, Destruir armadura, Armadura, Incremento de RF, Dañar energía, Maniobras de combate y
+apuntar, Potenciar Crítico, Ataque sobrenatural, Ataque elemental, Ataque indirecto, Marca, Impacto,
+Apresamiento, Estados sobrenaturales, Interrupción, Escudo de energía, Acumulación, Intangibilidad,
+Reflectar el ataque y Absorción de Ki; y las desventajas Agotamiento, Exceso de energía,
+Penalizador a toda Acción, Circunstancia límite, Daño reducido y Ataque especializado. Los demás se
+registran como desconocidos y se ignoran.
+
+### Combinables y forzadas (`repertorio`)
+
+Lo que puede ejecutar es su repertorio: sus técnicas, las combinaciones de 2 o 3 Combinables y, con
+Forzar Técnicas, la versión forzada de cada una. La IA elige entre todas con la misma cuenta.
+
+| Regla | Fuente |
+|---|---|
+| Combinables: se usan a la vez en una acción, suman sus costes y reúnen sus efectos; de los iguales vale el mayor | Dominus p.49 |
+| Forzar: el doble de cada acumulación; cada efecto sube la mitad hacia abajo, el multiplicador +1 y las Resistencias +40 | Dominus p.21 |
+| Una mantenida se fuerza sólo al ejecutarla; los asaltos siguientes se mantiene la normal | Dominus p.21 |
+
+### Habilidades del Ki que se usan en combate
+
+| Habilidad | Cómo se simula | Fuente |
+|---|---|---|
+| Armadura de energía mayor | La planilla ya trae TA 4 contra energía; apagada vuelve a TA 2. La IA la enciende (1 de Ki al encenderla y cada 5 asaltos) si algún rival ataca con energía | Dominus p.19 |
+| Armadura de energía arcana | TA 4 gratis; TA 6 pagando como la mayor | Dominus p.19 |
+| Recuperación | 5 de Ki por 1 de cansancio, uno por asalto | Core p.105 |
+| Dominio físico | +10 a la RF contra críticos y estados | Dominus p.22 |
+| Aura de combate | Control de Presencia + d100 de los enemigos sensibles (Presencia menor a la suya −10) contra la dificultad; afectado (−10), miedo o parálisis según el fracaso, desvanecido con 100 o más. Gratis, 1 de Ki cada 5 asaltos | Dominus p.20-22, Tabla 9 |
+| Absorción de energía | 1 de Ki por cada 5 de daño de energía | Dominus p.20 |
+| Curación por Ki / superior | 2 o 5 PV por Ki, nunca más de la mitad del daño sufrido; una acción activa en lugar de un ataque | Core p.104, Dominus p.20 |
+| Aumento de características (Incremento superior) | Sube AGI, CON, DES o FUE hasta +3 (+4) pagando el valor alcanzado y 1 de Ki por asalto (cada 10); recalcula los bonos de la Tabla 3 | Core p.105, Dominus p.21 |
+| Destrucción por Ki | Toque sin penalizador; RF contra la Presencia base (+5 por punto extra, hasta el doble); el fracaso es daño sin armadura | Core p.104 |
+| Forzar Técnicas | Ver arriba | Dominus p.21 |
+
+### Efectos sobrenaturales (Dominus cap. 5)
+
+| Efecto | Cómo se simula | Fuente |
+|---|---|---|
+| Estados sobrenaturales | Cada Estado añadido se tira aparte con su RF. Condición Ataque o Beso (−120): si el golpe daña (o dañaría, con Daño reducido); Contacto físico: si alcanza contra TA 0; las demás (visual, sonido, aire, superficie) son automáticas: una acción activa sin tirada de ataque sobre un blanco o, si son de varios, sobre todos a la Distancia del Efecto | p.66-68 |
+| Duraciones | Lo que dura minutos u horas dura todo el combate; las parálisis, tantos asaltos como el fracaso; Penalización menor baja 5 por asalto | p.67 |
+| Escudo de energía | Defiende con su parada o esquiva sin penalizador por defensas adicionales ni por proyectiles; si para, recibe el daño base (+10 por TA que reste el ataque) salvo que no pase su barrera 40; si se rompe, el resto alcanza sin defensa. Mantenido conserva el daño | p.66; Core p.100; Dominus p.11 |
+| Acumulación | Ese asalto es un ser con acumulación, con TA 4 más y una pantalla de PV que pierde primero | p.65 |
+| Intangibilidad | Lo atraviesa todo ataque que no sea de energía | p.69 |
+| Reflectar el ataque | Si se defiende con éxito, el ataque vuelve con la habilidad final del atacante (+ el bono de contra) y su daño, sin efectos esotéricos; no gasta acciones | p.71 |
+| Absorción de Ki | Con una defensa que permita contraatacar se queda con Ki de la técnica rival (hasta su límite) | p.64 |
+| Apresamiento | Presa sin penalizador, con el valor de la técnica en el control | p.64 |
+| Impacto | Control enfrentado de su Fuerza contra la del Impacto si supera la defensa; si lo pierde, Tabla 2 (metros) y Tabla 3 (daño del Grado, −10 por TA contundente; desde G4 crítico con el doble). Con Atraer, lo trae al cuerpo a cuerpo | p.68-69, p.12 |
+| Marca | Si daña, +20 (menor) o +50 (mayor) a sus ataques contra ese rival | p.70 |
+| Interrupción (Ki) | RF contra el daño + el valor; si falla, pierde lo acumulado, las mantenidas y las que tenía en espera | p.69 |
+| Potenciar Crítico | Suma a la tirada del crítico; con Crítico automático, critica si daña | p.70-71 |
+| Ataque sobrenatural | Ataca en ENE; sólo lo para quien para energía (o con un escudo) | p.64 |
+| Ataque elemental | Ataca en CAL (fuego), ELE (aire), FRI (agua), FIL/CON/PEN (tierra) o ENE (luz, oscuridad), sin el −10 del crítico secundario | p.63 |
+| Ataque indirecto | No se le puede contraatacar | p.52 |
+| Ataque a distancia | Alcance en metros; daño del arma o 2×Presencia base + bono de POD. Proyectil disparado: el defensor sufre la Tabla 49 (parada −80, maestro −20; esquiva −30, maestro 0); el ataque final tiene que superar la dificultad de la Tabla 48. A distancia sólo se apunta, y no hay contra si no lo alcanza | p.57; Core p.96 |
+
+Desventajas: Agotamiento (cansancio al ejecutarla, sin bono), Exceso de energía (paga otra vez su
+coste), Penalizador a toda Acción (baja 10 por asalto, nada lo quita), Circunstancia límite (mitad
+de PV, un cuarto, PV negativos, o haber recibido más de 10 de daño el asalto anterior), Daño reducido
+(mitad o nada, los efectos siguen) y Ataque especializado (contra otra defensa no tiene efectos).
+Las demás (elementales, condiciones de ambiente, Predeterminación…) no cambian el combate simulado.
+
+**Interpretaciones a confirmar** (no las precisa el manual):
+
+1. El Aura de combate afecta sólo a enemigos, y su parálisis es parcial.
+2. Absorción de energía sólo contra daño de tipo ENE.
+3. Curación por Ki es una acción activa que reemplaza un ataque.
+4. Aumento de FUE: el daño sube por el bono redondeado a grupos de 10; el de CON no cambia los PV.
+5. Destrucción por Ki se paga al usarla y no se combina con técnicas que mejoren el golpe.
+6. Estados: Control y Terror lo sacan del combate (como huido); Fascinación lo deja sin acciones
+   activas hasta superar la RF, que repite cada vez que lo atacan; Ilusión no se simula.
+7. Estados automáticos de varios blancos alcanzan también a los aliados a esa distancia.
+8. Impacto: se toma el mínimo de metros de la Tabla 2 y el daño medio del Grado de la Tabla 3; en el
+   mapa se frena contra muros y cuerpos (el Grado no baja).
+9. Acumulación (Ki): ese asalto no tira defensa, como los seres con acumulación.
+10. Reflectar usa el daño base del atacante; el ataque reflejado no se vuelve a reflectar.
+11. Las técnicas a distancia sufren la Tabla 48 (dificultad por distancia) como cualquier proyectil.
 
 **Interpretaciones confirmadas**:
 
@@ -437,11 +511,27 @@ penalizadores contra disparos (Core p.96). La bala no suma la Fuerza del usuario
 - En espera: al empezar a acumular de cero declara la técnica (de las que tardan más de un asalto)
   que más rinde por asalto de acumulación; si al final de un asalto la juntó y no la usó, la deja en
   espera. Si pasa más de 3 asaltos en espera sin usarse, la deja ir.
+- Efectos sobrenaturales: cada uno vale en PV (un estado, lo que deja de pegar o los PV que le
+  quedan si lo saca del combate, por la chance de fallar la RF; Impacto, el asalto que pierde; Marca,
+  lo que suman los golpes siguientes; Interrupción, el Ki que le hace perder). Las desventajas se
+  descuentan (Exceso, el Ki otra vez; Agotamiento, 5 PV por punto; Penalizador, lo que deja de pegar).
+- Estados automáticos: en lugar de un ataque, si rinden más que su mejor ataque (los aliados que
+  alcance cuentan en contra).
+- A distancia: si el objetivo está lejos, ataca con la técnica a distancia que más rinda si eso vale
+  más que acercarse a pegarle. Intangibilidad, antes de la iniciativa, por lo que le ahorra de los
+  que no dañan energía. Escudo, Acumulación, Reflectar y Absorción de Ki, al defenderse.
+- Aumento de características: el atributo que más gana en golpes previstos (4 asaltos) frente a su
+  costo. Armadura mayor si algún rival ataca con energía; Aura si algún rival es sensible;
+  Recuperación si le sobra el Ki. Curación cuando un aliado (o él) está por debajo del 70%.
 
 ### Pendiente del Ki
 
-- Técnicas Combinables usadas juntas en una misma acción.
-- Habilidades activas: Aumento de características, Destrucción por Ki, Armadura de energía mayor,
-  Aura de combate, Forzar Técnicas, Absorción de energía.
-- Efectos sobrenaturales (Estados, Apresamiento, Impacto, Escudo de energía…) y técnicas a distancia.
-- Velocidad: con Ki la IA evalúa más opciones (Kael simula unos 950 combates/s contra 1.900 sin Ki).
+No se simulan (no cambian el combate de la mesa o piden reglas que todavía no están): Camuflar
+ataque (Advertir), Acción adicional, Recuperar acción, Previsión, Transporte automático, Parada en
+área, Aumentar rotura y entereza, Incremento de movimiento y de habilidad, Capacidad incrementada,
+Armas físicas de Ki, Espejismo, Choque físico (descargas), las Ilusiones, Regeneración de escudos y
+pantallas, Ataque continuo y Combo, Proyección y Estela de destrucción, y la Transmisión del Ki.
+Las técnicas a distancia todavía no miran la línea de visión (llega con los proyectiles).
+
+Velocidad: con Ki la IA evalúa cada técnica con cada maniobra. Tras las optimizaciones exactas (huella
+idéntica) Kael simula unos 1.500 combates/s contra unos 3.300 sin Ki (`npm run bench -- Kael`).

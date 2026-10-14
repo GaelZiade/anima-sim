@@ -3,6 +3,36 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 14/10/2026 (noche): Ki completo
+
+### Habilidades del Ki (`0afccd1`, `e63782c`)
+
+- **Armadura de energía mayor y arcana** (Dominus p.19): la IA la enciende si algún rival ataca
+  con energía; 1 de Ki al encenderla y cada 5 asaltos.
+- **Recuperación** (Core p.105), **Dominio físico** (+10 a la RF, Dominus p.22).
+- **Aura de combate** (Dominus p.20-22): control de Presencia de los enemigos sensibles; afectado,
+  miedo, parálisis o desvanecido. Los arquetipos de Abel tienen Presencia.
+- **Absorción de energía**, **Curación por Ki** (y superior), **Aumento de características**
+  (recalcula los bonos), **Destrucción por Ki**.
+
+### Técnicas (`9c3fa7d`, `60046c4`, `9512f24`)
+
+- **Combinables** usadas juntas y **Forzar Técnicas** (Dominus p.21, p.49).
+- **Efectos sobrenaturales** (Dominus cap. 5): Estados (con sus RF y condiciones, también los
+  automáticos sobre varios blancos), Escudo de energía, Acumulación, Intangibilidad, Reflectar,
+  Absorción de Ki, Apresamiento, Impacto (Tablas 2 y 3 del Dominus), Marca, Interrupción,
+  Potenciar Crítico, Ataque sobrenatural, elemental e indirecto.
+- **Desventajas**: Agotamiento, Exceso de energía, Penalizador a toda Acción, Circunstancia
+  límite, Daño reducido, Ataque especializado.
+- **Técnicas a distancia**: el defensor sufre la Tabla 49 y el disparo, la Tabla 48 (Core p.96). La
+  IA ataca de lejos cuando rinde más que acercarse.
+
+### Velocidad (`03be72b`)
+
+Optimizaciones exactas de la IA (huella idéntica): Kael con Ki pasa de ~1.150 a ~1.500 combates/s.
+
+Las interpretaciones que el manual no precisa están en DISENO.md, "Interpretaciones a confirmar".
+
 ## 14/10/2026: auditoría, Ki, mapa y combate en vivo
 
 ### Auditoría contra los manuales (`ef267d6`)
