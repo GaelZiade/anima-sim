@@ -89,7 +89,8 @@ function aplicarAuras(ctx: Contexto, vivos: Luchador[]) {
     if (!fuente.ki?.auraActiva || !activo(fuente)) continue;
     const dificultad = dificultadAura(fuente, penAccion(fuente));
     for (const x of ctx.luchadores) {
-      if (x.equipo === fuente.equipo || !activo(x) || !sensibleAlAura(fuente, x) || distancia(fuente, x) > radioAura(fuente)) continue;
+      // Alcanza a todos los del radio, aliados incluidos (Dominus p.21: "aquellos que lo rodean").
+      if (x === fuente || !activo(x) || !sensibleAlAura(fuente, x) || distancia(fuente, x) > radioAura(fuente)) continue;
       const previo = x.aura;
       if (previo && (previo.estado !== 'afectado' || ctx.asalto - previo.asalto < 5)) continue;
       const dado100 = tirarD100Cerrada(ctx.rng);

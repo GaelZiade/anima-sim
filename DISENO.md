@@ -444,21 +444,33 @@ de PV, un cuarto, PV negativos, o haber recibido más de 10 de daño el asalto a
 (mitad o nada, los efectos siguen) y Ataque especializado (contra otra defensa no tiene efectos).
 Las demás (elementales, condiciones de ambiente, Predeterminación…) no cambian el combate simulado.
 
-**Interpretaciones a confirmar** (no las precisa el manual):
+**Interpretaciones confirmadas** (14/10/2026):
 
-1. El Aura de combate afecta sólo a enemigos, y su parálisis es parcial.
-2. Absorción de energía sólo contra daño de tipo ENE.
+1. El Aura de combate alcanza a todos los del radio (Presencia/5 m), aliados incluidos, salvo a
+   quienes tengan la Presencia a 10 o menos de la suya; su paralización es parcial ("incapaz apenas
+   de moverse"). La IA no la enciende con un aliado sensible cerca.
+2. Absorción de energía: contra daño plenamente sobrenatural o energético (ataques en ENE, Ataque
+   sobrenatural, descargas), no contra un golpe físico que sólo daña energía ni contra efectos con
+   RF (Dominus p.20).
 3. Curación por Ki es una acción activa que reemplaza un ataque.
-4. Aumento de FUE: el daño sube por el bono redondeado a grupos de 10; el de CON no cambia los PV.
-5. Destrucción por Ki se paga al usarla y no se combina con técnicas que mejoren el golpe.
-6. Estados: Control y Terror lo sacan del combate (como huido); Fascinación lo deja sin acciones
-   activas hasta superar la RF, que repite cada vez que lo atacan; Ilusión no se simula.
+4. Aumento de CON no cambia los PV durante el combate.
+5. Destrucción por Ki se paga al usarla (1 de Ki más los extra) y es su propio ataque de contacto.
+6. Control y Terror lo sacan del combate (como huido); Fascinación lo deja sin acciones activas
+   hasta superar la RF, que repite cada vez que lo atacan; las Ilusiones no se simulan.
 7. Estados automáticos de varios blancos alcanzan también a los aliados a esa distancia.
-8. Impacto: se toma el mínimo de metros de la Tabla 2 y el daño medio del Grado de la Tabla 3; en el
-   mapa se frena contra muros y cuerpos (el Grado no baja).
-9. Acumulación (Ki): ese asalto no tira defensa, como los seres con acumulación.
-10. Reflectar usa el daño base del atacante; el ataque reflejado no se vuelve a reflectar.
-11. Las técnicas a distancia sufren la Tabla 48 (dificultad por distancia) como cualquier proyectil.
+8. Impacto: Tabla 2 (metros, el mínimo del rango) y Tabla 3 (daño medio del Grado); contra un muro
+   el Grado no baja.
+9. Reflectar usa la habilidad final y el daño base del atacante; lo reflejado no se vuelve a reflectar.
+10. Las técnicas a distancia sufren la Tabla 48 (dificultad por distancia); la cobertura llega con la
+    línea de visión.
+
+**Se mantienen según el manual** (la respuesta del 14/10 decía otra cosa):
+
+- Aumento de FUE: el daño final se redondea en grupos de 10 hacia arriba porque así se calcula
+  siempre el daño con el bono de Fuerza (Core p.74, ejemplo de Lemures: 45 + 10 = 55 → 60).
+- El efecto de técnica **Acumulación** (Dominus p.65: "puede actuar durante el asalto como una
+  criatura con Acumulación de Daño") no es acumular Ki: ese asalto no tira defensa. Acumular Ki sí
+  deja defenderse normalmente (y ya era así).
 
 **Interpretaciones confirmadas**:
 

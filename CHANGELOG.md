@@ -31,7 +31,8 @@ retomar el trabajo, empezar por README.md.
 
 Optimizaciones exactas de la IA (huella idéntica): Kael con Ki pasa de ~1.150 a ~1.500 combates/s.
 
-Las interpretaciones que el manual no precisa están en DISENO.md, "Interpretaciones a confirmar".
+Interpretaciones confirmadas por el usuario (DISENO.md): el Aura de combate alcanza también a los
+aliados sensibles del radio, y la IA no la enciende con uno cerca.
 
 ## 14/10/2026: auditoría, Ki, mapa y combate en vivo
 

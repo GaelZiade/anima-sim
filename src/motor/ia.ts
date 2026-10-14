@@ -11,7 +11,7 @@ import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import {
-  asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
@@ -1469,8 +1469,10 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
   const h = habilidadesKi(l.ficha);
   const armadura = h.armaduraMayor && hayAtaquesDeEnergia(ctx, l);
   const recuperar = convieneRecuperar(l);
-  // Aura de combate: activarla es gratis salvo 1 de Ki cada 5 asaltos; vale si algún rival es sensible.
-  const aura = h.aura && enemigos(ctx, l).some((x) => sensibleAlAura(l, x));
+  // Aura de combate: activarla es gratis salvo 1 de Ki cada 5 asaltos; vale si algún rival es sensible
+  // y no alcanza a ningún aliado sensible (afecta a todos los del radio, Dominus p.21).
+  const aura = h.aura && enemigos(ctx, l).some((x) => sensibleAlAura(l, x)) &&
+    !ctx.luchadores.some((x) => x !== l && x.equipo === l.equipo && activo(x) && sensibleAlAura(l, x) && distancia(l, x) <= radioAura(l) + 5);
   const aumentar = h.aumento && !e.aumento ? elegirAumento(ctx, l) : undefined;
   const soltar = [...e.mantenidas.keys()].filter((t) => valorMantener(ctx, l, t) < precioKi(l) * t.mantenimiento);
   const liberar = [...e.enEspera].filter(([, desde]) => ctx.asalto - desde > 3).map(([t]) => t);

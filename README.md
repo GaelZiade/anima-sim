@@ -145,10 +145,9 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 1. **Proyectiles** (Tablas 47-49, recarga, armas de fuego) y **línea de visión** en el mapa. Las
    técnicas de Ki a distancia ya usan las Tablas 48 y 49; les falta mirar la línea de visión.
 2. **Magia** (zeon, ACT, conjuros, escudos; Arcana) **y psíquica** (CV, potencial; Rita).
-3. **Confirmar las interpretaciones del Ki** (DISENO.md, "Interpretaciones a confirmar").
-4. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
+3. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.
-5. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
+4. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
    desde parado); Erudición del Ki (localizar sin ver) supone la tirada; lo que no se simula del Ki
    (DISENO.md, "Pendiente del Ki"); ver AUDITORIA.md sección 3.
 
