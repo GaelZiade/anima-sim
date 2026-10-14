@@ -348,7 +348,9 @@ function elegirModos(
     l.modo = modo;
     l.bonoVariableEn = bonoVariableEn;
     nuevaDecision();
-    const v = valorDelAsalto(l, n, objetivos, entrantes);
+    let v = valorDelAsalto(l, n, objetivos, entrantes);
+    // Seraphite arcano sigue actuando aunque lo pongan a la defensiva: vale su ofensiva perdida.
+    if (modo.seraphite === 3) v += 0.3 * Math.max(0, valorDelAsalto(l, n, objetivos, []));
     l.modo = original.modo;
     l.bonoVariableEn = original.bonoVariableEn;
     nuevaDecision();
@@ -366,9 +368,7 @@ function elegirModos(
     for (const berserker of e.berserker ? [false, true] : [false])
       for (const bonoVariableEn of bonos) {
         const modo = { ...base, seraphite, berserker };
-        let valor = probar(modo, bonoVariableEn);
-        // Seraphite arcano sigue actuando aunque lo pongan a la defensiva: vale su ofensiva perdida.
-        if (seraphite === 3) valor += 0.3 * Math.max(0, valorDelAsalto(l, n, objetivos, []));
+        const valor = probar(modo, bonoVariableEn);
         if (valor > mejor.valor) mejor = { modo, bonoVariableEn, valor };
       }
 
