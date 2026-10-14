@@ -23,7 +23,7 @@ import {
   type Celda, type MapaListo,
 } from './mapa';
 import {
-  alMatar, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
+  ajusteTaEnergia, alMatar, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
   textoKi, type ModKi,
 } from './ki';
 
@@ -76,6 +76,11 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
 /** D100 abierta con el umbral de pifia de esa tirada (ver `umbralPifia`). */
 function tirar(ctx: Contexto, umbral: number): TiradaD100 {
   return tirarD100(ctx.rng, umbral);
+}
+
+/** TA contra energía en el cuerpo, con la Armadura de energía mayor o arcana encendida o no. */
+function taEnergia(l: Luchador): number {
+  return Math.max(0, (l.ficha.ta.ENE ?? 0) + ajusteTaEnergia(l));
 }
 
 function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>) {
@@ -217,7 +222,12 @@ function jugarAsalto(ctx: Contexto) {
       const decision = ia.decisionKi(ctx, l, d.acumularKi);
       for (const t of decision.soltar) log(ctx, () => `${l.ficha.nombre} deja de mantener ${t.nombre}.`);
       for (const t of decision.liberar) log(ctx, () => `${l.ficha.nombre} deja ir ${t.nombre}, que tenía en espera.`);
+      const armaduraAntes = l.ki.armaduraActiva;
+      const cansancioAntes = l.cansancio;
       empezarAsalto(l, decision, penAccion(l), ctx.asalto);
+      if (l.ki.armaduraActiva && !armaduraAntes) log(ctx, () => `${l.ficha.nombre} enciende su Armadura de energía (TA ${taEnergia(l)} contra energía) [reserva ${l.ki!.reserva}].`);
+      if (!l.ki.armaduraActiva && armaduraAntes) log(ctx, () => `${l.ficha.nombre} apaga su Armadura de energía.`);
+      if (l.cansancio > cansancioAntes) log(ctx, () => `${l.ficha.nombre} usa Recuperación: recupera un punto de cansancio con 5 de Ki (reserva ${l.ki!.reserva}).`);
       if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
       const tecnica = ia.tecnicaDeTurno(ctx, l);
       if (tecnica) {
@@ -757,7 +767,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
-  const baseRf = def.ficha.rf;
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfDano;
   const res = baseRf + dadoRf;
   if (dadoRf === 100 || res >= dif) {
     log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
@@ -1045,7 +1055,7 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
   // Incremento de Resistencia Física (Ki) suma a la RF durante el asalto (Dominus p.61).
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico + (def.ki?.activo.rf ?? 0);
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0);
   const res = baseRf + dadoRf;
   const tiradas = () => {
     const suma = dano + bono + dadoCritico;

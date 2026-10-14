@@ -2,7 +2,7 @@
 // Dominus cap. 5). Las Habilidades del Ki con bonos fijos (Velocidad y Daño incrementado, Extensión
 // del aura, Armadura de energía) ya vienen sumadas en los valores de la planilla.
 
-import { CARACTERISTICAS_KI, type CaracteristicaKi, type EfectoTecnica, type Luchador, type Tecnica } from './modelo';
+import { CARACTERISTICAS_KI, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
 import { normalizarRasgo, tiene } from './rasgos';
 
 /** Lo que las técnicas le suman a una acción o a todo el asalto. Los efectos iguales no se suman. */
@@ -163,6 +163,57 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
   return r;
 }
 
+// --------------------------------------------------------------------------- habilidades del Ki
+
+/**
+ * Habilidades del Ki que se usan en combate (Core p.103-105, Dominus p.19-22). Las de bono fijo
+ * (Armadura de energía TA 2, Daño y Velocidad incrementados, Extensión del aura) ya vienen sumadas en
+ * la planilla, igual que la Armadura de energía mayor y la arcana a TA 4 (ver `ajusteTaEnergia`).
+ */
+export interface HabilidadesKi {
+  /** Armadura de energía mayor: TA 4 contra energía pagando 1 de Ki cada 5 asaltos (Dominus p.19). */
+  armaduraMayor: boolean;
+  /** Armadura de energía arcana: TA 4 gratis; TA 6 pagando 1 de Ki cada 5 asaltos (Dominus p.19). */
+  armaduraArcana: boolean;
+  /** Recuperación: 1 de cansancio por cada 5 de Ki, uno por asalto (Core p.105). */
+  recuperacion: boolean;
+}
+
+const habilidades = new WeakMap<Ficha, HabilidadesKi>();
+
+export function habilidadesKi(f: Ficha): HabilidadesKi {
+  let h = habilidades.get(f);
+  if (!h) {
+    const hk = f.rasgos?.habilidadesKi;
+    // La planilla las abrevia: "Armadura mayor", "Arm. arcana".
+    const arcana = tiene(hk, 'armadura de energia arcana') || tiene(hk, 'arm. arcana') || tiene(hk, 'armadura arcana');
+    h = {
+      armaduraMayor: arcana || tiene(hk, 'armadura de energia mayor') || tiene(hk, 'armadura mayor'),
+      armaduraArcana: arcana,
+      recuperacion: tiene(hk, 'recuperacion'),
+    };
+    habilidades.set(f, h);
+  }
+  return h;
+}
+
+/** Usa alguna habilidad que gaste Ki durante el combate. */
+function gastaKiEnCombate(h: HabilidadesKi): boolean {
+  return h.armaduraMayor || h.recuperacion;
+}
+
+/**
+ * Lo que hay que sumar a la TA contra energía de la planilla, que trae la Armadura mayor o la arcana
+ * a TA 4. La mayor apagada vuelve a TA 2; la arcana encendida sube a TA 6 (Dominus p.19).
+ */
+export function ajusteTaEnergia(l: Luchador): number {
+  const h = habilidadesKi(l.ficha);
+  const activa = !!l.ki?.armaduraActiva;
+  if (h.armaduraArcana) return activa ? 2 : 0;
+  if (h.armaduraMayor) return activa ? 0 : -2;
+  return 0;
+}
+
 // --------------------------------------------------------------------------- estado y acumulación
 
 export interface EstadoKi {
@@ -199,15 +250,19 @@ export interface EstadoKi {
   danoCenobus: number;
   recuperadoCenobus: number;
   matadosAsalto: number;
+  /** Armadura de energía mayor (o arcana a TA 6) encendida, y asaltos desde el último pago. */
+  armaduraActiva: boolean;
+  asaltosArmadura: number;
 }
 
 export function crearEstadoKi(l: Luchador): EstadoKi | null {
   const ki = l.ficha.ki;
-  if (!ki || !ki.tecnicas.length) return null;
+  if (!ki || (!ki.tecnicas.length && !gastaKiEnCombate(habilidadesKi(l.ficha))) || ki.reserva <= 0) return null;
   return {
     reserva: ki.reserva, acumulado: {}, ganado: {}, acumulando: false, ejecuto: false,
     activo: { ...SIN_KI }, mantenidas: new Map(), enEspera: new Map(), defensasLibres: 0, asalto: 0, objetivo: null,
     reservaMax: ki.reserva, limitesUsados: new Set(), danoCenobus: 0, recuperadoCenobus: 0, matadosAsalto: 0,
+    armaduraActiva: false, asaltosArmadura: 0,
   };
 }
 
@@ -238,6 +293,10 @@ export interface DecisionKi {
   liberar: Tecnica[];
   /** Técnica que declara al empezar a acumular desde cero (null si no declara ninguna). */
   objetivo: Tecnica | null;
+  /** Enciende (o mantiene) la Armadura de energía mayor o la arcana a TA 6. */
+  armadura?: boolean;
+  /** Recupera un punto de cansancio con 5 de Ki (Recuperación). */
+  recuperar?: boolean;
 }
 
 /**
@@ -257,6 +316,21 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
   e.ganado = {};
   e.activo = { ...SIN_KI };
   e.defensasLibres = 0;
+  // Armadura de energía mayor: 1 de Ki al encenderla y cada 5 asaltos que siga (Dominus p.19).
+  if (d.armadura && e.reserva >= 1) {
+    if (!e.armaduraActiva || e.asaltosArmadura >= 5) {
+      e.reserva--;
+      e.asaltosArmadura = 0;
+    }
+    e.armaduraActiva = true;
+    e.asaltosArmadura++;
+  } else e.armaduraActiva = false;
+  // Recuperación: un punto de cansancio por 5 de Ki genérico, uno por asalto (Core p.105).
+  const maxCansancio = l.ficha.cansancio ?? l.ficha.constitucion;
+  if (d.recuperar && e.reserva >= 5 && l.cansancio < maxCansancio) {
+    e.reserva -= 5;
+    l.cansancio++;
+  }
   for (const t of d.soltar) e.mantenidas.delete(t);
   for (const t of d.liberar) e.enEspera.delete(t);
   for (const t of [...e.mantenidas.keys()]) {

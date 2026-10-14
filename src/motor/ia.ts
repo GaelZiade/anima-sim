@@ -11,7 +11,7 @@ import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import {
-  asaltosQueFaltan, combinar, costeKi, efectosDe, modDeAccion, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  asaltosQueFaltan, combinar, costeKi, efectosDe, habilidadesKi, modDeAccion, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   vistaPrevia, type DecisionKi, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
@@ -155,7 +155,7 @@ function valorCritico(
   const vital = m === 'cabeza' || m === 'corazon';
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
   const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth;
-  const ef = efectoCritico(base, def.ficha.rf + def.cap.est.bonoRfCritico, loc, {
+  const ef = efectoCritico(base, def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano, loc, {
     inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
   });
   // Quien reduce el dolor de los críticos (Inmunidad, Eliminación) sufre más o menos la mitad.
@@ -737,7 +737,7 @@ function mejorManiobra(
     if (m === 'puntosPresion') {
       // RF contra daño + 20: si falla, −fracaso a toda acción y −2×fracaso PV (Dominus p.42).
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
-      const margen = dif - def.ficha.rf;
+      const margen = dif - def.ficha.rf - def.cap.est.bonoRfDano;
       // Falla si el d100 de la RF sale por debajo del margen; el fracaso medio es la mitad del margen.
       const pFalla = Math.max(0, Math.min(1, (margen - 1) / 100));
       const fallo = Math.max(0, Math.min(margen, 100) / 2);
@@ -924,7 +924,25 @@ function precioKi(l: Luchador): number {
 
 /** Acumular es pasivo y no cuesta nada: se acumula mientras quede reserva y tenga técnicas. */
 function acumulaKi(l: Luchador): boolean {
-  return !!l.ki && l.ki.reserva > 0;
+  return !!l.ki && l.ki.reserva > 0 && !!l.ficha.ki?.tecnicas.length;
+}
+
+/** Algún enemigo puede atacarlo con crítico de energía: vale la pena encender la Armadura mayor. */
+function hayAtaquesDeEnergia(ctx: Contexto, l: Luchador): boolean {
+  return enemigos(ctx, l).some((e) =>
+    e.ficha.tipoAtaque === 'ENE' || e.ficha.arma?.critSecundario === 'ENE' || e.ficha.sinArmas?.tipoAtaque === 'ENE');
+}
+
+/**
+ * Recuperación (Core p.105): 5 de Ki por un punto de cansancio. Sin técnicas, el Ki no tiene otro
+ * uso; con técnicas, sólo si le sobra el doble de la más cara.
+ */
+function convieneRecuperar(l: Luchador): boolean {
+  const e = l.ki!;
+  if (!habilidadesKi(l.ficha).recuperacion || e.reserva < 5) return false;
+  if (l.cansancio >= (l.ficha.cansancio ?? l.ficha.constitucion)) return false;
+  const tecnicas = l.ficha.ki?.tecnicas ?? [];
+  return !tecnicas.length || e.reserva - 5 >= 2 * Math.max(...tecnicas.map(costeKi));
 }
 
 /**
@@ -1119,6 +1137,9 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
   const e = l.ki;
   if (!e || perfil(l) === 'bestia') return { acumula, soltar: [], liberar: [], objetivo: null };
   nuevaDecision(ctx);
+  const h = habilidadesKi(l.ficha);
+  const armadura = h.armaduraMayor && hayAtaquesDeEnergia(ctx, l);
+  const recuperar = convieneRecuperar(l);
   const soltar = [...e.mantenidas.keys()].filter((t) => valorMantener(ctx, l, t) < precioKi(l) * t.mantenimiento);
   const liberar = [...e.enEspera].filter(([, desde]) => ctx.asalto - desde > 3).map(([t]) => t);
   let objetivo: Tecnica | null = null;
@@ -1139,7 +1160,7 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
       }
     }
   }
-  return { acumula, soltar, liberar, objetivo };
+  return { acumula, soltar, liberar, objetivo, armadura, recuperar };
 }
 
 /**

@@ -12,7 +12,7 @@ import {
   type EstadoMushin, type Maniobra,
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
-import type { ModKi } from './ki';
+import { ajusteTaEnergia, type ModKi } from './ki';
 import { adyacentes, campoHacia, indice } from './mapa';
 
 export const ALCANCE = 2;
@@ -414,6 +414,8 @@ export function absorcionContra(
   const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) +
     reduccionHakyoukuken(def, atk, t, zona) + (ki?.reduccionTA ?? 0);
   let ta = taZona(def.ficha, zona, t);
+  // Armadura de energía mayor apagada (TA 2) o arcana subida a TA 6 (Dominus p.19).
+  if (t === 'ENE') ta = Math.max(0, ta + ajusteTaEnergia(def));
   // Armadura (Ki): una capa más contra todo, energía incluida: la mayor más la mitad de la otra
   // (Dominus p.60, Core p.83).
   const extra = kiDef?.ta ?? 0;
