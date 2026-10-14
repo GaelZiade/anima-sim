@@ -410,7 +410,8 @@ el turno del arma más lenta):
    resta a las técnicas de Ki a distancia, que no tienen los demás modificadores de la Tabla 47.
 7. La velocidad del blanco cuenta si se movió en el asalto, por su Tipo de movimiento.
 
-**Interpretaciones nuevas a confirmar:**
+**Interpretaciones confirmadas** (14/10/2026; la 8 y la 10 son adaptaciones aceptadas: el manual
+dice "esquivarlo", y deja entrar conjuros y descargas en los disparos paralelos):
 
 8. Si no atrapa el proyectil con Trucos de manos, se defiende con su habilidad −50 aunque pare (el
    manual dice "esquivarlo"; la ficha sólo tiene la defensa que usa).
