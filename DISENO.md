@@ -464,13 +464,11 @@ Las demás (elementales, condiciones de ambiente, Predeterminación…) no cambi
 10. Las técnicas a distancia sufren la Tabla 48 (dificultad por distancia); la cobertura llega con la
     línea de visión.
 
-**Se mantienen según el manual** (la respuesta del 14/10 decía otra cosa):
-
-- Aumento de FUE: el daño final se redondea en grupos de 10 hacia arriba porque así se calcula
-  siempre el daño con el bono de Fuerza (Core p.74, ejemplo de Lemures: 45 + 10 = 55 → 60).
-- El efecto de técnica **Acumulación** (Dominus p.65: "puede actuar durante el asalto como una
-  criatura con Acumulación de Daño") no es acumular Ki: ese asalto no tira defensa. Acumular Ki sí
-  deja defenderse normalmente (y ya era así).
+11. Aumento de FUE: el daño final se redondea en grupos de 10 hacia arriba, como siempre que se suma
+    el bono de Fuerza (Core p.74: sable 45 + 10 = 55 → 60).
+12. El efecto de técnica Acumulación (Dominus p.65) lo hace actuar ese asalto como una criatura con
+    Acumulación de daño: no tira defensa y no pierde sus acciones al recibir impactos. Acumular Ki,
+    en cambio, deja defenderse normalmente.
 
 **Interpretaciones confirmadas**:
 
