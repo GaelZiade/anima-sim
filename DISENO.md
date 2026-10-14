@@ -386,7 +386,9 @@ cuerpo; recarga si el próximo disparo, repartido entre los asaltos que faltan, 
 si nadie está al alcance pero alguien llegará, le apunta. Quien usa un arma a distancia no se acerca
 ese asalto. Si el blanco cae a mitad de los disparos, sigue con el que más rinda.
 
-**Interpretaciones a confirmar:**
+**Interpretaciones confirmadas** (14/10/2026; la 1, la 3 y la 5 son adaptaciones de mesa aceptadas:
+el manual permite mezclar acciones con −25, recoger armas y obliga a desenfundar con −25 y a usar
+el turno del arma más lenta):
 
 1. Disparar, recargar o apuntar ocupa todo el turno: no se mezclan disparos y golpes en un asalto.
 2. Los asaltos de recarga se gastan recargando (el turno); si hace otra cosa, la recarga no avanza.

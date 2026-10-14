@@ -143,11 +143,10 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 
 **Próximos pasos, en orden:**
 
-1. **Confirmar las interpretaciones de los proyectiles** (DISENO.md, "Proyectiles").
-2. **Magia** (zeon, ACT, conjuros, escudos; Arcana) **y psíquica** (CV, potencial; Rita).
-3. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
+1. **Magia** (zeon, ACT, conjuros, escudos; Arcana) **y psíquica** (CV, potencial; Rita).
+2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene; alejarse para seguir disparando.
-4. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
+3. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
    desde parado); Erudición del Ki (localizar sin ver) supone la tirada; lo que no se simula del Ki y
    de los proyectiles (DISENO.md); ver AUDITORIA.md sección 3.
 

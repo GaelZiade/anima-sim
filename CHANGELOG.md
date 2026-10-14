@@ -19,7 +19,7 @@ retomar el trabajo, empezar por README.md.
   30 m 8,2 → 38,9 (el revólver de Leo lo deja a la defensiva mientras se acerca); Kael vs Kiran a
   30 m 18,5 → 24,5; Kaito vs Teseo y Teseo vs Kiran sin cambios.
 
-Interpretaciones a confirmar en DISENO.md, "Proyectiles".
+Interpretaciones confirmadas por el usuario (DISENO.md, "Proyectiles").
 
 ## 14/10/2026 (noche): Ki completo
 
