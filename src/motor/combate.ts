@@ -18,7 +18,10 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
-import { crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, type ModKi } from './ki';
+import {
+  alMatar, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
+  textoKi, type ModKi,
+} from './ki';
 
 export interface OpcionesCombate {
   semilla?: number;
@@ -54,13 +57,14 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, balas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
     },
   };
   l.ki = crearEstadoKi(l);
+  l.balas = l.cap.est.leo ? 6 : 0;
   return l;
 }
 
@@ -360,7 +364,7 @@ export interface Ataque {
 const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
   normal: 'ataca', derribo: 'intenta derribar', presa: 'intenta apresar', desarmar: 'intenta desarmar',
   area: 'ataca en área', cabeza: 'apunta a la cabeza de', corazon: 'apunta al corazón de',
-  inutilizar: 'intenta inutilizar', inconsciencia: 'intenta dejar inconsciente',
+  inutilizar: 'intenta inutilizar', inconsciencia: 'intenta dejar inconsciente', combinado: 'hace un ataque combinado',
   engatillar: 'intenta engatillar', puntosPresion: 'ataca los puntos de presión de',
 };
 
@@ -404,7 +408,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.sorprendeA.clear(); // la sorpresa sólo vale para su primera acción
   atk.previenePendiente.delete(def);
 
-  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}`;
+  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
 
   // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55). Si
   // una contra lo pone a la defensiva, no sigue.
@@ -423,9 +427,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     // área de Ki alcanza a todos los del radio (Dominus p.58); sin Elección de blanco, aliados incluidos.
     const blancos = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
     const contras: { quien: Luchador; bono: number }[] = [];
+    let impactoCombinado = false;
     for (const blanco of blancos) {
       if (!activo(blanco) || !activo(atk)) continue;
       const r = resolverDefensa(ctx, atk, blanco, habAtk, tA, opcionesAtk, etiquetaPara(blanco));
+      if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
       if (r.contra !== null) {
         contras.push({ quien: r.defensor, bono: r.contra });
         // Parar la maniobra de Ataque en área la intercepta: los demás no tienen que defenderse.
@@ -434,8 +440,34 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     }
     // Engatillar: la amenaza se consume cuando quien amenaza ataca a su amenazado.
     if (def.amenazadoPor === atk && m !== 'engatillar') def.amenazadoPor = null;
+    // Ataque combinado (Leo): si la hoja alcanzó el cuerpo, dispara a bocajarro antes de cualquier contra.
+    if (m === 'combinado' && impactoCombinado && atk.balas > 0 && activo(atk) && activo(def)) disparoCombinado(ctx, atk, def);
     for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
   }
+}
+
+/** Bocajarro: +30 al disparo (Tabla 47). */
+const BONO_BOCAJARRO = 30;
+const RANURA_BALA: Ranura = { pen: 0, sinArmas: false, bala: true };
+
+/**
+ * Segundo ataque del Ataque combinado (Leo, Dominus p.101): el disparo a bocajarro, con +30 y sin más
+ * penalizador que el −20 de la maniobra. A bocajarro el defensor no sufre los penalizadores contra
+ * disparos: se defiende como de un golpe cuerpo a cuerpo (Core p.96). No consume otro ataque.
+ */
+function disparoCombinado(ctx: Contexto, atk: Luchador, def: Luchador) {
+  atk.balas--;
+  const opciones = { declarados: 1, ranura: RANURA_BALA, bono: BONO_BOCAJARRO, maniobra: 'combinado' as const, esContra: false };
+  const hab = ataqueFinal(atk, def, opciones);
+  const tA = tirar(ctx, atk.cap.umbralAtaque);
+  const etiqueta = `${atk.ficha.nombre} dispara a bocajarro a ${def.ficha.nombre}`;
+  if (tA.pifia) {
+    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+    ofrecerContra(ctx, def, atk, tA.nivelPifia);
+    return;
+  }
+  const r = resolverDefensa(ctx, atk, def, hab, tA, { maniobra: 'normal', esContra: false, ranura: RANURA_BALA, tipo: perfilDe(atk, RANURA_BALA).tipoAtaque }, etiqueta);
+  if (r.contra !== null) ofrecerContra(ctx, r.defensor, atk, r.contra);
 }
 
 /** Tirada de un Ataque o Defensa Predeterminada: no se tiran dados. */
@@ -450,6 +482,8 @@ interface ResultadoDefensa {
   defensor: Luchador;
   /** Bono de contraataque si el defensor ganó, o null. */
   contra: number | null;
+  /** El ataque lo alcanzó (resultado positivo), dañara o no. */
+  impacto: boolean;
 }
 
 interface Golpe {
@@ -521,7 +555,7 @@ function resolverDefensa(
       if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
     }
     // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
-    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra ? bonoContraataque(resultado) : null };
+    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra ? bonoContraataque(resultado) : null, impacto: false };
   }
 
   // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
@@ -530,7 +564,7 @@ function resolverDefensa(
     const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura, o.ki), porcentajeDano(resultado, absorcionContra(def, atk, esManiobraDeControl(o.maniobra) ? 'normal' : o.maniobra, o.tipo, o.ranura, o.ki)));
     if (golpe <= 2 * sacrificio) {
       log(ctx, () => `  La sombra de sangre recibe el golpe (${golpe} de ${2 * sacrificio}).`);
-      return { defensor: def, contra: null };
+      return { defensor: def, contra: null, impacto: true };
     }
     log(ctx, () => `  El golpe (${golpe}) atraviesa la sombra de sangre.`);
   }
@@ -545,7 +579,7 @@ function resolverDefensa(
   if (esManiobraDeControl(m)) {
     if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra);
     else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
-    if (m === 'desarmar') return { defensor: def, contra: null };
+    if (m === 'desarmar') return { defensor: def, contra: null, impacto: true };
   }
 
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
@@ -566,13 +600,13 @@ function resolverDefensa(
       def.amenazadoPor = atk;
       log(ctx, () => `  ${def.ficha.nombre} queda amenazado por ${atk.ficha.nombre}.`);
     } else log(ctx, () => `  No logra engatillarlo.`);
-    return { defensor: def, contra: null };
+    return { defensor: def, contra: null, impacto: true };
   }
   // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
   if (m === 'puntosPresion') {
     if (dano > 0) puntosDePresion(ctx, atk, def, dano, o.estadoMushin ?? null);
     else log(ctx, () => `  No alcanza los puntos de presión.`);
-    return { defensor: def, contra: null };
+    return { defensor: def, contra: null, impacto: true };
   }
   if (dano > 0) aplicarDano(ctx, atk, def, dano, resiste, m);
   else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
@@ -581,7 +615,7 @@ function resolverDefensa(
     // La armadura evitó el daño: puede romperse (Core p.93).
     if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura, zonaDe(m));
   }
-  return { defensor: def, contra: null };
+  return { defensor: def, contra: null, impacto: true };
 }
 
 /**
@@ -601,6 +635,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   const fallo = dif - res;
   def.penDolor += fallo;
   def.pv -= 2 * fallo;
+  limitePorDano(ctx, def, 2 * fallo);
   atk.stats.danoCausado += 2 * fallo;
   def.stats.danoRecibido += 2 * fallo;
   log(ctx, () => `  ${def.ficha.nombre} falla la RF (${res} [${baseRf}+${dadoRf}] contra ${dif}) por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`);
@@ -651,6 +686,7 @@ function roturaEnParada(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ran
     const falla = controlRotura(ctx, roturaDe(atk, ranura), entereza);
     if (falla > 0) {
       def.pv -= 5 * falla;
+      limitePorDano(ctx, def, 5 * falla);
       def.stats.danoRecibido += 5 * falla;
       atk.stats.danoCausado += 5 * falla;
       log(ctx, () => `  ${def.ficha.nombre} para sin armas y recibe ${5 * falla} de daño (${def.pv}/${def.ficha.pv}).`);
@@ -817,6 +853,7 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: num
   // Samiel: el daño recibido de este enemigo se acumula como bono contra él (Dominus p.92).
   if (def.cap.est.samiel && !def.ficha.acumulacion) def.samiel.set(atk, (def.samiel.get(atk) ?? 0) + dano);
   log(ctx, () => `  ${def.ficha.nombre} pierde ${dano} PV (${def.pv}/${def.ficha.pv}).`);
+  limitePorDano(ctx, def, dano);
   // Puntos vulnerables: un ataque apuntado a cabeza, corazón o (para inutilizar) una extremidad
   // critica con 1/10 de los PV actuales (Core p.91, p.97). Inutilizar no funciona con acumulación.
   // Ojos de la Muerte: todo golpe que daña es crítico; contra acumulación, en cambio, todo su cuerpo
@@ -833,6 +870,12 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: num
   verificarCaida(ctx, atk, def);
 }
 
+/** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */
+function limitePorDano(ctx: Contexto, l: Luchador, dano: number) {
+  const limite = alPerderPv(l, dano);
+  if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);
+}
+
 function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
   if (!activo(def)) return;
   // Sangre Eterna: sigue consciente hasta −20×CON (Dominus p.80).
@@ -847,6 +890,7 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
 
 function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra) {
   atk.stats.criticosCausados++;
+  if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
   const e = atk.cap.est;
   const apuntado = localizacionApuntada(m);
   const vital = m === 'cabeza' || m === 'corazon';
@@ -923,6 +967,7 @@ function sangreDeOrochi(ctx: Contexto, l: Luchador) {
 function caer(ctx: Contexto, atk: Luchador, def: Luchador, estado: Luchador['estado']) {
   def.estado = estado;
   def.stats.asaltoCaida = ctx.asalto;
+  if (estado === 'muerto' && atk !== def && alMatar(atk)) log(ctx, () => `  ${atk.ficha.nombre} activa su Límite Mors: recupera 1 de Ki.`);
   if (atk !== def) atk.stats.bajas++;
   soltar(def);
   if (def.apresando) soltar(def.apresando);

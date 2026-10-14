@@ -45,6 +45,8 @@ export interface HojaJson {
     /** "Si" si la planilla usa la Unificación de puntos de Ki (una sola reserva). */
     unificacion: string;
     tecnicas: TecnicaJson[];
+    /** Límites elegidos ("Caelum: Límite del Peligro"), debajo del título "Límite". */
+    limites: string[];
   };
   Elan: Tabla;
   Misticos: Record<string, string | Tabla>;
@@ -112,7 +114,21 @@ function datosKi(libro: Libro): HojaJson['Ki'] {
     acumulacionGenerica: texto(libro, KI, 'D24'),
     unificacion: texto(libro, KI, 'I10'),
     tecnicas: tecnicas(libro),
+    limites: limites(libro),
   };
+}
+
+/** Límites de la hoja Ki: las filas debajo del título "Límite" que nombran uno (Dominus p.28). */
+function limites(libro: Libro): string[] {
+  if (!libro.tieneHoja(KI)) return [];
+  const titulo = libro.buscarFila(KI, 'C', 'Limite', 25, 80);
+  if (titulo === null) return [];
+  const out: string[] = [];
+  for (let fila = titulo + 1; fila <= titulo + 3; fila++) {
+    const v = texto(libro, KI, `C${fila}`);
+    if (/limite/i.test(v)) out.push(v);
+  }
+  return out;
 }
 
 export interface TecnicaJson {

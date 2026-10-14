@@ -129,6 +129,8 @@ export interface AtaqueExtra {
 export interface Ranura {
   pen: number;
   sinArmas: boolean;
+  /** Disparo del arma de fuego de un arma Leo (Ataque combinado, Dominus p.101). */
+  bala?: boolean;
 }
 
 /**

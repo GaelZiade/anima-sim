@@ -728,6 +728,17 @@ function mejorManiobra(
       // le quedan ataques este asalto, vale para el primero del siguiente.
       v += p.pManiobra * (0.2 * amen + ganancia(120, Math.max(1, atk.ataquesRestantes - 1), 0));
     }
+    if (m === 'combinado') {
+      // Leo: si la hoja lo alcanza, dispara a bocajarro con +30 y sin más penalizador que el −20,
+      // contra una defensa más (Dominus p.101, Core p.96).
+      const bala: Ranura = { pen: 0, sinArmas: false, bala: true };
+      const hab2 = ataqueFinal(atk, def, { declarados: 1, ranura: bala, bono: 30, maniobra: 'combinado' });
+      const def2 = defensaFinal(def, atk, { defensasPrevias: def.defensasHechas + 1 });
+      const p2 = pronostico(atk, def, hab2, def2, { ranura: bala });
+      let disparo = valorGolpe(atk, def, p2, golpesSiguientes);
+      if (def.ataquesRestantes > 0 && puedeActuar(def)) disparo -= lambda(atk) * p2.pContra * golpeDe(def, atk);
+      v += p.pImpacto * disparo;
+    }
     if (m === 'puntosPresion') {
       // RF contra daño + 20: si falla, −fracaso a toda acción y −2×fracaso PV (Dominus p.42).
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
@@ -755,6 +766,7 @@ function mejorManiobra(
     opciones.push('inconsciencia', 'engatillar');
     if (e.mushin) opciones.push('puntosPresion');
   }
+  if (e.leo && atk.balas > 0) opciones.push('combinado');
   // No se puede aprovechar una contra para un ataque en área (Core p.89). Con un área de Ki la
   // maniobra sobra: la técnica ya alcanza a todos los del radio.
   const area = esContra || soloNormal || ki?.area ? [] : blancosArea(ctx, atk, def);
@@ -790,7 +802,7 @@ function mejorManiobra(
         }
       }
       continue;
-    } else v = valor(m, tipo) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, tipo) : 0);
+    } else v = valor(m, tipo) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, m, tipo) : 0);
     if (v > mejorValor) {
       mejorValor = v;
       mejor = { maniobra: m, tipo, especial: false };
@@ -949,11 +961,14 @@ export function blancosAreaKi(ctx: Contexto, atk: Luchador, def: Luchador, ki: M
 }
 
 /** Lo que suma un área de Ki por los demás blancos del radio (los aliados restan). */
-function valorAreaKi(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, bono: number, tipo?: TipoAtaque): number {
+function valorAreaKi(
+  ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, bono: number, maniobra: Maniobra, tipo?: TipoAtaque,
+): number {
   let v = 0;
   for (const b of blancosAreaKi(ctx, atk, def, ki)) {
     if (b === def) continue;
-    const hab = ki.ataqueFijo || ataqueFinal(atk, b, { bono, tipo, ki });
+    // La maniobra (y su penalizador) es la misma para todos los del área.
+    const hab = ki.ataqueFijo || ataqueFinal(atk, b, { bono, tipo, ki, maniobra });
     const p = pronostico(atk, b, hab, defensaFinal(b, atk), { tipo, ki });
     if (b.equipo === atk.equipo) {
       v -= p.dano + p.pBaja * amenaza(atk, b);

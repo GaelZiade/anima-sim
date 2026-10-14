@@ -366,15 +366,34 @@ Armadura, Incremento de RF, Dañar energía, Maniobras de combate y apuntar. Los
    se guarda Ki concentrado para asaltos futuros salvo que se siga acumulando sin ejecutar.
 2. El área de Ki pega a todos los del radio (centrada en el blanco elegido) y no se intercepta: la
    intercepción al parar es sólo de la maniobra Ataque en área con un arma (Core p.92).
-
-**Interpretaciones nuevas** (para confirmar):
-
 3. Defensa adicional +N deja N defensas sin penalizador a partir de la que ejecuta la técnica. El
    ejemplo del Dominus (p.56) dice que con +3 "se defenderá de los tres primeros golpes con
    habilidad plena" y el cuarto va a −30: eso daría N − 1 (la primera defensa nunca tiene
    penalizador), y entonces +1 no haría nada. Se toma N.
 4. Una técnica en espera que se ejecuta no reinicia lo acumulado para otras (Core p.105: "nada
    impide a un personaje que tiene preparada una Técnica empezar a acumular otras").
+
+### Límites (Dominus p.28-29)
+
+Se leen de la hoja Ki (debajo del título "Límite"). Recuperan Ki perdido sin pasar la reserva inicial:
+Caelum 30 una vez al bajar de un cuarto de los PV; Terminus 30 una vez al quedar con PV negativos;
+Cenobus 1 cada 5 de daño (máx. 60); Cruor 10 por cada crítico sufrido; Agon 1 por asalto; Mors 1 por
+rival muerto (máx. 10 por asalto). Custodium (un ser querido en peligro) no se simula.
+
+### Leo, Armas-pistola (Ars Magnus, Dominus p.101)
+
+Ataque combinado: −20 al ataque con la hoja; si alcanza el cuerpo (dañe o no), dispara a bocajarro
+con +30 (Tabla 47) y sin otro penalizador que el −20. A bocajarro el defensor no sufre los
+penalizadores contra disparos (Core p.96). La bala no suma la Fuerza del usuario sino la del arma
+(pistola 10, rifle 11, cañón 12; +1 por cada +5 de calidad).
+
+**Interpretaciones confirmadas**:
+
+1. Daño incrementado suma +10 a la bala ("también funciona con proyectiles", Dominus p.19); Extensión
+   del aura no (la bala es un proyectil, no el arma extendida). Kael: 50 + 15 + 10 = 75 PEN.
+2. El disparo no gasta otro ataque y va antes de las contras del golpe con la hoja.
+3. Recámara de 6 balas (la más corta del rango 6-12) y sin recargar durante el combate (recargar lleva
+   dos asaltos completos).
 
 ### IA
 

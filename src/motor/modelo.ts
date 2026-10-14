@@ -64,6 +64,8 @@ export interface KiFicha {
   /** Acumulación por asalto de cada característica (Tabla 53 más lo comprado). */
   acumulacion: Partial<Record<CaracteristicaKi, number>>;
   tecnicas: Tecnica[];
+  /** Límites (Dominus p.28): "caelum", "cruor", "mors"… */
+  limites?: string[];
 }
 
 /** Un efecto de una técnica, como lo resume la planilla: "Habilidad de Ataque (+50)". */
@@ -246,6 +248,8 @@ export interface Luchador {
   /** Tabla de 2ª Arma: Estilo Defensivo usada este asalto (la segunda arma defiende, no ataca). */
   estiloDefensivo: boolean;
 
+  /** Balas del arma de fuego de un arma Leo (6, la recámara más corta, Dominus p.101; no recarga). */
+  balas: number;
   /** Dominios del Ki: reserva, Ki concentrado y técnicas activas (null sin técnicas). */
   ki: EstadoKi | null;
 

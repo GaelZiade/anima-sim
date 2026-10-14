@@ -7,6 +7,7 @@
 
 import type { Ficha } from './modelo';
 import { gradoArteMarcial, tiene } from './rasgos';
+import { bonoCaracteristica } from './maniobras';
 
 export interface Estilos {
   // ---------------------------------------------------------------- maniobras (Core p.91-92)
@@ -146,6 +147,23 @@ export interface Estilos {
   orochi: boolean;
   /** Sangre de Aeon: daño a la mitad de su elemento. */
   elementoAfin: string | null;
+  /**
+   * Leo, Armas-pistola (Ars Magnus, Dominus p.101): daño y crítico del disparo. La bala no suma la
+   * Fuerza del usuario sino la del arma (pistola 10, rifle 11, cañón 12, +1 por cada +5 de calidad);
+   * Daño incrementado también vale con proyectiles (Dominus p.19). null si no lo tiene.
+   */
+  leo: { dano: number; tipo: 'PEN' | 'CON' } | null;
+}
+
+/** Perfil del disparo de un arma Leo: espada-pistola (50, Fuerza 10), lanza-rifle (50, 11), maza-cañón (120, 12). */
+function armaLeo(f: Ficha, desarmado: boolean): Estilos['leo'] {
+  if (desarmado || !tiene(f.rasgos?.arsMagnus, 'leo')) return null;
+  const n = (f.arma?.nombre ?? '').toLowerCase();
+  const [base, fuerza, tipo]: [number, number, 'PEN' | 'CON'] =
+    /rifle|lanza/.test(n) ? [50, 11, 'PEN'] : /ca[nñ]on|maza/.test(n) ? [120, 12, 'CON'] : [50, 10, 'PEN'];
+  const calidad = Math.floor(Math.max(0, f.arma?.calidad ?? 0) / 5);
+  const incrementado = tiene(f.rasgos?.habilidadesKi, 'dano incrementado') ? 10 : 0;
+  return { dano: base + bonoCaracteristica(fuerza + calidad) + incrementado, tipo };
 }
 
 /** Tamaño de un ataque en área por tamaño de arma (Core p.92). */
@@ -274,5 +292,6 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     sangreEterna: tiene(v, 'sangre eterna'),
     orochi: tiene(v, 'orochi'),
     elementoAfin: aeon ? (ELEMENTO[aeon] ?? null) : null,
+    leo: armaLeo(f, desarmado),
   };
 }

@@ -5,7 +5,7 @@ import type { Ficha, Tecnica } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, danoBase, defensaFinal, turnoFinal } from '../src/motor/calculos';
 import {
-  combinar, efectosDe, ejecutar, empezarAsalto, ponerEnEspera, puedeEjecutar, puedePonerEnEspera, SIN_KI, terminarAsalto,
+  alPerderPv, combinar, efectosDe, ejecutar, empezarAsalto, ponerEnEspera, recuperarKi, puedeEjecutar, puedePonerEnEspera, SIN_KI, terminarAsalto,
   vistaPrevia, type DecisionKi,
 } from '../src/motor/ki';
 import { leerEfectosTecnica } from '../src/hoja/ficha';
@@ -184,5 +184,31 @@ describe('Kael en combate', () => {
     }
     expect(tecnicas).toBeGreaterThan(60);
     expect(conKi).toBeGreaterThan(sinKi);
+  });
+});
+
+describe('Límites (Dominus p.28-29)', () => {
+  it('Caelum: recupera 30 de Ki una sola vez al bajar de un cuarto de sus PV, sin pasar la reserva inicial', () => {
+    const f = tecnicista([CORTE]);
+    const l = crearLuchador({ ...f, ki: { ...f.ki!, limites: ['caelum'] } }, 'A', 0, 0);
+    l.ki!.reserva = 50;
+    l.pv = 50;
+    expect(alPerderPv(l, 10)).toBe(null);
+    l.pv = 30;
+    expect(alPerderPv(l, 20)).toBe('Caelum');
+    expect(l.ki!.reserva).toBe(80);
+    l.pv = 10;
+    expect(alPerderPv(l, 20)).toBe(null);
+    l.ki!.reserva = 90;
+    expect(recuperarKi(l, 30)).toBe(10);
+  });
+
+  it('Cenobus: 1 de Ki cada 5 de daño', () => {
+    const f = tecnicista([CORTE]);
+    const l = crearLuchador({ ...f, ki: { ...f.ki!, limites: ['cenobus'] } }, 'A', 0, 0);
+    l.ki!.reserva = 50;
+    alPerderPv(l, 12);
+    alPerderPv(l, 3);
+    expect(l.ki!.reserva).toBe(53);
   });
 });

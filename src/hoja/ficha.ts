@@ -91,7 +91,9 @@ function leerKi(json: HojaJson): KiFicha | undefined {
   }));
   const reserva = numero(json.Ki.acumulacionMax, 0);
   if (!reserva && !tecnicas.length) return undefined;
-  return { reserva, acumulacion, tecnicas };
+  // "Caelum: Límite del Peligro" → "caelum".
+  const limites = json.Ki.limites.map((x) => normalizar(x.split(':')[0]));
+  return { reserva, acumulacion, tecnicas, limites };
 }
 
 /** Como `CombatData.hasTrait`: contiene, sin acentos ni mayúsculas. */

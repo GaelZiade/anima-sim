@@ -15,7 +15,9 @@ export type Maniobra =
   /** Core p.92: −100, sin daño; deja al rival amenazado. */
   | 'engatillar'
   /** Mushin (Dominus p.42): en vez de daño, RF contra el daño + 20. */
-  | 'puntosPresion';
+  | 'puntosPresion'
+  /** Leo (Ars Magnus): golpe con la hoja (−20) y, si alcanza el cuerpo, disparo a bocajarro. */
+  | 'combinado';
 
 /** Tabla 45: ataques apuntados que interesan en combate. Brazo y pierna (muslo) −20. */
 export const PEN_APUNTADO = { cabeza: 60, corazon: 60, inutilizar: 20, inconsciencia: 60 } as const;
@@ -76,6 +78,7 @@ export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean): number
       return arriba5(PEN_APUNTADO.inconsciencia * e.factorApuntado) + (l.ficha.tipoAtaque === 'CON' ? 0 : 40);
     case 'engatillar': return e.penEngatillar;
     case 'puntosPresion': return e.mushin ? 0 : Infinity;
+    case 'combinado': return e.leo ? 20 : Infinity;
   }
 }
 

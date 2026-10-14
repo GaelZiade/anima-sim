@@ -426,6 +426,8 @@ export function proximaRanura(l: Luchador): Ranura {
 
 /** Habilidad, daño y crítico con los que hace un ataque: el arma, o el perfil sin armas para la patada. */
 export function perfilDe(l: Luchador, ranura: Ranura): { ataque: number; danoBase: number; tipoAtaque: TipoAtaque } {
+  const leo = l.cap.est.leo;
+  if (ranura.bala && leo) return { ataque: l.ficha.ataque, danoBase: leo.dano, tipoAtaque: leo.tipo };
   const s = l.ficha.sinArmas;
   return ranura.sinArmas && s ? s : l.ficha;
 }

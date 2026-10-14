@@ -192,6 +192,13 @@ export interface EstadoKi {
    * (Core p.105: "si antes de comenzar a acumular declara que quiere usar una Técnica en concreto").
    */
   objetivo: Tecnica | null;
+  /** Reserva inicial: los Límites recuperan Ki perdido, sin pasarla (Dominus p.28). */
+  reservaMax: number;
+  /** Límites que ya se activaron (Caelum y Terminus, una vez) y lo recuperado con Cenobus. */
+  limitesUsados: Set<string>;
+  danoCenobus: number;
+  recuperadoCenobus: number;
+  matadosAsalto: number;
 }
 
 export function crearEstadoKi(l: Luchador): EstadoKi | null {
@@ -200,6 +207,7 @@ export function crearEstadoKi(l: Luchador): EstadoKi | null {
   return {
     reserva: ki.reserva, acumulado: {}, ganado: {}, acumulando: false, ejecuto: false,
     activo: { ...SIN_KI }, mantenidas: new Map(), enEspera: new Map(), defensasLibres: 0, asalto: 0, objetivo: null,
+    reservaMax: ki.reserva, limitesUsados: new Set(), danoCenobus: 0, recuperadoCenobus: 0, matadosAsalto: 0,
   };
 }
 
@@ -242,6 +250,9 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
   const e = l.ki;
   if (!e) return;
   e.asalto = asalto;
+  e.matadosAsalto = 0;
+  // Agon: recupera un punto de Ki por asalto de combate (Dominus p.29).
+  if (tieneLimite(l, 'agon')) recuperarKi(l, 1);
   e.ejecuto = false;
   e.ganado = {};
   e.activo = { ...SIN_KI };
@@ -388,6 +399,61 @@ export function tecnicasPara(l: Luchador, clase: Clase, esContra = false): Tecni
     const encaja = c === clase || (clase === 'ataque' && esContra && c === 'contra');
     return encaja && !l.ki!.mantenidas.has(t) && puedeEjecutar(l, t);
   });
+}
+
+// --------------------------------------------------------------------------- Límites (Dominus p.28-29)
+
+function tieneLimite(l: Luchador, nombre: string): boolean {
+  return !!l.ficha.ki?.limites?.includes(nombre);
+}
+
+/** Recupera Ki perdido, sin pasar la reserva inicial. Devuelve cuánto recuperó. */
+export function recuperarKi(l: Luchador, n: number): number {
+  const e = l.ki;
+  if (!e || n <= 0) return 0;
+  const antes = e.reserva;
+  e.reserva = Math.min(e.reservaMax, e.reserva + n);
+  return e.reserva - antes;
+}
+
+/**
+ * Pierde PV: Cenobus recupera 1 de Ki cada 5 de daño (máx. 60); Caelum, 30 una vez al bajar de un
+ * cuarto de sus PV; Terminus, 30 una vez al quedar con PV negativos. Devuelve qué Límite se activó.
+ */
+export function alPerderPv(l: Luchador, dano: number): string | null {
+  const e = l.ki;
+  if (!e || dano <= 0) return null;
+  let activado: string | null = null;
+  if (tieneLimite(l, 'cenobus') && e.recuperadoCenobus < 60) {
+    e.danoCenobus += dano;
+    const puntos = Math.min(60 - e.recuperadoCenobus, Math.floor(e.danoCenobus / 5));
+    e.danoCenobus -= puntos * 5;
+    e.recuperadoCenobus += recuperarKi(l, puntos);
+  }
+  if (tieneLimite(l, 'caelum') && !e.limitesUsados.has('caelum') && l.pv < l.ficha.pv / 4) {
+    e.limitesUsados.add('caelum');
+    recuperarKi(l, 30);
+    activado = 'Caelum';
+  }
+  if (tieneLimite(l, 'terminus') && !e.limitesUsados.has('terminus') && l.pv < 0) {
+    e.limitesUsados.add('terminus');
+    recuperarKi(l, 30);
+    activado = 'Terminus';
+  }
+  return activado;
+}
+
+/** Cruor: cada crítico que sufre, tenga o no efectos, recupera 10 de Ki. */
+export function alRecibirCritico(l: Luchador): boolean {
+  return tieneLimite(l, 'cruor') && recuperarKi(l, 10) > 0;
+}
+
+/** Mors: un punto de Ki por cada rival que mata, hasta 10 por asalto. */
+export function alMatar(l: Luchador): boolean {
+  const e = l.ki;
+  if (!e || !tieneLimite(l, 'mors') || e.matadosAsalto >= 10) return false;
+  e.matadosAsalto++;
+  return recuperarKi(l, 1) > 0;
 }
 
 /** Resumen para el registro: "DES 7/14, FUE 6/12 (reserva 93)". */

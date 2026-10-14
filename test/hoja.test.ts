@@ -159,6 +159,12 @@ describe('Ki de las planillas (hoja Ki)', () => {
     const velocidad = ki.tecnicas[5];
     expect(velocidad).toMatchObject({ coste: { CON: 6, DES: 6 }, mantenimiento: 3 });
     expect(velocidad.efectos).toEqual([{ nombre: 'Incrementar Turno', opciones: ['+100'], mantenido: true }]);
+    expect(ki.limites).toEqual(['caelum']);
+  });
+
+  it.skipIf(falta(KAEL))('Kael: Leo, Armas-pistola: la bala de la espada-pistola hace 50 + Fuerza 10 + Daño incrementado, PEN', () => {
+    const f = jsonAFicha(hoja(KAEL)!);
+    expect(capacidades(f).est.leo).toEqual({ dano: 50 + 15 + 10, tipo: 'PEN' });
   });
 
   it.skipIf(falta(KAITO))('Kaito: sin técnicas; Uso de la energía necesaria le deja gastar 5 de cansancio por asalto', () => {
