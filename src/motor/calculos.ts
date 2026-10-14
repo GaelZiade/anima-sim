@@ -310,6 +310,8 @@ export interface OpcionesPronostico {
   esContra?: boolean;
   tipo?: TipoAtaque;
   ranura?: Ranura;
+  /** Multiplica el daño base (Inutilizar e Inconsciencia hacen la mitad). */
+  factorDano?: number;
 }
 
 /** Pronóstico de un ataque a partir de las habilidades finales (sin dados). */
@@ -324,6 +326,7 @@ export function pronostico(
   // Derribo y Presa dañan a la mitad (contra la armadura real) si el atacante quiere; Desarmar no daña.
   if (m === 'desarmar') base = 0;
   else if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
+  if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
   const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura) : abs;
   const pContra = def.ficha.acumulacion ? 0 : t.pContra(s);
   const frena = barreraFrena(def, atk, base);

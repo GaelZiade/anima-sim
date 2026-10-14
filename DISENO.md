@@ -53,18 +53,26 @@ cada uno, o guardarlos para contras).
 
 ### Puntaje
 
-Toda opción se valora en "daño esperado":
+Toda opción se valora en PV esperados, con las mismas piezas para lo que uno pega y lo que recibe
+(`valorGolpe`, `valorCritico`, `valorNegativo` en `ia.ts`):
 
 ```
-valor = daño esperado causado
-      + tempo: si el objetivo aún no actuó, P(impacto) × su daño esperado del asalto
-      + bono por probabilidad de dejarlo fuera de combate
-      − λ × daño esperado recibido por contras
-      − costo del cansancio
+golpe    = daño esperado
+         + P(dejarlo fuera por PV) × su amenaza de dos asaltos
+         + P(crítico) × [P(fuera) × (PV que le quedan + su amenaza) + P(negativos) × valor de los negativos]
+ataque   = golpe + tempo (si todavía no actuó: P(impacto) × su asalto) − λ × P(contra) × su golpe
+negativo = lo que deja de pegar (este asalto si no actuó, el próximo si sigue en pie)
+         + lo que pegan de más los golpes siguientes, sin pasar de los PV que le quedarían
 ```
 
-`λ` sale del perfil: agresivo 0.5, equilibrado 0.9, cauto 1.4. Las bestias (inteligencia ≤ 4)
-atacan al más cercano.
+- El crítico es exacto (`valoracion.ts`, probado contra dados): nivel = daño + d100 (reducido sobre
+  200) contra RF + d100, con los tramos de la Tabla 51 según dónde pega (al azar o apuntado).
+- Inutilizar e Inconsciencia valen la mitad de daño y de chance de tumbarlo; el crítico, pleno.
+- Ningún efecto cuenta daño sobre un rival que ya iba a caer con los golpes normales.
+- `λ` sale del perfil: agresivo 0.5, equilibrado 0.9, cauto 1.4. Las bestias (inteligencia ≤ 4)
+  atacan al más cercano.
+- `sinManiobras` en las opciones del escenario: todos atacan normal. Sirve para medir cuánto
+  aporta cada decisión (`test/decisiones.test.ts`).
 
 ### Reglas de la IA que salieron de probar
 
@@ -75,6 +83,9 @@ atacan al más cercano.
   pierde (`ventajaEquipos`) y, para la defensa total, si hay aliados que peleen mientras tanto.
 - **Coordinación.** Al declarar, supone que la mitad de los aliados que llegan a un blanco lo
   atacan antes: el blanco llega con defensas adicionales encima.
+- **Resistir el golpe.** Compara lo que cuesta (la diferencia de `valorGolpe` de cada ataque que
+  recibe antes de actuar) con su asalto × P(lo impactan) × P(sigue en pie). El tempo de su asalto
+  sólo cuenta contra quien actúa después que él.
 - **Cansancio.** Nunca se agota para atacar. Para defender, sólo si baja ≥20 puntos la chance de
   quedar fuera de combate en ese golpe. La referencia es su propia vida, no la del blanco.
 

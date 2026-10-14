@@ -2,6 +2,7 @@
 // estados que dejan (Tabla 43).
 
 import type { Atributo, Luchador } from './modelo';
+import type { Localizacion } from './reglas';
 import type { Rng } from './rng';
 import { dado } from './rng';
 
@@ -27,6 +28,14 @@ export function esManiobraDeControl(m: Maniobra): m is 'derribo' | 'presa' | 'de
 /** Ataques a un punto vulnerable (crítico con 1/10 de los PV, Core p.97). */
 export function esApuntado(m: Maniobra): m is 'cabeza' | 'corazon' | 'inutilizar' | 'inconsciencia' {
   return m === 'cabeza' || m === 'corazon' || m === 'inutilizar' || m === 'inconsciencia';
+}
+
+/** Dónde pega un crítico de esta maniobra, o null si se tira la localización (Tabla 51). */
+export function localizacionApuntada(m: Maniobra): Localizacion | null {
+  if (m === 'cabeza' || m === 'inconsciencia') return 'cabeza';
+  if (m === 'corazon') return 'corazon';
+  if (m === 'inutilizar') return 'extremidad';
+  return null;
 }
 
 /** Inutilizar e Inconsciencia hacen la mitad de daño pero cuentan el pleno para el crítico. */

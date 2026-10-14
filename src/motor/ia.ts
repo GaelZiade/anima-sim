@@ -4,13 +4,15 @@
 import type { Contexto, Luchador, Perfil } from './modelo';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
-  pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA,
+  pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { tabla } from './probabilidades';
 import { MAX_CANSANCIO_ASALTO, negativoCansancio, umbralPifia, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
+import { efectoCritico } from './valoracion';
+import type { Localizacion } from './reglas';
 import {
-  caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, modificadorPorResultado,
+  caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
   pGanaControl, type EstadoMushin, type Maniobra,
 } from './maniobras';
 
@@ -61,6 +63,60 @@ function amenaza(e: Luchador, l: Luchador): number {
   return golpeDe(e, l) * Math.max(1, e.ataquesDeclarados || 1);
 }
 
+/**
+ * Valor de dejar a `def` con −`pen` a toda acción, en PV: lo que deja de pegarle a `atk` (lo que
+ * le queda de este asalto si no actuó, y el próximo si sigue en pie) más lo que pegan de más los
+ * `golpes` siguientes de `atk`. Esto último nunca pasa de los PV que le quedarían: no se valora
+ * daño sobre alguien que ya cae (`danoPrevio`: lo que se espera que ya pierda antes).
+ */
+function valorNegativo(atk: Luchador, def: Luchador, pen: number, golpes: number, danoPrevio: number): number {
+  if (pen <= 0) return 0;
+  const hDef = ataqueFinal(def, atk);
+  const dAtk = defensaFinal(atk, def);
+  const perdida = pronostico(def, atk, hDef, dAtk).dano - pronostico(def, atk, hDef - pen, dAtk).dano;
+  const h = ataqueFinal(atk, def, { bono: 0 });
+  const dDef = defensaFinal(def, atk);
+  const normal = pronostico(atk, def, h, dDef).dano;
+  const quedan = Math.max(0, def.pv - danoPrevio - golpes * normal);
+  const ganancia = Math.min(golpes * (pronostico(atk, def, h, dDef - pen).dano - normal), quedan);
+  const ataques = Math.max(1, def.ataquesDeclarados || 1);
+  const asaltos = (def.haActuado ? 0 : 1) + (quedan > 0 ? 1 : 0);
+  return perdida * ataques * asaltos + ganancia;
+}
+
+/**
+ * Valor esperado del crítico de un golpe, en PV: P(critica) × [P(fuera de combate) × (PV que le
+ * quedarían + su amenaza de dos asaltos) + P(sólo negativos) × valor de esos negativos].
+ */
+function valorCritico(
+  atk: Luchador, def: Luchador, pCritica: number, danoPleno: number, loc: Localizacion | null, m: Maniobra,
+  golpes: number, danoPrevio: number,
+): number {
+  if (pCritica <= 0) return 0;
+  const e = atk.cap.est;
+  const vital = m === 'cabeza' || m === 'corazon';
+  const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
+  const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth;
+  const ef = efectoCritico(base, def.ficha.rf + def.cap.est.bonoRfCritico, loc, {
+    inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
+  });
+  // Quien reduce el dolor de los críticos (Inmunidad, Eliminación) sufre más o menos la mitad.
+  const negativo = def.cap.mitadDolorCritico ? ef.negativo * 0.6 : ef.negativo;
+  const fuera = Math.max(0, def.pv - danoPrevio) + 2 * amenaza(def, atk);
+  return pCritica * (ef.pFuera * fuera + ef.pNegativo * valorNegativo(atk, def, negativo, golpes, danoPrevio));
+}
+
+/**
+ * Lo que vale para `atk` un golpe con este pronóstico contra `def`, en PV: el daño, la chance de
+ * dejarlo fuera por PV (le saca su amenaza de dos asaltos) y el crítico. Es la misma cuenta para
+ * lo que uno pega y para lo que uno recibe, así las decisiones comparan en la misma escala.
+ */
+function valorGolpe(atk: Luchador, def: Luchador, p: Pronostico, golpes: number): number {
+  const danoSiImpacta = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
+  return p.dano + p.pBaja * amenaza(def, atk) * 2 +
+    valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, 'normal', golpes, p.dano);
+}
+
 interface Oportunidad {
   objetivo: Luchador;
   valor: number;
@@ -76,7 +132,7 @@ function valorAtaque(
   });
   const p = pronostico(l, e, hab, defensaFinal(e, l, { defensasPrevias: o.defensasPrevias }), { ranura: o.ranura });
   const amen = amenaza(e, l);
-  let v = p.dano + p.pBaja * amen * 2 + p.pCritico * amen * 0.5;
+  let v = valorGolpe(l, e, p, Math.max(0, (o.declarados ?? l.ataquesDeclarados) - 1));
   // Tempo: si todavía no actuó, impactarlo lo deja sin acciones este asalto.
   if (o.primeraVez !== false && !e.haActuado && puedeActuar(e) && !e.ficha.acumulacion)
     v += p.pImpacto * amen;
@@ -360,9 +416,15 @@ export function resistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
 }
 
 function convieneResistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
-  // Lo que pierde si lo ponen a la defensiva: su daño esperado del asalto.
+  // Lo que pierde si lo ponen a la defensiva: su daño esperado del asalto. El tempo (dejar sin
+  // asalto a quien todavía no actuó) sólo vale contra quien actúa después que él: el que lo está
+  // atacando ahora ya habrá actuado cuando le toque.
   let miAsalto = 0;
-  for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) miAsalto = Math.max(miAsalto, valorAtaque(l, e, {}));
+  for (const e of enemigos(ctx, l)) {
+    if (!alcanzable(l, e)) continue;
+    const despues = e !== atk && e.iniciativa < l.iniciativa;
+    miAsalto = Math.max(miAsalto, valorAtaque(l, e, { primeraVez: despues }));
+  }
   miAsalto *= Math.max(1, l.ataquesRestantes);
   if (miAsalto <= 0) return false;
 
@@ -370,6 +432,8 @@ function convieneResistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
   // que él, repartidos entre los blancos que tengan.
   let costo = 0;
   let pSinImpacto = 1;
+  // Resistiendo, también puede caer antes de actuar: entonces el asalto se pierde igual.
+  let pSigueEnPie = 1;
   for (const e of enemigos(ctx, l)) {
     const ahora = e === atk;
     if (!ahora && (e.haActuado || e.iniciativa < l.iniciativa || !puedeActuar(e))) continue;
@@ -379,14 +443,13 @@ function convieneResistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
     const hab = ataqueFinal(e, l);
     const normal = pronostico(e, l, hab, defensaFinal(l, e));
     const resistiendo = pronostico(e, l, hab, defensaFinal(l, e, { resistir: true }));
-    costo += ataques * (
-      lambda(l) * (resistiendo.dano - normal.dano) +
-      (resistiendo.pCritico - normal.pCritico) * l.pv * 0.5 +
-      (resistiendo.pBaja - normal.pBaja) * l.pv * 2);
+    const golpes = Math.max(0, ataques - 1);
+    costo += ataques * lambda(l) * (valorGolpe(e, l, resistiendo, golpes) - valorGolpe(e, l, normal, golpes));
     pSinImpacto *= Math.pow(1 - normal.pImpacto, ataques);
+    pSigueEnPie *= Math.pow(1 - resistiendo.pBaja, ataques);
   }
   // Si no resiste, pierde su asalto con la probabilidad de que al menos un ataque lo impacte.
-  return costo < (1 - pSinImpacto) * miAsalto;
+  return costo < (1 - pSinImpacto) * pSigueEnPie * miAsalto;
 }
 
 /** ¿Gastar `k` puntos lo deja agotado (Tabla 27)? */
@@ -480,26 +543,45 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  * la maniobra: un rival derribado o apresado pega y defiende peor, uno desarmado amenaza menos.
  */
 export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number): PlanAtaque {
-  if (perfil(atk) === 'bestia') return NORMAL;
+  if (perfil(atk) === 'bestia' || ctx.opciones.sinManiobras) return NORMAL;
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
   const habDef = defensaFinal(def, atk);
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
-  // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa.
-  const mejora = (pen: number) => {
-    const h = ataqueFinal(atk, def, { bono: 0 });
-    return pronostico(atk, def, h, habDef - pen).dano - pronostico(atk, def, h, habDef).dano;
+  // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa, sin pasar de los
+  // PV que le quedarían después de este golpe y de esos mismos golpes sin la ventaja.
+  const hNormal = ataqueFinal(atk, def, { bono: 0 });
+  const golpeNormal = pronostico(atk, def, hNormal, habDef).dano;
+  const ganancia = (pen: number, golpes: number, danoEste: number) => {
+    const quedan = Math.max(0, def.pv - danoEste - golpes * golpeNormal);
+    return Math.min(golpes * (pronostico(atk, def, hNormal, habDef - pen).dano - golpeNormal), quedan);
   };
 
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
     const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin });
     const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
+    // Inutilizar e Inconsciencia: la mitad de daño (y de chance de tumbarlo por PV); el crítico, pleno.
+    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5 }) : p;
     // Los ataques que no dañan (engatillar, puntos de presión) se valoran sólo por su efecto.
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
-    const mitad = esNoLetal(m) ? 0.5 : 1;
-    let v = sinDano ? 0 : mitad * p.dano + (m === 'inconsciencia' ? 0 : p.pBaja * amen * 2 + p.pCritico * amen * 0.5);
+    const danoEste = sinDano ? 0 : real.dano;
+    let v = danoEste + (sinDano || m === 'inconsciencia' ? 0 : real.pBaja * amen * 2);
     if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
     if (def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+
+    // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
+    // cualquier otro golpe, con la mitad de los PV y en un lugar al azar.
+    const danoSiImpacta = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
+    const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
+    if (!sinDano && vulnerable) {
+      const t = tablaPara(atk, def);
+      const base = Math.max(1, atk.ficha.danoBase);
+      const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
+      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo), pct);
+      v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste);
+    } else if (!sinDano) {
+      v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste);
+    }
 
     if (m === 'derribo' || m === 'presa' || m === 'desarmar') {
       const c = caracteristicasControl(m, atk, def);
@@ -508,11 +590,12 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
         : (esContra ? e.controlPresaDerriboEnContra : e.controlPresaDerribo);
       const resiste = m === 'desarmar' ? def.cap.est.resisteDesarme : def.cap.est.resistePresaDerribo;
       const pGana = p.pManiobra * pGanaControl(c.atk + bonoC + modificadorPorResultado(50), c.def + resiste);
-      // Derribado: −30 a su defensa y +20 de posición superior para quien le pegue.
-      if (m === 'derribo') v += pGana * (0.3 * amen + golpesSiguientes * mejora(50));
+      // Derribado: −30 a su defensa y +20 de posición superior para quien le pegue; levantarse le
+      // gasta la acción activa del asalto siguiente (−25 a lo que haga).
+      if (m === 'derribo') v += pGana * (0.3 * amen + ganancia(50, golpesSiguientes, danoEste));
       if (m === 'presa') {
         // Una presa suele durar más de un asalto y deja al rival en parálisis parcial (−80).
-        v += pGana * (1.5 * 0.8 * amen + golpesSiguientes * mejora(80));
+        v += pGana * (1.5 * 0.8 * amen + ganancia(80, golpesSiguientes, danoEste));
         if (!e.sinPenalizadorApresando) v -= 0.2 * lambda(atk) * amen;
       }
       if (m === 'desarmar') {
@@ -521,40 +604,19 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
         v += pGana * 2 * caida * amen;
       }
     }
-    if (esApuntado(m)) {
-      // Un punto vulnerable critica con 1/10 de los PV; cabeza: inconsciente si falla por más de 50,
-      // corazón: muerte si falla por más de 100 (Core p.97-98). Inutilizar: la extremidad es punto
-      // débil y el crítico deja negativos. Inconsciencia: inconsciente si falla por más de 50.
-      const t = tablaPara(atk, def);
-      const base = Math.max(1, atk.ficha.danoBase);
-      const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
-      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo), pct);
-      const danoSiCritica = Math.max(def.pv / 10, p.dano / Math.max(0.05, p.pImpacto));
-      const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-      const ventaja = danoSiCritica + atk.cap.bonoCritico + e.bonoCriticoEstilos + bonoEnuth +
-        (m === 'cabeza' || m === 'corazon' ? e.bonoCriticoVital : 0) - (def.ficha.rf + def.cap.est.bonoRfCritico);
-      if (m === 'inutilizar') {
-        // Negativo esperado: lo que falla la RF, si falla (aprox. triangular de dos d100).
-        const fallo = Math.max(0, ventaja + 33);
-        v += pCrit * pDiferenciaD100(-ventaja) * Math.min(1, fallo / 100) * (2 * amen + golpesSiguientes * mejora(fallo));
-      } else {
-        const fueraDeCombate = pDiferenciaD100((m === 'corazon' ? 100 : 50) - ventaja);
-        v += pCrit * fueraDeCombate * (def.pv + 2 * amen);
-      }
-    }
     if (m === 'engatillar') {
-      // Amenazado: −120 a defenderse de él y −20 al atacarlo (Tabla 43).
-      v += p.pManiobra * (0.2 * amen + Math.max(0, atk.ataquesRestantes - 1) * mejora(120));
+      // Amenazado: −120 a defenderse de él y −20 al atacarlo (Tabla 43). Dura hasta que lo use: si no
+      // le quedan ataques este asalto, vale para el primero del siguiente.
+      v += p.pManiobra * (0.2 * amen + ganancia(120, Math.max(1, atk.ataquesRestantes - 1), 0));
     }
     if (m === 'puntosPresion') {
       // RF contra daño + 20: si falla, −fracaso a toda acción y −2×fracaso PV (Dominus p.42).
-      const danoSiImpacta = p.dano / Math.max(0.05, p.pImpacto);
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
       const margen = dif - def.ficha.rf;
       // Falla si el d100 de la RF sale por debajo del margen; el fracaso medio es la mitad del margen.
       const pFalla = Math.max(0, Math.min(1, (margen - 1) / 100));
       const fallo = Math.max(0, Math.min(margen, 100) / 2);
-      v += p.pImpacto * pFalla * (2 * fallo + Math.min(1, fallo / 100) * 2 * amen);
+      v += p.pImpacto * pFalla * (Math.min(2 * fallo, def.pv) + valorNegativo(atk, def, fallo, golpesSiguientes, 2 * fallo));
       if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen);
     }
     return v;
@@ -583,9 +645,12 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
   for (const m of opciones) {
     let v = 0;
     if (m === 'area') {
+      // Cada blanco con la misma cuenta que un golpe normal: daño, baja, crítico, tempo y su contra.
       for (const b of area) {
         const p = pronostico(atk, b, ataqueFinal(atk, b, { bono, maniobra: 'area', tipo }), defensaFinal(b, atk), { tipo });
-        v += p.dano + p.pBaja * amenaza(b, atk) * 2;
+        v += valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
+        if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) v += p.pImpacto * amenaza(b, atk);
+        if (b.ataquesRestantes > 0 && puedeActuar(b)) v -= lambda(atk) * p.pContra * golpeDe(b, atk);
       }
     } else if (m === 'puntosPresion' && e.mushin >= 3) {
       // Mushin arcano: se prueba cada estado con su penalizador al ataque.

@@ -14,7 +14,7 @@ import {
 } from './calculos';
 import {
   atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
-  esManiobraDeControl, esNoLetal, gradoPresa, type EstadoMushin,
+  esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin,
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
@@ -743,18 +743,10 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
   if (def.pv <= limite) caer(ctx, atk, def, def.pv <= -5 * def.ficha.constitucion && !def.cap.est.sangreEterna ? 'muerto' : 'caido');
 }
 
-/** Dónde pega un crítico de esta maniobra, o null si se tira la localización (Tabla 51). */
-function localizacionDe(m: Maniobra): Localizacion | null {
-  if (m === 'cabeza' || m === 'inconsciencia') return 'cabeza';
-  if (m === 'corazon') return 'corazon';
-  if (m === 'inutilizar') return 'extremidad';
-  return null;
-}
-
 function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra) {
   atk.stats.criticosCausados++;
   const e = atk.cap.est;
-  const apuntado = localizacionDe(m);
+  const apuntado = localizacionApuntada(m);
   const vital = m === 'cabeza' || m === 'corazon';
   // Enuth: +20 al crítico para dejar inconsciente; arcano +50 (Dominus p.43).
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
