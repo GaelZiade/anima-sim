@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra } from '../src/motor/calculos';
-import { empezarAsalto, type DecisionKi } from '../src/motor/ki';
+import { curable, dificultadDestruccion, empezarAsalto, fichaConAumento, type DecisionKi } from '../src/motor/ki';
+import { curacionKi } from '../src/motor/ia';
 import { absorcion } from '../src/motor/reglas';
 
 const decision = (extra: Partial<DecisionKi> = {}): DecisionKi =>
@@ -89,5 +90,74 @@ describe('estado de Ki', () => {
     expect(crearLuchador(maestro(['Inhumanidad']), 'A', 0, 0).ki).toBeNull();
     const r = simularCombate([maestro(['Recuperacion'])], [rival('FIL')], { semilla: 2, registrar: true });
     expect(r.registro!.some((x) => x.texto.includes('acumula Ki'))).toBe(false);
+  });
+});
+
+describe('Curación por Ki (Core p.104, Dominus p.20)', () => {
+  const sanadora = () => maestro(['Curacion por Ki', 'Curacion superior']);
+
+  it('5 PV por punto de Ki con la superior, nunca más de la mitad del daño sufrido', () => {
+    const l = crearLuchador(sanadora(), 'A', 0, 0);
+    l.pv = 80;
+    l.stats.danoRecibido = 120;
+    expect(curable(l)).toBe(60);
+    l.curado = 50;
+    expect(curable(l)).toBe(10);
+  });
+
+  it('sin enemigos al alcance, la IA se cura en lugar de quedarse quieta', () => {
+    const ctx = { luchadores: [] as ReturnType<typeof crearLuchador>[] };
+    const l = crearLuchador(sanadora(), 'A', 0, 0);
+    const lejos = crearLuchador(rival('FIL'), 'B', 60, 0);
+    ctx.luchadores.push(l, lejos);
+    l.pv = 80;
+    l.stats.danoRecibido = 120;
+    const cura = curacionKi(ctx as unknown as Parameters<typeof curacionKi>[0], l);
+    expect(cura?.quien).toBe(l);
+    // 60 PV curables a 5 por punto: 12 de Ki.
+    expect(cura?.ki).toBe(12);
+  });
+});
+
+describe('Aumento de características (Core p.105, Dominus p.21)', () => {
+  const fuerte = (extra: Partial<Ficha> = {}) => maestro(['Aumento de caracteristicas'], {
+    atributos: { AGI: 8, CON: 8, DES: 9, FUE: 9 }, ki: { reserva: 60, acumulacion: { DES: 2 }, tecnicas: [] }, ...extra,
+  });
+
+  it('recalcula los bonos: DES 9 → 12 suma +10 al ataque, a la parada y al turno (Tabla 3)', () => {
+    const f = fuerte();
+    const g = fichaConAumento(f, 'DES', 9, 12);
+    expect(g.ataque - f.ataque).toBe(10);
+    expect(g.defensa - f.defensa).toBe(10);
+    expect(g.turno - f.turno).toBe(10);
+    // FUE 9 → 12: +10 al daño, redondeado en grupos de 10 hacia arriba.
+    expect(fichaConAumento(f, 'FUE', 9, 12).danoBase).toBe(70);
+    // Volver deja la ficha como estaba.
+    const h = fichaConAumento(g, 'DES', 12, 9);
+    expect([h.ataque, h.defensa, h.turno]).toEqual([f.ataque, f.defensa, f.turno]);
+  });
+
+  it('activarlo cuesta el valor alcanzado y después 1 de Ki por asalto; la IA lo usa si le sobra Ki', () => {
+    const r = simularCombate([fuerte()], [rival('FIL')], { semilla: 5, registrar: true });
+    const linea = r.registro!.find((x) => x.texto.includes('usa Aumento de características'));
+    expect(linea?.texto).toMatch(/: (DES|AGI|FUE|CON) \d+ → \d+ \[reserva \d+\]/);
+  });
+});
+
+describe('Destrucción por Ki (Core p.104)', () => {
+  it('dificultad: Presencia base +5 por punto extra, hasta el doble', () => {
+    const l = crearLuchador(maestro(['Destruccion por Ki']), 'A', 0, 0);
+    expect(dificultadDestruccion(l, 0)).toBe(60);
+    expect(dificultadDestruccion(l, 5)).toBe(85);
+    expect(dificultadDestruccion(l, 40)).toBe(120);
+  });
+
+  it('la IA la usa contra un rival de RF baja y el fracaso le quita PV sin contar la armadura', () => {
+    const blindado: Ficha = { ...rival('FIL'), ta: { FIL: 8, CON: 8, PEN: 8 }, rf: 20, pv: 400 };
+    const r = simularCombate([maestro(['Destruccion por Ki'], { ki: { reserva: 60, acumulacion: {}, tecnicas: [] } })], [blindado], { semilla: 2, registrar: true });
+    const usos = r.registro!.filter((x) => x.texto.includes('usa Destrucción por Ki contra'));
+    expect(usos.length).toBeGreaterThan(0);
+    const falla = r.registro!.findIndex((x) => x.texto.includes('falla la RF contra la Destrucción por Ki'));
+    if (falla >= 0) expect(r.registro![falla + 1].texto).toMatch(/Rival pierde \d+ PV/);
   });
 });

@@ -4,6 +4,7 @@
 
 import { CARACTERISTICAS_KI, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
 import { normalizarRasgo, tiene } from './rasgos';
+import { bonoCaracteristica } from './maniobras';
 
 /** Lo que las técnicas le suman a una acción o a todo el asalto. Los efectos iguales no se suman. */
 export interface ModKi {
@@ -177,6 +178,21 @@ export interface HabilidadesKi {
   armaduraArcana: boolean;
   /** Recuperación: 1 de cansancio por cada 5 de Ki, uno por asalto (Core p.105). */
   recuperacion: boolean;
+  /** Aura de combate (Dominus p.21). */
+  aura: boolean;
+  /** Absorción de energía: 1 de Ki por cada 5 de daño plenamente energético (Dominus p.20). */
+  absorcion: boolean;
+  /** PV que cura cada punto de Ki: 2 con Curación por Ki (Core p.104), 5 con la superior (Dominus p.20). */
+  curacion: number;
+  /**
+   * Aumento de características: cuántos puntos puede subir (3; 4 con Incremento superior) y cada
+   * cuántos asaltos paga 1 de Ki para mantenerlo (1; 10 con Incremento superior). Core p.105,
+   * Dominus p.21. 0 si no la tiene.
+   */
+  aumento: number;
+  asaltosPorPagoAumento: number;
+  /** Destrucción por Ki (Core p.104). */
+  destruccion: boolean;
 }
 
 const habilidades = new WeakMap<Ficha, HabilidadesKi>();
@@ -191,15 +207,100 @@ export function habilidadesKi(f: Ficha): HabilidadesKi {
       armaduraMayor: arcana || tiene(hk, 'armadura de energia mayor') || tiene(hk, 'armadura mayor'),
       armaduraArcana: arcana,
       recuperacion: tiene(hk, 'recuperacion'),
+      aura: tiene(hk, 'aura de combate'),
+      absorcion: tiene(hk, 'absorcion de energia'),
+      curacion: tiene(hk, 'curacion superior') ? 5 : tiene(hk, 'curacion por ki') ? 2 : 0,
+      aumento: tiene(hk, 'incremento superior') ? 4 : tiene(hk, 'aumento de caracteristicas') ? 3 : 0,
+      asaltosPorPagoAumento: tiene(hk, 'incremento superior') ? 10 : 1,
+      destruccion: tiene(hk, 'destruccion por ki'),
     };
     habilidades.set(f, h);
   }
   return h;
 }
 
+/** PV que todavía se le pueden curar con Ki: nunca más de la mitad del daño sufrido (Core p.104). */
+export function curable(l: Luchador): number {
+  return Math.max(0, Math.min(Math.floor(l.stats.danoRecibido / 2) - l.curado, l.ficha.pv - l.pv));
+}
+
+/** Características que sube Aumento de características y que cambian el combate. */
+export type AtributoAumento = 'AGI' | 'CON' | 'DES' | 'FUE';
+
+/**
+ * La ficha con una característica subida o bajada de `desde` a `hasta` (Aumento de características,
+ * Core p.105): se recalculan los bonos que dependen de ella (Core p.13, Tabla 3). DES: ataque y
+ * parada; AGI: esquiva y Tipo de movimiento; AGI y DES: turno; FUE: daño (el doble a dos manos,
+ * redondeado en grupos de 10 hacia arriba, Core p.73); CON: RF y Constitución. Sobre la ficha actual,
+ * así no se pierde lo que haya cambiado mientras tanto (un arma mellada).
+ */
+export function fichaConAumento(f: Ficha, a: AtributoAumento, desde: number, hasta: number): Ficha {
+  const d = bonoCaracteristica(hasta) - bonoCaracteristica(desde);
+  const atributos = { ...f.atributos, [a]: hasta };
+  const esquiva = f.tipoDefensa === 'esquiva';
+  const dos = f.tamanoArma === 'G' ? 2 : 1;
+  const dano = (x: number) => (a === 'FUE' ? Math.max(0, Math.ceil((x + d * dos) / 10) * 10) : x);
+  const ataque = a === 'DES' ? d : 0;
+  const defensa = (a === 'DES' && !esquiva) || (a === 'AGI' && esquiva) ? d : 0;
+  const turno = a === 'DES' || a === 'AGI' ? d : 0;
+  const s = f.sinArmas;
+  return {
+    ...f, atributos,
+    ataque: f.ataque + ataque, defensa: f.defensa + defensa, turno: f.turno + turno, danoBase: dano(f.danoBase),
+    rf: f.rf + (a === 'CON' ? d : 0),
+    constitucion: a === 'CON' ? hasta : f.constitucion,
+    tipoMovimiento: a === 'AGI' ? f.tipoMovimiento + (hasta - desde) : f.tipoMovimiento,
+    sinArmas: s && {
+      ...s, ataque: s.ataque + ataque, danoBase: dano(s.danoBase), turno: s.turno + turno,
+      defensa: s.defensa + ((a === 'DES' && s.tipoDefensa !== 'esquiva') || (a === 'AGI' && s.tipoDefensa === 'esquiva') ? d : 0),
+    },
+  };
+}
+
+/**
+ * Dificultad de la RF contra Destrucción por Ki con `extra` puntos de Ki además del primero: la
+ * Presencia base, +5 por punto, hasta el doble de la Presencia (Core p.104).
+ */
+export function dificultadDestruccion(l: Luchador, extra: number): number {
+  const p = presenciaBase(l.ficha);
+  return Math.min(2 * p, p + 5 * extra);
+}
+
 /** Usa alguna habilidad que gaste Ki durante el combate. */
 function gastaKiEnCombate(h: HabilidadesKi): boolean {
-  return h.armaduraMayor || h.recuperacion;
+  return h.armaduraMayor || h.recuperacion || h.aura || h.absorcion || h.curacion > 0 || h.aumento > 0 || h.destruccion;
+}
+
+/**
+ * Presencia base (Core p.25, Tabla 5): la de la planilla; si falta, la RF menos el bono de
+ * Constitución, que es como se calcula la RF.
+ */
+export function presenciaBase(f: Ficha): number {
+  return f.presencia ?? f.rf - bonoCaracteristica(f.atributos?.CON ?? f.constitucion);
+}
+
+/** Tabla 8 (Dominus p.21): bono a la dificultad del Aura según la suma de las acumulaciones. */
+export function bonoAura(sumaAcumulaciones: number): number {
+  const s = sumaAcumulaciones;
+  return s >= 28 ? 60 : s >= 23 ? 50 : s >= 17 ? 40 : s >= 14 ? 30 : s >= 11 ? 20 : s >= 9 ? 10 : 0;
+}
+
+/** Dificultad del Aura: Presencia base + Tabla 8, menos los negativos a la acción (Dominus p.21). */
+export function dificultadAura(l: Luchador, negativo: number): number {
+  const acum = l.ficha.ki?.acumulacion ?? {};
+  let suma = 0;
+  for (const c of CARACTERISTICAS_KI) suma += acum[c] ?? 0;
+  return presenciaBase(l.ficha) + bonoAura(suma) - negativo;
+}
+
+/** El Aura no afecta a quien tiene una Presencia a 10 o menos de la suya (Dominus p.21). */
+export function sensibleAlAura(fuente: Luchador, x: Luchador): boolean {
+  return presenciaBase(x.ficha) < presenciaBase(fuente.ficha) - 10;
+}
+
+/** Radio del Aura en metros: la Presencia entre 5 (Dominus p.21). */
+export function radioAura(l: Luchador): number {
+  return presenciaBase(l.ficha) / 5;
 }
 
 /**
@@ -253,6 +354,11 @@ export interface EstadoKi {
   /** Armadura de energía mayor (o arcana a TA 6) encendida, y asaltos desde el último pago. */
   armaduraActiva: boolean;
   asaltosArmadura: number;
+  /** Aura de combate encendida, y asaltos desde el último pago (1 de Ki cada 5, Dominus p.21). */
+  auraActiva: boolean;
+  asaltosAura: number;
+  /** Aumento de características activo: qué característica, desde y hasta qué valor, y asaltos sin pagar. */
+  aumento: { atributo: AtributoAumento; desde: number; hasta: number; asaltos: number } | null;
 }
 
 export function crearEstadoKi(l: Luchador): EstadoKi | null {
@@ -262,7 +368,7 @@ export function crearEstadoKi(l: Luchador): EstadoKi | null {
     reserva: ki.reserva, acumulado: {}, ganado: {}, acumulando: false, ejecuto: false,
     activo: { ...SIN_KI }, mantenidas: new Map(), enEspera: new Map(), defensasLibres: 0, asalto: 0, objetivo: null,
     reservaMax: ki.reserva, limitesUsados: new Set(), danoCenobus: 0, recuperadoCenobus: 0, matadosAsalto: 0,
-    armaduraActiva: false, asaltosArmadura: 0,
+    armaduraActiva: false, asaltosArmadura: 0, auraActiva: false, asaltosAura: 0, aumento: null,
   };
 }
 
@@ -297,6 +403,10 @@ export interface DecisionKi {
   armadura?: boolean;
   /** Recupera un punto de cansancio con 5 de Ki (Recuperación). */
   recuperar?: boolean;
+  /** Desencadena (o mantiene) el Aura de combate. */
+  aura?: boolean;
+  /** Activa Aumento de características hasta ese valor (si no tiene uno activo). */
+  aumentar?: { atributo: AtributoAumento; hasta: number };
 }
 
 /**
@@ -325,6 +435,15 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
     e.armaduraActiva = true;
     e.asaltosArmadura++;
   } else e.armaduraActiva = false;
+  // Aura de combate: activarla es pasivo y gratis, pero cada 5 asaltos cuesta 1 de Ki (Dominus p.21).
+  if (d.aura && e.reserva >= 1) {
+    if (!e.auraActiva || e.asaltosAura >= 5) {
+      e.reserva--;
+      e.asaltosAura = 0;
+    }
+    e.auraActiva = true;
+    e.asaltosAura++;
+  } else e.auraActiva = false;
   // Recuperación: un punto de cansancio por 5 de Ki genérico, uno por asalto (Core p.105).
   const maxCansancio = l.ficha.cansancio ?? l.ficha.constitucion;
   if (d.recuperar && e.reserva >= 5 && l.cansancio < maxCansancio) {

@@ -23,7 +23,7 @@ import {
   type Celda, type MapaListo,
 } from './mapa';
 import {
-  ajusteTaEnergia, alMatar, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
+  ajusteTaEnergia, alMatar, curable, dificultadDestruccion, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, presenciaBase, radioAura, sensibleAlAura, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
   textoKi, type ModKi,
 } from './ki';
 
@@ -58,7 +58,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
     movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
     derribado: false, paralisis: 0, apresadoPor: null, apresando: null, desarmado: false,
-    paralisisInducida: 0, paralisisTurnos: 0, amenazadoPor: null, enfundada: false, huyendo: false,
+    paralisisInducida: 0, paralisisTurnos: 0, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
@@ -76,6 +76,49 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
 /** D100 abierta con el umbral de pifia de esa tirada (ver `umbralPifia`). */
 function tirar(ctx: Contexto, umbral: number): TiradaD100 {
   return tirarD100(ctx.rng, umbral);
+}
+
+/**
+ * Aura de combate (Dominus p.21-22): cada rival sensible en el radio hace un control con su Presencia
+ * base + d100 contra la dificultad del Aura. Quien lo supera no lo repite en el combate; afectado
+ * lo repite cada 5 asaltos sin poder empeorar. Por el fracaso (Tabla 9): hasta 19 afectado (−10 a
+ * toda acción), hasta 49 miedo, hasta 99 paralización parcial, 100 o más se desvanece.
+ */
+function aplicarAuras(ctx: Contexto, vivos: Luchador[]) {
+  for (const fuente of vivos) {
+    if (!fuente.ki?.auraActiva || !activo(fuente)) continue;
+    const dificultad = dificultadAura(fuente, penAccion(fuente));
+    for (const x of ctx.luchadores) {
+      if (x.equipo === fuente.equipo || !activo(x) || !sensibleAlAura(fuente, x) || distancia(fuente, x) > radioAura(fuente)) continue;
+      const previo = x.aura;
+      if (previo && (previo.estado !== 'afectado' || ctx.asalto - previo.asalto < 5)) continue;
+      const dado100 = tirarD100Cerrada(ctx.rng);
+      const base = presenciaBase(x.ficha);
+      const fracaso = dado100 === 100 ? 0 : dificultad - (base + dado100);
+      const estado = fracaso <= 0 ? 'resistio' : fracaso < 20 ? 'afectado' : fracaso < 50 ? 'miedo' : fracaso < 100 ? 'paralizado' : 'desvanecido';
+      const texto = `${x.ficha.nombre} siente el Aura de combate de ${fuente.ficha.nombre} (Presencia ${base + dado100} [${base}+${dado100}] contra ${dificultad})`;
+      // Repetir el control como afectado sólo puede mejorar: o lo supera o sigue igual.
+      if (previo && estado !== 'resistio') {
+        x.aura = { ...previo, asalto: ctx.asalto };
+        log(ctx, () => `${texto}: sigue afectado.`);
+        continue;
+      }
+      if (estado === 'desvanecido') {
+        log(ctx, () => `${texto}: falla por ${fracaso} y se desvanece.`);
+        caer(ctx, fuente, x, 'inconsciente');
+        continue;
+      }
+      x.aura = { fuente, estado, asalto: ctx.asalto };
+      if (estado === 'paralizado') {
+        // "Incapaz apenas de moverse": paralización parcial (Core p.233), mientras dure el combate.
+        x.paralisisInducida = Math.max(x.paralisisInducida, 2) as 2 | 3;
+        x.paralisisTurnos = Infinity;
+      }
+      const efecto = { resistio: 'lo resiste', afectado: `falla por ${fracaso}: queda afectado, −10 a toda acción`,
+        miedo: `falla por ${fracaso}: siente miedo, −60 a toda acción`, paralizado: `falla por ${fracaso}: queda paralizado` }[estado];
+      log(ctx, () => `${texto}: ${efecto}.`);
+    }
+  }
 }
 
 /** TA contra energía en el cuerpo, con la Armadura de energía mayor o arcana encendida o no. */
@@ -223,10 +266,13 @@ function jugarAsalto(ctx: Contexto) {
       for (const t of decision.soltar) log(ctx, () => `${l.ficha.nombre} deja de mantener ${t.nombre}.`);
       for (const t of decision.liberar) log(ctx, () => `${l.ficha.nombre} deja ir ${t.nombre}, que tenía en espera.`);
       const armaduraAntes = l.ki.armaduraActiva;
+      const auraAntes = l.ki.auraActiva;
       const cansancioAntes = l.cansancio;
       empezarAsalto(l, decision, penAccion(l), ctx.asalto);
       if (l.ki.armaduraActiva && !armaduraAntes) log(ctx, () => `${l.ficha.nombre} enciende su Armadura de energía (TA ${taEnergia(l)} contra energía) [reserva ${l.ki!.reserva}].`);
       if (!l.ki.armaduraActiva && armaduraAntes) log(ctx, () => `${l.ficha.nombre} apaga su Armadura de energía.`);
+      if (l.ki.auraActiva && !auraAntes) log(ctx, () => `${l.ficha.nombre} desencadena su Aura de combate (dificultad ${dificultadAura(l, penAccion(l))}, ${radioAura(l)} m) [reserva ${l.ki!.reserva}].`);
+      aumentoDeCaracteristicas(ctx, l, decision.aumentar);
       if (l.cansancio > cansancioAntes) log(ctx, () => `${l.ficha.nombre} usa Recuperación: recupera un punto de cansancio con 5 de Ki (reserva ${l.ki!.reserva}).`);
       if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
       const tecnica = ia.tecnicaDeTurno(ctx, l);
@@ -237,6 +283,8 @@ function jugarAsalto(ctx: Contexto) {
       }
     }
   }
+
+  aplicarAuras(ctx, vivos);
 
   // 2. Iniciativa: turno + d100 abierta. Una pifia en turno actúa automáticamente último, sin nivel
   // de pifia; para la sorpresa vale el turno con el penalizador de la Tabla 52 (Core p.98). El turno
@@ -324,6 +372,13 @@ function turno(ctx: Contexto, l: Luchador) {
     if (l.apresadoPor && !zafarse(ctx, l)) l.ataquesRestantes = 0;
     ia.prepararGodhand(ctx, l);
     while (l.ataquesRestantes > 0 && puedeActuar(l) && !terminado(ctx)) {
+      // Curación por Ki: una acción activa en lugar de un ataque (interpretación, Core p.104).
+      const cura = ia.curacionKi(ctx, l);
+      if (cura) {
+        curar(ctx, l, cura.quien, cura.ki);
+        l.ataquesRestantes--;
+        continue;
+      }
       const obj = ia.elegirObjetivo(ctx, l);
       if (!obj) break;
       if (!enAlcance(l, obj)) {
@@ -340,6 +395,46 @@ function turno(ctx: Contexto, l: Luchador) {
   }
   l.sorprendeA.clear();
   l.haActuado = true;
+}
+
+/**
+ * Aumento de características (Core p.105, Dominus p.21): activarlo cuesta tanto Ki como el valor que
+ * alcanza la característica; después, 1 de Ki por asalto (cada 10 con Incremento superior). Si no
+ * puede pagar, la característica vuelve a su valor.
+ */
+function aumentoDeCaracteristicas(ctx: Contexto, l: Luchador, pedido: DecisionKi['aumentar']) {
+  const e = l.ki!;
+  const a = e.aumento;
+  if (a) {
+    a.asaltos++;
+    if (a.asaltos < habilidadesKi(l.ficha).asaltosPorPagoAumento) return;
+    a.asaltos = 0;
+    if (e.reserva >= 1) {
+      e.reserva--;
+      return;
+    }
+    l.ficha = fichaConAumento(l.ficha, a.atributo, a.hasta, a.desde);
+    l.cap = capacidades(l.ficha);
+    e.aumento = null;
+    log(ctx, () => `${l.ficha.nombre} no puede mantener el Aumento de características: ${a.atributo} vuelve a ${a.desde}.`);
+    return;
+  }
+  if (!pedido || e.reserva < pedido.hasta) return;
+  const desde = atributo(l, pedido.atributo);
+  e.reserva -= pedido.hasta;
+  e.aumento = { atributo: pedido.atributo, desde, hasta: pedido.hasta, asaltos: 0 };
+  l.ficha = fichaConAumento(l.ficha, pedido.atributo, desde, pedido.hasta);
+  l.cap = capacidades(l.ficha);
+  log(ctx, () => `${l.ficha.nombre} usa Aumento de características: ${pedido.atributo} ${desde} → ${pedido.hasta} [reserva ${e.reserva}].`);
+}
+
+/** Curación por Ki: 2 PV (5 con la superior) por punto de Ki, sin pasar la mitad del daño sufrido. */
+function curar(ctx: Contexto, l: Luchador, quien: Luchador, ki: number) {
+  const pv = Math.min(ki * habilidadesKi(l.ficha).curacion, curable(quien));
+  l.ki!.reserva -= ki;
+  quien.pv += pv;
+  quien.curado += pv;
+  log(ctx, () => `${l.ficha.nombre} usa Curación por Ki${quien === l ? '' : ` en ${quien.ficha.nombre}`}: ${ki} de Ki, recupera ${pv} PV (${quien.pv}/${quien.ficha.pv}) [reserva ${l.ki!.reserva}].`);
 }
 
 /**
@@ -475,6 +570,7 @@ const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
   area: 'ataca en área', cabeza: 'apunta a la cabeza de', corazon: 'apunta al corazón de',
   inutilizar: 'intenta inutilizar', inconsciencia: 'intenta dejar inconsciente', combinado: 'hace un ataque combinado',
   engatillar: 'intenta engatillar', puntosPresion: 'ataca los puntos de presión de',
+  destruccionKi: 'usa Destrucción por Ki contra',
 };
 
 export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
@@ -496,6 +592,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     ki = ejecutar(atk, plan.tecnica);
     atk.stats.tecnicas[plan.tecnica.nombre] = (atk.stats.tecnicas[plan.tecnica.nombre] ?? 0) + 1;
   } else ki = modDeAccion(atk, 'ataque', true);
+  // Destrucción por Ki: se paga al usarla (1 de Ki más los extra), alcance o no (Core p.104).
+  if (m === 'destruccionKi') atk.ki!.reserva -= 1 + (plan.kiDestruccion ?? 0);
   const cAtk = ia.cansancioAtaque(ctx, atk, def, bono, plan);
   gastarCansancio(atk, cAtk);
   const samielAtk = ia.gastoSamiel(atk, def, 'ataque');
@@ -503,7 +601,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const ranura = proximaRanura(atk);
   const opcionesAtk = {
     bono, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
-    estadoMushin: plan.estadoMushin ?? null, ki,
+    estadoMushin: plan.estadoMushin ?? null, ki, kiDestruccion: plan.kiDestruccion,
   };
   // Ataque Predeterminado: la habilidad final es un valor fijo y no se tiran dados (Dominus p.51).
   const fijo = ki?.ataqueFijo ?? 0;
@@ -612,6 +710,8 @@ interface ResultadoDefensa {
 
 interface Golpe {
   maniobra: Maniobra;
+  /** Destrucción por Ki: puntos de Ki extra (+5 a la dificultad cada uno). */
+  kiDestruccion?: number;
   /** Efectos de Ki del atacante en este golpe. */
   ki?: ModKi;
   estadoMushin?: EstadoMushin | null;
@@ -741,6 +841,12 @@ function resolverDefensa(
     avisar();
     return { defensor: def, contra: null, impacto: true };
   }
+  // Destrucción por Ki: basta con alcanzarlo, aunque el golpe no dañe (Core p.104).
+  if (m === 'destruccionKi') {
+    destruccionPorKi(ctx, atk, def, o.kiDestruccion ?? 0, resiste);
+    avisar();
+    return { defensor: def, contra: null, impacto: true };
+  }
   // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
   if (m === 'puntosPresion') {
     if (dano > 0) puntosDePresion(ctx, atk, def, dano, o.estadoMushin ?? null);
@@ -748,15 +854,46 @@ function resolverDefensa(
     avisar();
     return { defensor: def, contra: null, impacto: true };
   }
+  // Absorción de energía: el daño plenamente energético se puede pagar con Ki, 1 cada 5 (Dominus p.20).
+  let absorbido = false;
+  if (dano > 0 && tipo === 'ENE') {
+    const ki = ia.kiParaAbsorber(def, dano);
+    if (ki > 0) {
+      def.ki!.reserva -= ki;
+      const antes = dano;
+      dano = Math.max(0, dano - 5 * ki);
+      absorbido = true;
+      log(ctx, () => `  ${def.ficha.nombre} absorbe ${antes - dano} de daño con ${ki} de Ki (Absorción de energía) [reserva ${def.ki!.reserva}].`);
+    }
+  }
   if (dano > 0) aplicarDano(ctx, atk, def, dano, resiste, m);
   else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
-  else if (!esManiobraDeControl(m)) {
+  else if (!esManiobraDeControl(m) && !absorbido) {
     log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
     // La armadura evitó el daño: puede romperse (Core p.93).
     if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura, zonaDe(m));
   }
   avisar();
   return { defensor: def, contra: null, impacto: true };
+}
+
+/**
+ * Destrucción por Ki (Core p.104): RF contra la Presencia base del atacante (+5 por punto de Ki extra,
+ * hasta el doble); pierde tantos PV como el fracaso, sin que cuente la armadura. Un 100 natural en la
+ * RF siempre resiste.
+ */
+function destruccionPorKi(ctx: Contexto, atk: Luchador, def: Luchador, extra: number, resistia: boolean) {
+  const dif = dificultadDestruccion(atk, extra);
+  const dadoRf = tirarD100Cerrada(ctx.rng);
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfDano;
+  const fracaso = dadoRf === 100 ? 0 : dif - (baseRf + dadoRf);
+  const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dif}`;
+  if (fracaso <= 0) {
+    log(ctx, () => `  ${def.ficha.nombre} resiste la Destrucción por Ki (${tirada}).`);
+    return;
+  }
+  log(ctx, () => `  ${def.ficha.nombre} falla la RF contra la Destrucción por Ki (${tirada}) por ${fracaso}.`);
+  aplicarDano(ctx, atk, def, fracaso, resistia, 'normal');
 }
 
 /**

@@ -17,7 +17,9 @@ export type Maniobra =
   /** Mushin (Dominus p.42): en vez de daño, RF contra el daño + 20. */
   | 'puntosPresion'
   /** Leo (Ars Magnus): golpe con la hoja (−20) y, si alcanza el cuerpo, disparo a bocajarro. */
-  | 'combinado';
+  | 'combinado'
+  /** Destrucción por Ki (Core p.104): un toque que obliga a una RF contra la Presencia; daña el fracaso. */
+  | 'destruccionKi';
 
 /** Tabla 45: ataques apuntados que interesan en combate. Brazo y pierna (muslo) −20. */
 export const PEN_APUNTADO = { cabeza: 60, corazon: 60, inutilizar: 20, inconsciencia: 60 } as const;
@@ -79,6 +81,8 @@ export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean): number
     case 'engatillar': return e.penEngatillar;
     case 'puntosPresion': return e.mushin ? 0 : Infinity;
     case 'combinado': return e.leo ? 20 : Infinity;
+    // Basta con alcanzarlo con la habilidad de ataque: sin penalizador (Core p.104).
+    case 'destruccionKi': return 0;
   }
 }
 

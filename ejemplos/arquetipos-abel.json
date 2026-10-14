@@ -31,7 +31,8 @@
     "VOL": 5,
     "POD": 5
    },
-   "acrobacias": 40
+   "acrobacias": 40,
+   "presencia": 20
   },
   {
    "id": "burgues",
@@ -62,7 +63,8 @@
     "INT": 7,
     "VOL": 7,
     "POD": 7
-   }
+   },
+   "presencia": 35
   },
   {
    "id": "soldado",
@@ -116,7 +118,8 @@
      "calidad": 0,
      "entereza": 14
     }
-   ]
+   ],
+   "presencia": 30
   },
   {
    "id": "elite",
@@ -168,7 +171,8 @@
      "calidad": 0,
      "entereza": 16
     }
-   ]
+   ],
+   "presencia": 40
   },
   {
    "id": "oficial",
@@ -222,7 +226,8 @@
      "calidad": 0,
      "entereza": 15
     }
-   ]
+   ],
+   "presencia": 45
   },
   {
    "id": "noble",
@@ -253,7 +258,8 @@
     "INT": 7,
     "VOL": 7,
     "POD": 7
-   }
+   },
+   "presencia": 35
   }
  ]
 }

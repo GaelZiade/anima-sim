@@ -8,10 +8,10 @@ import {
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
 import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
-import { planDeAtaques, type Ranura } from './rasgos';
+import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import {
-  asaltosQueFaltan, combinar, costeKi, efectosDe, habilidadesKi, modDeAccion, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   vistaPrevia, type DecisionKi, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
@@ -593,6 +593,8 @@ export interface PlanAtaque {
   estadoMushin?: EstadoMushin | null;
   /** Técnica de Ki que ejecuta con este ataque. */
   tecnica?: Tecnica;
+  /** Destrucción por Ki: puntos de Ki que pone además del primero (+5 a la dificultad cada uno). */
+  kiDestruccion?: number;
 }
 
 const NORMAL: PlanAtaque = { maniobra: 'normal', especial: false };
@@ -762,6 +764,9 @@ function mejorManiobra(
     if (e.mushin) opciones.push('puntosPresion');
   }
   if (e.leo && atk.balas > 0) opciones.push('combinado');
+  // Destrucción por Ki es un ataque propio: no se combina con una técnica que mejore el golpe.
+  const golpeConTecnica = !!ki && (ki.ataque > 0 || ki.dano > 0 || ki.multDano > 1 || ki.danoFijo > 0 || ki.area > 0 || ki.ataqueFijo > 0);
+  if (!soloNormal && !golpeConTecnica && habilidadesKi(atk.ficha).destruccion && (atk.ki?.reserva ?? 0) >= 1) opciones.push('destruccionKi');
   // No se puede aprovechar una contra para un ataque en área (Core p.89). Con un área de Ki la
   // maniobra sobra: la técnica ya alcanza a todos los del radio.
   const area = esContra || soloNormal || ki?.area ? [] : blancosArea(ctx, atk, def);
@@ -794,6 +799,28 @@ function mejorManiobra(
         if (ve > mejorValor) {
           mejorValor = ve;
           mejor = { maniobra: m, tipo, especial: false, estadoMushin: estado };
+        }
+      }
+      continue;
+    } else if (m === 'destruccionKi') {
+      // Destrucción por Ki: se prueba cada cantidad de Ki extra (+5 a la dificultad cada una).
+      const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo });
+      const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
+      const rf = def.ficha.rf + def.cap.est.bonoRfDano;
+      const tope = Math.min(Math.floor(presenciaBase(atk.ficha) / 5), atk.ki!.reserva - 1);
+      let base = 0;
+      if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) base += p.pImpacto * amen;
+      if (def.ataquesRestantes > 0 && puedeActuar(def)) base -= lambda(atk) * p.pContra * golpeDe(def, atk);
+      for (let extra = 0; extra <= tope; extra++) {
+        // Fracaso = margen − d100 (1-99; el 100 resiste): su media y la chance de dejarlo a 0 PV.
+        const margen = dificultadDestruccion(atk, extra) - rf;
+        let medio = 0;
+        for (let d = 1; d <= 99 && d < margen; d++) medio += (margen - d) / 100;
+        const pBaja = Math.max(0, Math.min(99, margen - Math.max(1, def.pv))) / 100;
+        const ve = base + p.pImpacto * (medio + pBaja * 2 * amen) - precioKi(atk) * (1 + extra);
+        if (ve > mejorValor) {
+          mejorValor = ve;
+          mejor = { maniobra: m, tipo, especial: false, kiDestruccion: extra };
         }
       }
       continue;
@@ -925,6 +952,83 @@ function precioKi(l: Luchador): number {
 /** Acumular es pasivo y no cuesta nada: se acumula mientras quede reserva y tenga técnicas. */
 function acumulaKi(l: Luchador): boolean {
   return !!l.ki && l.ki.reserva > 0 && !!l.ficha.ki?.tecnicas.length;
+}
+
+/**
+ * Absorción de energía (Dominus p.20): cuánto Ki pone para no perder PV con un daño plenamente
+ * energético, a 1 de Ki cada 5 de daño. Es voluntaria: lo hace mientras un punto de Ki le valga menos
+ * que los 5 PV que ahorra.
+ */
+export function kiParaAbsorber(l: Luchador, dano: number): number {
+  if (!l.ki || !habilidadesKi(l.ficha).absorcion || perfil(l) === 'bestia') return 0;
+  if (precioKi(l) >= 5) return 0;
+  return Math.min(l.ki.reserva, Math.ceil(dano / 5));
+}
+
+/** Asaltos que se supone que dura lo que se activa al empezar (para comparar con lo que cuesta). */
+const ASALTOS_PREVISTOS = 4;
+
+/**
+ * Aumento de características: prueba subir cada una hasta el máximo con la ficha cambiada y mide lo
+ * que gana por asalto (lo que pega de más al rival principal y lo que deja de recibir de cada uno que
+ * puede atacarlo). Conviene si en los asaltos previstos supera el Ki de activarlo y mantenerlo.
+ */
+function elegirAumento(ctx: Contexto, l: Luchador): DecisionKi['aumentar'] {
+  const h = habilidadesKi(l.ficha);
+  const rival = rivalPrincipal(ctx, l);
+  if (!rival) return undefined;
+  const medir = () => {
+    nuevaDecision(ctx);
+    let v = golpeDe(l, rival) * Math.max(1, l.cap.maxAtaques);
+    for (const e of enemigos(ctx, l)) if (alcanzable(e, l)) v -= lambda(l) * amenaza(e, l);
+    return v;
+  };
+  const antes = medir();
+  const original = { ficha: l.ficha, cap: l.cap };
+  let mejor: DecisionKi['aumentar'];
+  let mejorNeto = 0;
+  for (const a of ['DES', 'AGI', 'FUE', 'CON'] as const) {
+    const desde = l.ficha.atributos?.[a] ?? 5;
+    const hasta = desde + h.aumento;
+    const mantener = Math.ceil(ASALTOS_PREVISTOS / h.asaltosPorPagoAumento);
+    if (l.ki!.reserva < hasta + mantener) continue;
+    l.ficha = fichaConAumento(original.ficha, a, desde, hasta);
+    l.cap = capacidades(l.ficha);
+    const ganancia = medir() - antes;
+    l.ficha = original.ficha;
+    l.cap = original.cap;
+    const neto = ganancia * ASALTOS_PREVISTOS - precioKi(l) * (hasta + mantener);
+    if (neto > mejorNeto) {
+      mejorNeto = neto;
+      mejor = { atributo: a, hasta };
+    }
+  }
+  nuevaDecision(ctx);
+  return mejor;
+}
+
+/**
+ * Curación por Ki en su turno, en lugar de un ataque: a sí mismo o al aliado en contacto que más la
+ * necesite. Los PV curados valen lo mismo que el daño recibido (λ), y conviene si eso menos el Ki
+ * supera su mejor ataque. Sólo con 30% o más de los PV perdidos.
+ */
+export function curacionKi(ctx: Contexto, l: Luchador): { quien: Luchador; ki: number } | null {
+  const rate = habilidadesKi(l.ficha).curacion;
+  if (!rate || !l.ki || l.ki.reserva <= 0 || perfil(l) === 'bestia') return null;
+  nuevaDecision(ctx);
+  let mejor: { quien: Luchador; ki: number; valor: number } | null = null;
+  for (const x of ctx.luchadores) {
+    if (x.equipo !== l.equipo || !activo(x) || (x !== l && !enAlcance(l, x)) || x.pv > 0.7 * x.ficha.pv) continue;
+    const pv = Math.min(curable(x), l.ki.reserva * rate);
+    if (pv <= 0) continue;
+    const ki = Math.ceil(pv / rate);
+    const valor = lambda(l) * pv - precioKi(l) * ki;
+    if (!mejor || valor > mejor.valor) mejor = { quien: x, ki, valor };
+  }
+  if (!mejor || mejor.valor <= 0) return null;
+  let ataque = 0;
+  for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) ataque = Math.max(ataque, valorAtaque(l, e, {}));
+  return mejor.valor > ataque ? { quien: mejor.quien, ki: mejor.ki } : null;
 }
 
 /** Algún enemigo puede atacarlo con crítico de energía: vale la pena encender la Armadura mayor. */
@@ -1140,6 +1244,9 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
   const h = habilidadesKi(l.ficha);
   const armadura = h.armaduraMayor && hayAtaquesDeEnergia(ctx, l);
   const recuperar = convieneRecuperar(l);
+  // Aura de combate: activarla es gratis salvo 1 de Ki cada 5 asaltos; vale si algún rival es sensible.
+  const aura = h.aura && enemigos(ctx, l).some((x) => sensibleAlAura(l, x));
+  const aumentar = h.aumento && !e.aumento ? elegirAumento(ctx, l) : undefined;
   const soltar = [...e.mantenidas.keys()].filter((t) => valorMantener(ctx, l, t) < precioKi(l) * t.mantenimiento);
   const liberar = [...e.enEspera].filter(([, desde]) => ctx.asalto - desde > 3).map(([t]) => t);
   let objetivo: Tecnica | null = null;
@@ -1160,7 +1267,7 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
       }
     }
   }
-  return { acumula, soltar, liberar, objetivo, armadura, recuperar };
+  return { acumula, soltar, liberar, objetivo, armadura, recuperar, aura, aumentar };
 }
 
 /**

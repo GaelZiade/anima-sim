@@ -67,7 +67,8 @@ export function penAccion(l: Luchador): number {
   // Sangre Eterna: consciente con PV negativos, con un negativo igual a esos PV (Dominus p.80).
   const negativos = c.est.sangreEterna && l.pv < 0 ? -l.pv : 0;
   // Miedo: −60 a toda acción que no sea huir (Core p.232); pelear no lo es.
-  const miedo = l.ficha.estados?.miedo ? PEN_MIEDO : 0;
+  // El Aura de combate de un rival puede dar miedo o −10 a toda acción (Dominus p.22, Tabla 9).
+  const miedo = (l.ficha.estados?.miedo || l.aura?.estado === 'miedo' ? PEN_MIEDO : 0) + (l.aura?.estado === 'afectado' ? 10 : 0);
   if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + negativos + miedo - luna;
   // Dolor como estado (Core p.233): no baja con los asaltos como el de los críticos.
   const estadoDolor = l.ficha.estados?.dolor ? PEN_DOLOR[l.ficha.estados.dolor] : 0;
