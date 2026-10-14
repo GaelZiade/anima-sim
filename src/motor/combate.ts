@@ -18,7 +18,7 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
-import { completarArma, estadoProyectiles, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
+import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
   buscarCamino, campoHacia, caminoHasta, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
   type Celda, type MapaListo,
@@ -63,7 +63,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -220,7 +220,7 @@ function jugarAsalto(ctx: Contexto) {
     l.haActuado = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
     l.movioAsaltoAnterior = l.metrosMovidos > 0;
     l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
-    l.disparo = false; l.ultimoBlanco = null;
+    l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
     l.planResistir = null;
     l.repitioControl = false;
     // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
@@ -638,8 +638,10 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // La ranura (qué ataque del asalto es) se fija antes de gastarlo: decide arma o patada.
   const ranura = ranuraProyectil ?? proximaRanura(atk);
   if (arma) {
+    const st = atk.proyectiles[a.proyectil!.arma];
     if (arma.leo) atk.balas--;
-    else atk.proyectiles[a.proyectil!.arma].municion--;
+    else st.municion--;
+    st.enRecamara--;
   }
   const opcionesAtk = {
     bono: bonoFinal, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: ki?.elemento || plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
@@ -695,6 +697,12 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     let impactoCombinado = false;
     for (const blanco of blancos) {
       if (!activo(blanco) || !activo(atk)) continue;
+      // Disparos paralelos (opcional, Core p.95): quien recibe un disparo sin haber actuado y con menos
+      // de 25 de diferencia de turno puede disparar a su vez antes de defenderse.
+      if (g === 0 && arma && aDistancia && ctx.opciones.disparosParalelos) {
+        disparoParalelo(ctx, blanco, atk);
+        if (!activo(atk) || !activo(blanco)) continue;
+      }
       const r = resolverDefensa(ctx, atk, blanco, hab, tA, opcionesAtk, etiquetaPara(blanco));
       if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
       if (r.contra !== null) {
@@ -729,12 +737,25 @@ function accionADistancia(ctx: Contexto, l: Luchador, d: ia.AccionDistancia) {
   l.disparo = true;
   if (d.tipo === 'recargar') {
     st.recargaFalta--;
+    // Una recámara vacía se recarga entera (ballesta de repetición).
+    const recamara = completarArma(arma).recamara;
+    if (!st.recargaFalta && recamara) st.enRecamara = Math.min(recamara, st.municion);
     log(ctx, () => `${l.ficha.nombre} recarga ${arma.nombre}${st.recargaFalta ? ` (le falta${st.recargaFalta > 1 ? 'n' : ''} ${st.recargaFalta} asalto${st.recargaFalta > 1 ? 's' : ''})` : ''}.`);
   } else if (d.tipo === 'apuntar') {
     const sigue = l.apuntando?.blanco === d.objetivo && l.apuntando.arma === d.arma;
     l.apuntando = { blanco: d.objetivo, arma: d.arma, asaltos: sigue ? Math.min(3, l.apuntando!.asaltos + 1) : 1 };
     log(ctx, () => `${l.ficha.nombre} apunta con ${arma.nombre} a ${d.objetivo.ficha.nombre} (+${10 * l.apuntando!.asaltos}).`);
   } else {
+    // Antes de disparar se aleja de quien lo alcanzaría el asalto que viene (hasta un cuarto de su
+    // movimiento, sin penalizador), si desde ahí sigue viendo y alcanzando a su blanco.
+    const atras = ia.retroceso(ctx, l, d.objetivo, d.arma);
+    if (atras) {
+      const desde = { ...l.pos };
+      l.pos = atras.celda;
+      l.metrosMovidos += atras.metros;
+      ctx.movimientosEnAsalto++;
+      log(ctx, () => `${l.ficha.nombre} retrocede ${atras.metros.toFixed(1)} m.`, () => ({ camino: { quien: nro(ctx, l), celdas: [desde, { ...l.pos }] } }));
+    }
     if (d.disparos > 1) log(ctx, () => `${l.ficha.nombre} ${arma.clase === 'disparo' ? 'dispara' : 'lanza'} ${d.disparos} veces con ${arma.nombre} (−${d.pen} a cada uno).`);
     let blanco: Luchador | null = d.objetivo;
     for (let k = 0; k < d.disparos && blanco; k++) {
@@ -743,9 +764,43 @@ function accionADistancia(ctx: Contexto, l: Luchador, d: ia.AccionDistancia) {
       if (!puedeActuar(l) || terminado(ctx)) break;
       if (!activo(blanco)) blanco = ia.siguienteBlanco(ctx, l, d.arma, d.pen);
     }
-    st.recargaFalta = d.recargaFalta;
+    st.recargaFalta = recargaTrasDisparar(l, d.arma, d.recargaFalta);
   }
   l.ataquesRestantes = 0;
+}
+
+/** Recarga pendiente después de disparar: con recámara, sólo cuando se vacía (y es la recarga entera). */
+function recargaTrasDisparar(l: Luchador, i: number, segunRecarga: number): number {
+  const a = completarArma(l.ficha.armasDistancia![i]);
+  if (!a.recamara) return segunRecarga;
+  return l.proyectiles[i].enRecamara <= 0 && l.proyectiles[i].municion > 0 ? a.recarga : 0;
+}
+
+function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
+  if (l.haActuado || l === ctx.turnoDe || !puedeActuar(l) || l.ataquesRestantes <= 0 || !activo(atk)) return;
+  if (Math.abs(l.iniciativa - atk.iniciativa) >= 25) return;
+  const d = ia.accionADistancia(ctx, l);
+  if (d?.tipo !== 'disparar') return;
+  log(ctx, () => `  ${l.ficha.nombre} dispara a la vez (disparos paralelos).`);
+  accionADistancia(ctx, l, d);
+  l.haActuado = true;
+}
+
+/**
+ * Trucos de manos contra un proyectil (Core p.94): contra la dificultad del proyectil, o enfrentado
+ * con el ataque final si es sobrenatural (una técnica de Ki a distancia). −25 por cada control de
+ * más en el asalto. Devuelve si lo atrapó.
+ */
+function atrapar(ctx: Contexto, l: Luchador, atk: Luchador, ataqueTotal: number, o: Golpe): boolean {
+  const dif = dificultadAtrapar(o.ranura.proyectil);
+  const base = (l.ficha.trucosDeManos ?? 0) - penAccion(l) - PEN_ATRAPAR_ADICIONAL * l.atrapadas;
+  l.atrapadas++;
+  const t = tirar(ctx, umbralPifia(l.ficha.trucosDeManos ?? 0));
+  const total = base + valorTirada(t);
+  const contra = dif ?? ataqueTotal;
+  const logra = !t.pifia && (dif === null ? total > contra : total >= contra);
+  log(ctx, () => `  ${l.ficha.nombre} intenta atrapar el ${dif === null ? 'ataque' : 'proyectil'} de ${atk.ficha.nombre} (Trucos de manos ${textoTirada(base, t)} contra ${contra}): ${logra ? '¡lo atrapa!' : 'no lo logra'}.`);
+  return logra;
 }
 
 /**
@@ -853,6 +908,13 @@ function resolverDefensa(
   gastarCansancio(quienDefiende, cDef);
   const samielDef = ia.gastoSamiel(quienDefiende, atk, 'defensa');
   if (samielDef) quienDefiende.samiel.set(atk, (quienDefiende.samiel.get(atk) ?? 0) - samielDef);
+  // Trucos de manos: atrapar el proyectil en el aire, como defensa pasiva; si falla, se defiende igual
+  // con −50 (Core p.94).
+  let trasAtrapar = 0;
+  if (!proteccion && o.aDistancia && !def.ficha.acumulacion && def.ficha.trucosDeManos !== undefined && ia.intentaAtrapar(ctx, def, atk, habAtk, o)) {
+    if (atrapar(ctx, def, atk, habAtk + tA.valor, o)) return { defensor: def, contra: null, impacto: false };
+    trasAtrapar = PEN_ESQUIVA_TRAS_ATRAPAR;
+  }
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
   const tecnica = quienDefiende.ficha.acumulacion ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
   let kiDef: ModKi | undefined;
@@ -860,7 +922,7 @@ function resolverDefensa(
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined }) - (proteccion?.pen ?? 0);
+  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined }) - (proteccion?.pen ?? 0) - trasAtrapar;
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
@@ -1579,13 +1641,19 @@ function ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number
   // Desde lejos sólo se contraataca con un arma a distancia, y sin el bono (Core p.95).
   if (!motivo && !enAlcance(def, atk)) {
     const arma = ia.contraADistancia(ctx, def, atk);
+    // Una técnica de Ki a distancia también sirve, y sin bono (Dominus p.57: cuenta como proyectil).
+    const ki = arma === null ? ia.contraKiADistancia(ctx, def, atk) : null;
+    if (ki) {
+      atacar(ctx, def, atk, { esContra: true, bono: 0, tecnica: ki.tecnica });
+      return;
+    }
     if (arma === null) {
       log(ctx, () => `  ${def.ficha.nombre} no puede aprovechar la contra (+${bono}): no tiene a ${atk.ficha.nombre} a su alcance.`);
       return;
     }
     atacar(ctx, def, atk, { esContra: true, bono: 0, proyectil: { arma, pen: 0 } });
     const a = completarArma(def.ficha.armasDistancia![arma]);
-    if (a.clase === 'disparo') def.proyectiles[arma].recargaFalta = Math.max(0, a.recarga - 1);
+    if (a.clase === 'disparo') def.proyectiles[arma].recargaFalta = recargaTrasDisparar(def, arma, Math.max(0, a.recarga - 1));
     return;
   }
   if (motivo) {

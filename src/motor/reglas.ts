@@ -66,7 +66,9 @@ export function dificultadDisparo(metros: number): number {
  * maestría −20), esquiva −30 (con maestría, nada). Lanzado: parada −50 (con maestría, nada), esquiva
  * nada.
  */
-export function penDefensaProyectil(campo: 'parada' | 'esquiva', maestro: boolean, clase: 'disparo' | 'lanzamiento' = 'disparo'): number {
+export function penDefensaProyectil(campo: 'parada' | 'esquiva', maestro: boolean, clase: 'disparo' | 'lanzamiento' = 'disparo', escudo = false): number {
+  // Con escudo: −30 contra disparos (nada si es maestro) y nada contra lanzamientos (Core p.79).
+  if (campo === 'parada' && escudo) return clase === 'disparo' && !maestro ? 30 : 0;
   if (clase === 'lanzamiento') return campo === 'parada' && !maestro ? 50 : 0;
   return campo === 'parada' ? (maestro ? 20 : 80) : maestro ? 0 : 30;
 }

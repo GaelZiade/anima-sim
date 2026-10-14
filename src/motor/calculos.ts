@@ -413,7 +413,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
-  if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa), o.proyectil === 'lanzamiento' ? 'lanzamiento' : 'disparo');
+  if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa), o.proyectil === 'lanzamiento' ? 'lanzamiento' : 'disparo', !!def.ficha.escudo);
   if (paradaAnulada(def, atk, o.kiAtk)) h = Math.min(h, 0);
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
@@ -703,6 +703,9 @@ export function modProyectil(atk: Luchador, def: Luchador, arma: ArmaDistancia, 
   if (lejos) bono -= 30;
   if (atk.apuntando?.blanco === def) bono += 10 * Math.min(3, atk.apuntando.asaltos);
   if (bocajarro) bono += 30;
+  if (atk.entorno.escasaVisibilidad && !bocajarro) bono -= 20;
+  // Blanco grande: más de 2,5 m (Tamaño 22, Tabla 3); no contra acumulación (Core p.95).
+  if ((tamanoDe(def) ?? 0) >= 22 && !def.ficha.acumulacion) bono += 30;
   return { bono, lejos };
 }
 

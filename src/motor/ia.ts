@@ -2,14 +2,15 @@
 // No tira dados ni mira hacia adelante; todas las probabilidades salen de las tablas precalculadas.
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
+import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
   absorcionContra, activo, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
-  danoBase, danoCon, danoEsperado, modControl, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
 import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
-import { completarArma, disparosConRecarga, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
+import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import {
   asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
@@ -1266,6 +1267,14 @@ function armaUsable(l: Luchador, i: number): boolean {
  */
 function formasDeDisparar(l: Luchador, i: number): { disparos: number; pen: number; recargaFalta: number }[] {
   const a = completarArma(l.ficha.armasDistancia![i]);
+  if (a.clase === 'disparo' && a.recamara) {
+    // Con recámara dispara como con índice 1 hasta vaciarla; vacía, la recarga entera (Core p.81).
+    const res = [];
+    const quedan = Math.min(l.proyectiles[i].enRecamara, l.proyectiles[i].municion);
+    for (let k = 0; k <= reduccionesPosibles(a.ataque) && k < quedan; k++)
+      res.push({ disparos: k + 1, pen: 30 * k, recargaFalta: k + 1 >= quedan ? a.recarga : 0 });
+    return res;
+  }
   if (a.clase === 'disparo') {
     const res = [];
     for (let k = 0; k <= reduccionesPosibles(a.ataque); k++) res.push(disparosConRecarga(a.recarga, k));
@@ -1391,6 +1400,88 @@ export function siguienteBlanco(ctx: Contexto, l: Luchador, i: number, pen: numb
     }
   }
   return mejor;
+}
+
+/**
+ * Atrapar un proyectil con Trucos de manos (Core p.94) si lo que espera recibir intentándolo (si falla,
+ * se defiende con −50) es menos que defendiéndose como siempre. Contra un arma de fuego hace falta
+ * maestría.
+ */
+export function intentaAtrapar(ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number, g: { ranura: Ranura; ki?: ModKi }): boolean {
+  if (perfil(def) === 'bestia') return false;
+  const trucos = def.ficha.trucosDeManos ?? 0;
+  const arma = g.ranura.proyectil;
+  if (arma?.fuego && trucos < 200) return false;
+  nuevaDecision(ctx);
+  const dif = dificultadAtrapar(arma) ?? habAtk + 50;
+  const base = trucos - penAccion(def) - PEN_ATRAPAR_ADICIONAL * def.atrapadas;
+  const p = Math.max(0, Math.min(1, (101 - (dif - base)) / 100));
+  if (p <= 0) return false;
+  const proyectil = arma?.clase ?? 'disparo';
+  const hab = defensaFinal(def, atk, { proyectil, kiAtk: g.ki });
+  const o = { ranura: g.ranura, ki: g.ki };
+  return (1 - p) * danoEsperado(atk, def, habAtk, hab - PEN_ESQUIVA_TRAS_ATRAPAR, o) < danoEsperado(atk, def, habAtk, hab, o);
+}
+
+/**
+ * Celda a la que retroceder antes de disparar (hasta un cuarto de su movimiento: sin penalizador,
+ * Tabla 47), o null: sólo si algún enemigo lo alcanzaría el asalto que viene, y
+ * desde la celda nueva ninguno lo alcanza y sigue viendo y alcanzando a su blanco. La más cercana.
+ */
+export function retroceso(ctx: Contexto, l: Luchador, blanco: Luchador, i: number): { celda: Celda; metros: number } | null {
+  const m = l.mapa;
+  if (!m || perfil(l) === 'bestia' || trabadoConAlguien(l) || l.apresadoPor) return null;
+  const amenazas = enemigos(ctx, l).filter((e) => puedeAvanzar(e) && faltaParaLlegar(e, l) <= metrosTotales(e));
+  if (!amenazas.length) return null;
+  const tope = metrosTotales(l) / 4 - l.metrosMovidos;
+  if (tope < 1) return null;
+  // Alejarse `tope` metros alarga el camino de cada uno a lo sumo eso: si igual lo alcanzaría, no hay caso.
+  if (amenazas.some((e) => faltaParaLlegar(e, l) + tope <= metrosTotales(e))) return null;
+  const ocupadas = m.ocupadas.fill(0);
+  for (const x of ctx.luchadores) if (x !== l && activo(x)) ocupadas[indice(m, x.pos)] = 1;
+  buscarCamino(m, l.pos, ocupadas, tope + 1e-6, () => false);
+  const costos = Float32Array.from(m.costos);
+  const arma = l.ficha.armasDistancia![i];
+  let mejor: { celda: Celda; metros: number } | null = null;
+  for (let j = 0; j < costos.length; j++) {
+    const c = costos[j];
+    if (c === Infinity || c === 0 || (mejor && c >= mejor.metros)) continue;
+    const celda = celdaDe(m, j);
+    if (amenazas.some((e) => campoHacia(m, celda)[indice(m, e.pos)] <= metrosTotales(e))) continue;
+    if (Math.hypot(celda.x - blanco.pos.x, celda.y - blanco.pos.y) > alcanceMaximo(arma)) continue;
+    if (lineaDeVision(m, celda, blanco.pos) === 'bloqueada') continue;
+    mejor = { celda, metros: c };
+  }
+  return mejor;
+}
+
+/** Puede moverse este asalto (no está apresado ni paralizado del todo). */
+function puedeAvanzar(e: Luchador): boolean {
+  return !e.apresadoPor && e.paralisis < 3 && e.paralisisInducida < 3 && metrosTotales(e) > 0;
+}
+
+/** Contraataque con una técnica de Ki a distancia (o una activa) que alcance y vea a quien lo atacó. */
+export function contraKiADistancia(ctx: Contexto, l: Luchador, atk: Luchador): { tecnica: Tecnica | null } | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  const d = distancia(l, atk);
+  const activo0 = modDeAccion(l, 'ataque', false);
+  const opciones: [Tecnica | null, ModKi][] = [];
+  if (activo0 && activo0.distancia >= d) opciones.push([null, activo0]);
+  for (const t of tecnicasPara(l, 'ataque', true)) {
+    const k = vistaPrevia(l, t);
+    if (k.distancia >= d) opciones.push([t, k]);
+  }
+  if (!opciones.length) return null;
+  const vision = visionEntre(ctx.luchadores, l, atk);
+  if (vision === 'bloqueada') return null;
+  nuevaDecision(ctx);
+  const bono = vision === 'cobertura' ? -PEN_COBERTURA : 0;
+  let mejor: { tecnica: Tecnica | null; valor: number } | null = null;
+  for (const [t, k] of opciones) {
+    const v = mejorManiobra(ctx, l, atk, true, bono, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, atk, t) : 0);
+    if (v > 0 && (!mejor || v > mejor.valor)) mejor = { tecnica: t, valor: v };
+  }
+  return mejor ? { tecnica: mejor.tecnica } : null;
 }
 
 /** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */

@@ -61,6 +61,10 @@ export interface Ficha {
   tamano?: number;
   /** Armas de proyectiles y arrojadizas (Core p.94-96, Tabla 34). */
   armasDistancia?: ArmaDistancia[];
+  /** Para con un escudo (rodela, medio, corporal): contra proyectiles disparados sólo −30 (Core p.79). */
+  escudo?: boolean;
+  /** Habilidad secundaria Trucos de manos: atrapar proyectiles en el aire (Core p.94). */
+  trucosDeManos?: number;
 }
 
 /**
@@ -84,6 +88,8 @@ export interface ArmaDistancia {
   cadencia?: number;
   /** Proyectiles que lleva (flechas, balas, unidades a lanzar). Sin dato: sin límite al disparar, 1 al lanzar. */
   municion?: number;
+  /** Recámara: disparos sin recargar (ballesta de repetición, 4 a 8); vacía, se recarga entera (Core p.81). */
+  recamara?: number;
   /** Arma de fuego: con una pifia se encasquilla (menos de 80) o estalla (Core p.80-81). */
   fuego?: boolean;
   calidad?: number;
@@ -98,6 +104,8 @@ export interface EstadoArmaDistancia {
   municion: number;
   /** Asaltos de recarga que le faltan antes de poder volver a disparar. */
   recargaFalta: number;
+  /** Disparos que quedan en la recámara (Infinity si el arma no tiene). */
+  enRecamara: number;
   /** Encasquillada o rota (estalló): no se puede usar más en el combate. */
   inutil: '' | 'encasquillada' | 'rota';
 }
@@ -344,6 +352,8 @@ export interface Luchador {
   ultimoBlanco: Luchador | null;
   /** Usó un arma a distancia este asalto: no se acerca después. */
   disparo: boolean;
+  /** Controles de Trucos de manos para atrapar proyectiles hechos este asalto (−25 cada uno, Core p.94). */
+  atrapadas: number;
   /** Dominios del Ki: reserva, Ki concentrado y técnicas activas (null sin técnicas). */
   ki: EstadoKi | null;
 
@@ -427,6 +437,13 @@ export interface OpcionesEscenario {
    * 'B') al que se le quitan; para medir cuánto le aportan a uno, el rival no tiene que cambiar.
    */
   sinManiobras?: boolean | Equipo;
+  /** Escasa visibilidad (niebla, humo, lluvia densa): −20 a los proyectiles (Tabla 47). */
+  escasaVisibilidad?: boolean;
+  /**
+   * Disparos paralelos (Core p.95, opcional): con menos de 25 de diferencia de turno, quien recibe un
+   * disparo todavía sin actuar puede disparar a su vez antes de defenderse.
+   */
+  disparosParalelos?: boolean;
 }
 
 export interface Contexto {

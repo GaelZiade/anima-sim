@@ -11,6 +11,7 @@ interface DatosTabla34 {
   cadencia?: number;
   alcance: number;
   fuego?: boolean;
+  recamara?: number;
 }
 
 /**
@@ -27,7 +28,8 @@ const TABLA_34: [RegExp, DatosTabla34][] = [
   [/balista pesada/, { clase: 'disparo', recarga: 12, alcance: 200 }],
   [/balista/, { clase: 'disparo', recarga: 10, alcance: 150 }],
   [/ballesta de mano/, { clase: 'disparo', recarga: 2, alcance: 30 }],
-  [/ballesta de repeticion/, { clase: 'disparo', recarga: 3, alcance: 60 }],
+  // Recámara de 4 a 8 virotes (Core p.81): se toma la más corta; vacía, se recarga en 3 asaltos.
+  [/ballesta de repeticion/, { clase: 'disparo', recarga: 3, alcance: 60, recamara: 4 }],
   [/ballesta pesada/, { clase: 'disparo', recarga: 2, alcance: 80 }],
   [/ballesta/, { clase: 'disparo', recarga: 2, alcance: 60 }],
   [/boleadoras/, { clase: 'lanzamiento', cadencia: 80, alcance: 20 }],
@@ -76,6 +78,7 @@ function completar(a: ArmaDistancia): Required<Pick<ArmaDistancia, 'recarga' | '
     recarga: a.recarga ?? (a.clase === 'disparo' ? t?.recarga ?? 1 : 0),
     cadencia: a.cadencia ?? (a.clase === 'lanzamiento' ? t?.cadencia ?? CADENCIA_SIN_TABLA : 0),
     fuego: a.fuego ?? t?.fuego ?? false,
+    recamara: a.recamara ?? t?.recamara,
   };
 }
 
@@ -85,6 +88,7 @@ export function estadoProyectiles(f: Ficha): EstadoArmaDistancia[] {
     // Un arma arrojadiza sin munición declarada es una sola: lanzada, se pierde.
     municion: a.municion ?? (a.clase === 'lanzamiento' ? 1 : Infinity),
     recargaFalta: 0,
+    enRecamara: completarArma(a).recamara ?? Infinity,
     inutil: '',
   }));
 }
@@ -129,6 +133,22 @@ export function umbralEstallido(calidad = 0): number {
 export function modVelocidadBlanco(tipoMovimiento: number): number {
   return tipoMovimiento > 10 ? -60 : tipoMovimiento === 10 ? -40 : tipoMovimiento > 8 ? -20 : 0;
 }
+
+/**
+ * Dificultad para atrapar un proyectil con Trucos de manos (Core p.94): lanzado Absurdo (180),
+ * disparado Casi Imposible (240), un arma de fuego Inhumano (320, y hace falta maestría). Contra uno
+ * sobrenatural (técnica de Ki, conjuro) es un control enfrentado con su ataque final: null.
+ */
+export function dificultadAtrapar(arma: ArmaDistancia | undefined): number | null {
+  if (!arma) return null;
+  if (arma.fuego) return 320;
+  return arma.clase === 'lanzamiento' ? 180 : 240;
+}
+
+/** Cada control de Trucos de manos de más en el asalto: −25 (Core p.94). */
+export const PEN_ATRAPAR_ADICIONAL = 25;
+/** Si no lo atrapa, todavía puede esquivarlo con −50 (Core p.94). */
+export const PEN_ESQUIVA_TRAS_ATRAPAR = 50;
 
 /** Extiende su Ki al arma (Extensión del aura al arma): sus proyectiles pasan el tope de 280 (Core p.95). */
 export function superaTope(f: Ficha): boolean {

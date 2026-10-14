@@ -62,7 +62,7 @@ interface OpcionesGuardadas {
   casillas: Record<string, boolean>;
 }
 
-const CASILLAS = ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const;
+const CASILLAS = ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio', 'escasaVisibilidad', 'disparosParalelos'] as const;
 
 /** Lo que trae un escenario .json (el mismo formato que usa el CLI). */
 interface EscenarioJson {
@@ -190,6 +190,8 @@ function escenarioActual() {
     espacioReducido: marcado('espacioReducido'),
     armasEnfundadas: marcado('armasEnfundadas'),
     desequilibrio: marcado('desequilibrio'),
+    escasaVisibilidad: marcado('escasaVisibilidad'),
+    disparosParalelos: marcado('disparosParalelos'),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
     // Una copia: el mapa del estado se edita en el lugar y el motor guarda lo que preparó con él.

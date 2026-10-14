@@ -116,3 +116,70 @@ describe('combate a distancia', () => {
     expect(hoja('Kael').armasDistancia).toEqual([expect.objectContaining({ clase: 'disparo', alcance: 50, leo: true, recarga: 1 })]);
   });
 });
+
+describe('cierre del combate a distancia', () => {
+  const arco = arquero.armasDistancia![0];
+
+  it('escudo: parar disparos con −30 (maestro nada) y lanzamientos sin penalizador (Core p.79)', () => {
+    expect(penDefensaProyectil('parada', false, 'disparo', true)).toBe(30);
+    expect(penDefensaProyectil('parada', true, 'disparo', true)).toBe(0);
+    expect(penDefensaProyectil('parada', false, 'lanzamiento', true)).toBe(0);
+    const l = crearLuchador(arquero, 'A', 0, 0);
+    const e = crearLuchador({ ...soldado, escudo: true }, 'B', 20, 0);
+    expect(defensaFinal(e, l) - defensaFinal(e, l, { proyectil: 'disparo' })).toBe(30);
+  });
+
+  it('blanco grande +30 (Tamaño 22, más de 2,5 m) y escasa visibilidad −20', () => {
+    const l = crearLuchador(arquero, 'A', 0, 0);
+    const gigante = crearLuchador({ ...soldado, tamano: 24 }, 'B', 20, 0);
+    expect(modProyectil(l, gigante, arco, 'libre').bono).toBe(30);
+    const niebla = crearLuchador(arquero, 'A', 0, 0);
+    niebla.entorno = { escasaVisibilidad: true };
+    expect(modProyectil(niebla, crearLuchador(soldado, 'B', 20, 0), arco, 'libre').bono).toBe(-20);
+  });
+
+  it('ballesta de repetición: dispara de la recámara y, vacía, la recarga entera', () => {
+    const repeticion: Ficha = {
+      ...soldado, id: 'rep', nombre: 'Repetidor',
+      armasDistancia: [{ nombre: 'Ballesta de repetición', clase: 'disparo', ataque: 80, danoBase: 50, tipoAtaque: 'PEN', alcance: 80, municion: 20 } as ArmaDistancia],
+    };
+    expect(completarArma(repeticion.armasDistancia![0]).recamara).toBe(4);
+    const t = textos([repeticion], [{ ...soldado, pv: 2000, tipoMovimiento: 0 }], { distanciaInicial: 30, maxAsaltos: 8 });
+    const acciones = t.filter((x) => /^Repetidor (dispara a|recarga)/.test(x)).map((x) => (x.includes('recarga') ? 'R' : 'D')).join('');
+    expect(acciones.startsWith('DDDDRRR')).toBe(true);
+  });
+
+  it('Trucos de manos: atrapa en el aire las flechas de un arquero torpe', () => {
+    const malabarista: Ficha = { ...soldado, id: 'mal', nombre: 'Malabarista', pv: 400, trucosDeManos: 260, tipoMovimiento: 0 };
+    const t = textos([arquero], [malabarista], { distanciaInicial: 30, maxAsaltos: 4 });
+    expect(t.some((x) => x.includes('Malabarista intenta atrapar el proyectil de Arquero imperial'))).toBe(true);
+    expect(t.some((x) => x.includes('¡lo atrapa!'))).toBe(true);
+  });
+
+  it('disparos paralelos: el que recibe el disparo sin haber actuado dispara a la vez', () => {
+    const r = simularCombate([arquero], [{ ...arquero, id: 'otro', nombre: 'Otro arquero', turno: arquero.turno }], {
+      semilla: 3, registrar: true, distanciaInicial: 30, maxAsaltos: 6, escenario: { disparosParalelos: true },
+    });
+    expect(r.registro!.some((x) => x.texto.includes('dispara a la vez'))).toBe(true);
+  });
+
+  it('el arquero retrocede ante un rival lento para seguir disparando', () => {
+    const lento: Ficha = { ...soldado, tipoMovimiento: 3, pv: 400 };
+    const t = textos([{ ...arquero, tipoMovimiento: 8 }], [lento], { distanciaInicial: 12, maxAsaltos: 6 });
+    expect(t.some((x) => x.startsWith('Arquero imperial retrocede'))).toBe(true);
+  });
+});
+
+describe('contra desde lejos con Ki', () => {
+  it('quien tiene una técnica a distancia contraataca al arquero, sin el bono', async () => {
+    const { leerEfectosTecnica } = await import('../src/hoja/ficha');
+    const monje: Ficha = {
+      ...soldado, id: 'monje', nombre: 'Monje', defensa: 260, ataque: 150, pv: 300, tipoMovimiento: 0,
+      ki: { reserva: 80, acumulacion: { DES: 6, POD: 6 }, tecnicas: [
+        { nombre: 'Rayo', nivel: 1, cm: 10, coste: { POD: 2 }, mantenimiento: 0, combinable: false, efectos: leerEfectosTecnica('Habilidad de Ataque (+30), Ataque a distancia (50 metros)') },
+      ] },
+    };
+    const t = textos([{ ...arquero, pv: 3000, rf: 200, ataque: 160, tipoMovimiento: 0, armasDistancia: [{ ...arquero.armasDistancia![0], ataque: 160 }] }], [monje], { distanciaInicial: 25, maxAsaltos: 8 });
+    expect(t.some((x) => x.startsWith('Monje contraataca (+0) y ataca a Arquero imperial con Rayo'))).toBe(true);
+  });
+});

@@ -379,12 +379,22 @@ arcabuz en `ejemplos/tiradores.json`.
 | Contra desde lejos: sólo con un arma a distancia y sin el bono | Core p.95 |
 | Armas de fuego: pifia de nivel menor al umbral (80, +15 por cada +5) se encasquilla; mayor, estalla | Core p.80-81 |
 | Sin línea de visión no se dispara (tampoco con técnicas de Ki a distancia) | |
+| Escudo (rodela, medio, corporal): parar disparos −30 (maestro nada), lanzamientos sin penalizador | Core p.79 |
+| Blanco grande (+30): Tamaño 22 o más (más de 2,5 m, Tabla 3), no contra acumulación | Core p.95 |
+| Escasa visibilidad (opción del escenario: niebla, humo): −20 | Core p.95 |
+| Ballesta de repetición: recámara de 4 virotes (la más corta de 4 a 8); vacía, se recarga entera en 3 asaltos | Core p.80-81 |
+| Trucos de manos: atrapar en el aire (defensa pasiva, −25 por cada control de más): lanzado Absurdo, disparado Casi Imposible, arma de fuego Inhumano con maestría, sobrenatural enfrentado con el ataque final; si falla, se defiende con −50 | Core p.94 |
+| Disparos paralelos (opción del escenario): con menos de 25 de diferencia de turno y sin haber actuado, quien recibe un disparo dispara a su vez antes de defenderse | Core p.95 |
+| Contra desde lejos también con una técnica de Ki a distancia, sin bono | Core p.95, Dominus p.57 |
 
 **IA**: al empezar su turno compara disparar (cada forma de recarga o cadencia, contra cada enemigo
 que alcance y vea, repartida entre los asaltos de recarga que deja) con su mejor ataque cuerpo a
 cuerpo; recarga si el próximo disparo, repartido entre los asaltos que faltan, rinde más que pelear;
 si nadie está al alcance pero alguien llegará, le apunta. Quien usa un arma a distancia no se acerca
-ese asalto. Si el blanco cae a mitad de los disparos, sigue con el que más rinda.
+ese asalto. Si el blanco cae a mitad de los disparos, sigue con el que más rinda. Antes de disparar
+retrocede (hasta un cuarto de su movimiento, sin penalizador) si así ningún enemigo lo alcanza el
+asalto siguiente y sigue viendo y alcanzando a su blanco. Intenta atrapar con Trucos de manos si lo
+que espera recibir intentándolo es menos que defendiéndose como siempre.
 
 **Interpretaciones confirmadas** (14/10/2026; la 1, la 3 y la 5 son adaptaciones de mesa aceptadas:
 el manual permite mezclar acciones con −25, recoger armas y obliga a desenfundar con −25 y a usar
@@ -400,10 +410,25 @@ el turno del arma más lenta):
    resta a las técnicas de Ki a distancia, que no tienen los demás modificadores de la Tabla 47.
 7. La velocidad del blanco cuenta si se movió en el asalto, por su Tipo de movimiento.
 
-**No se simula todavía:** disparos paralelos (regla opcional, Core p.95), "preparado para disparar"
-(el texto del turno está cortado en el manual), lluvia de proyectiles, escudos físicos contra
-proyectiles (−30), blanco grande, atrapar con Trucos de manos, recuperar arrojadizas y alejarse para
-seguir disparando.
+**Interpretaciones nuevas a confirmar:**
+
+8. Si no atrapa el proyectil con Trucos de manos, se defiende con su habilidad −50 aunque pare (el
+   manual dice "esquivarlo"; la ficha sólo tiene la defensa que usa).
+9. La ballesta de repetición dispara como un arma de índice 1 mientras tenga virotes en la recámara
+   (4); vacía, la recarga entera con su índice de 3.
+10. Disparos paralelos: sólo con armas a distancia y contra disparos de armas (no técnicas de Ki); el
+    que dispara a la vez elige el blanco que más le rinda y ya no actúa en su turno.
+11. Retroceder antes de disparar: sólo hasta un cuarto del movimiento, para no sufrir el −10.
+12. Lleva escudo si entre sus armas hay uno (escudo, rodela); el Tamaño, si la ficha no lo trae, es
+    Fuerza + Constitución.
+
+**Cómo quedan las demás reglas:**
+
+- **Lluvia de proyectiles** (Core p.97): es un atajo de mesa para no tirar cada disparo de más de diez
+  tiradores; el simulador los resuelve uno por uno, que es lo exacto.
+- **Preparado para disparar** (Core p.95; el texto está cortado en el manual): con la adaptación 5
+  (siempre el turno del arma principal) no hay nada que cambie.
+- **Recoger arrojadizas**: no, por la adaptación 3.
 
 ## Ki (fase 3)
 

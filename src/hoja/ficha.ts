@@ -245,6 +245,9 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
       entereza: numero(c.Entereza, 10),
     })),
     ...(armasDistancia(json).length ? { armasDistancia: armasDistancia(json) } : {}),
+    // Un escudo (rodela, medio o corporal) entre sus armas: para proyectiles con menos penalizador (Core p.79).
+    ...(json.Combate.armas.some((a) => /\b(escudo|rodela)\b/.test(normalizar(a.nombre))) ? { escudo: true } : {}),
+    ...(json.Habilidades['T. Manos'] !== undefined ? { trucosDeManos: numero(json.Habilidades['T. Manos'], 0) } : {}),
     acrobacias: json.Habilidades.Acrobacias !== undefined ? numero(json.Habilidades.Acrobacias, 0) : undefined,
     ki: leerKi(json),
     presencia: numero(json.Resistencias['Pres. Base'], 0),

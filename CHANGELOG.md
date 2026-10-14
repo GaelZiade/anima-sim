@@ -3,6 +3,17 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 14/10/2026 (noche): cierre de los proyectiles
+
+- **Escudos** contra proyectiles (−30 a disparos, nada a lanzamientos, Core p.79); **blanco grande**
+  (+30); **escasa visibilidad** (−20, opción del escenario).
+- **Ballesta de repetición**: recámara de 4 virotes que se recarga entera.
+- **Trucos de manos**: atrapar proyectiles en el aire (Core p.94); la IA lo intenta si le conviene.
+- **Disparos paralelos** (opción del escenario, Core p.95).
+- **Contra desde lejos** también con técnicas de Ki a distancia.
+- **IA**: retrocede antes de disparar si así nadie la alcanza el asalto siguiente.
+- Lluvia de proyectiles y "preparado para disparar" quedan explicadas en DISENO.md (no hacen falta).
+
 ## 14/10/2026 (noche): proyectiles y línea de visión
 
 - **Mapa**: paredes (no se pasa ni se ve) y terreno infranqueable (no se pasa, pero se ve: abismo,
