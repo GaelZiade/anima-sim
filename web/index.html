@@ -44,8 +44,10 @@
           <label>Ancho (m) <input type="number" id="mapaAncho" min="4" max="80"></label>
           <label>Alto (m) <input type="number" id="mapaAlto" min="4" max="80"></label>
           <button type="button" id="reubicar" class="chico">Reubicar fichas</button>
-          <button type="button" id="limpiarParedes" class="chico">Sacar paredes</button>
-          <span class="nota">Arrastrá las fichas para ubicarlas. Clic izquierdo pone paredes y clic derecho las saca (también arrastrando). Cada celda es 1 m.</span>
+          <label><input type="radio" name="pincel" value="pared" checked> Pared</label>
+          <label><input type="radio" name="pincel" value="terreno"> Terreno infranqueable</label>
+          <button type="button" id="limpiarParedes" class="chico">Limpiar mapa</button>
+          <span class="nota">Arrastrá las fichas para ubicarlas. Clic izquierdo pinta y clic derecho borra (también arrastrando). La pared tapa la vista y el paso; el terreno infranqueable (abismo, agua, lava) sólo el paso. Cada celda es 1 m.</span>
         </div>
         <div class="barra" id="controles" hidden>
           <button type="button" id="reiniciar" class="chico" title="Desde el principio">⏮</button>

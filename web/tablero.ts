@@ -20,9 +20,14 @@ export interface FichaTablero {
 export interface MapaTablero {
   ancho: number;
   alto: number;
-  /** Celdas no transitables, como "x,y". */
+  /** Paredes (no se pasa ni se ve), como "x,y". */
   paredes: Set<string>;
+  /** Terreno infranqueable (no se pasa, pero se ve): abismo, agua, lava. */
+  terreno: Set<string>;
 }
+
+/** Qué pinta el clic izquierdo al editar. */
+export type Pincel = 'pared' | 'terreno';
 
 /** Un ataque para dibujar: flecha de quien ataca a quien defiende. */
 export interface FlechaAtaque {
@@ -51,7 +56,9 @@ const clave = (c: Celda) => `${c.x},${c.y}`;
 
 export class Tablero {
   readonly canvas: HTMLCanvasElement;
-  mapa: MapaTablero = { ancho: 20, alto: 12, paredes: new Set() };
+  mapa: MapaTablero = { ancho: 20, alto: 12, paredes: new Set(), terreno: new Set() };
+  /** Qué pone el clic izquierdo. */
+  pincel: Pincel = 'pared';
   fichas: FichaTablero[] = [];
   /** En "ver" no se puede editar. */
   modo: 'editar' | 'ver' = 'editar';
@@ -62,8 +69,8 @@ export class Tablero {
   flecha: FlechaAtaque | null = null;
   dano: { id: string; cantidad: number } | null = null;
   estelas: Estela[] = [];
-  /** Al pintar o borrar una pared. */
-  alCambiarPared: (c: Celda, pared: boolean) => void = () => {};
+  /** Al pintar una pared o terreno (null: al borrar). */
+  alCambiarCelda: (c: Celda, tipo: Pincel | null) => void = () => {};
   /** Al soltar una ficha en otra celda. */
   alMoverFicha: (id: string, c: Celda) => void = () => {};
 
@@ -158,6 +165,22 @@ export class Tablero {
     for (const k of this.mapa.paredes) {
       const [x, y] = k.split(',').map(Number);
       if (x < ancho && y < alto) g.fillRect(x * c, y * c, c, c);
+    }
+    // El terreno infranqueable, con rayas: se ve a través, pero no se pisa.
+    for (const k of this.mapa.terreno) {
+      const [x, y] = k.split(',').map(Number);
+      if (x >= ancho || y >= alto) continue;
+      g.fillStyle = color('--terreno');
+      g.fillRect(x * c, y * c, c, c);
+      g.strokeStyle = color('--terreno-raya');
+      g.beginPath();
+      for (let k2 = 0.25; k2 < 1; k2 += 0.25) {
+        g.moveTo(x * c + k2 * c, y * c);
+        g.lineTo(x * c, y * c + k2 * c);
+        g.moveTo(x * c + c, y * c + k2 * c);
+        g.lineTo(x * c + k2 * c, y * c + c);
+      }
+      g.stroke();
     }
 
     for (const e of this.estelas) this.dibujarEstela(g, e, color);
@@ -393,7 +416,7 @@ export class Tablero {
       this.arrastre = { id: f.id, x: c.x, y: c.y };
       return;
     }
-    // Clic izquierdo pone paredes y clic derecho las saca; arrastrando sigue igual.
+    // Clic izquierdo pinta (pared o terreno, según el pincel) y clic derecho borra; arrastrando sigue igual.
     if (e.button !== 0 && e.button !== 2) return;
     this.pintando = e.button === 0;
     this.ultimaPintada = c;
@@ -424,7 +447,8 @@ export class Tablero {
     if (!a) return;
     const c = this.celdaDe(e) ?? { x: a.x, y: a.y };
     const ocupante = this.fichaEn(c);
-    if (!this.mapa.paredes.has(clave(c)) && (!ocupante || ocupante.id === a.id)) this.alMoverFicha(a.id, c);
+    const libre = !this.mapa.paredes.has(clave(c)) && !this.mapa.terreno.has(clave(c));
+    if (libre && (!ocupante || ocupante.id === a.id)) this.alMoverFicha(a.id, c);
     this.dibujar();
   }
 
@@ -436,9 +460,10 @@ export class Tablero {
 
   private pintar(c: Celda) {
     if (this.fichaEn(c)) return; // no se levanta una pared encima de alguien
-    const tiene = this.mapa.paredes.has(clave(c));
-    if (tiene === this.pintando) return;
-    this.alCambiarPared(c, this.pintando!);
+    const actual = this.mapa.paredes.has(clave(c)) ? 'pared' : this.mapa.terreno.has(clave(c)) ? 'terreno' : null;
+    const nuevo = this.pintando ? this.pincel : null;
+    if (actual === nuevo) return;
+    this.alCambiarCelda(c, nuevo);
   }
 }
 

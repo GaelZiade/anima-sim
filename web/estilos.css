@@ -17,6 +17,8 @@
   --grilla: rgba(60, 50, 30, 0.12);
   --grilla-fuerte: rgba(60, 50, 30, 0.28);
   --pared: #4a4339;
+  --terreno: #c9d8e0;
+  --terreno-raya: #7c98a8;
   --resalte-actor: rgba(235, 170, 30, 0.75);
   --resalte-objetivo: rgba(200, 40, 30, 0.45);
   --defensiva: #f2b233;
@@ -52,6 +54,8 @@
     --grilla: rgba(255, 255, 255, 0.06);
     --grilla-fuerte: rgba(255, 255, 255, 0.16);
     --pared: #77706a;
+    --terreno: #2b3a44;
+    --terreno-raya: #5f7f93;
     --barra-fondo: rgba(255, 255, 255, 0.18);
     --turno: #ffc23d;
     --flecha-impacto: #ff5a4e;

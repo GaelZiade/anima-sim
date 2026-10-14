@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Ficha } from '../src/motor/modelo';
 import { simularCombate } from '../src/motor/combate';
-import { adyacentes, campoHacia, indice, prepararMapa, type Celda, type Mapa } from '../src/motor/mapa';
+import { adyacentes, campoHacia, indice, lineaDeVision, prepararMapa, type Celda, type Mapa } from '../src/motor/mapa';
 
 function ficha(nombre: string, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -63,5 +63,29 @@ describe('mapa editado en el lugar', () => {
     expect(prepararMapa(m).muro[indice(prepararMapa(m), { x: 4, y: 2 })]).toBe(0);
     m.bloqueadas!.push({ x: 4, y: 2 });
     expect(prepararMapa(m).muro[indice(prepararMapa(m), { x: 4, y: 2 })]).toBe(1);
+  });
+});
+
+describe('paredes y terreno infranqueable', () => {
+  it('el terreno no se pisa pero se puede rodear en diagonal; la pared no deja cortar la esquina', () => {
+    const conTerreno = prepararMapa({ ancho: 5, alto: 5, infranqueables: [{ x: 1, y: 0 }, { x: 0, y: 1 }] });
+    expect(conTerreno.muro[indice(conTerreno, { x: 1, y: 0 })]).toBe(1);
+    expect(adyacentes(conTerreno, { x: 0, y: 0 }, { x: 1, y: 1 })).toBe(true);
+    const conPared = prepararMapa({ ancho: 5, alto: 5, bloqueadas: [{ x: 1, y: 0 }, { x: 0, y: 1 }] });
+    expect(adyacentes(conPared, { x: 0, y: 0 }, { x: 1, y: 1 })).toBe(false);
+  });
+
+  it('línea de visión: la pared la corta, el terreno no, y un cuerpo en medio da cobertura', () => {
+    const m = prepararMapa({ ancho: 9, alto: 5, bloqueadas: [{ x: 4, y: 2 }], infranqueables: [{ x: 4, y: 0 }] });
+    expect(lineaDeVision(m, { x: 0, y: 2 }, { x: 8, y: 2 })).toBe('bloqueada');
+    expect(lineaDeVision(m, { x: 0, y: 0 }, { x: 8, y: 0 })).toBe('libre');
+    expect(lineaDeVision(m, { x: 0, y: 4 }, { x: 8, y: 4 }, (i) => i === indice(m, { x: 3, y: 4 }))).toBe('cobertura');
+    // En diagonal justo por la esquina entre dos paredes no se ve; con una sola, cobertura.
+    const esquina = prepararMapa({ ancho: 3, alto: 3, bloqueadas: [{ x: 1, y: 0 }, { x: 0, y: 1 }] });
+    expect(lineaDeVision(esquina, { x: 0, y: 0 }, { x: 2, y: 2 })).toBe('bloqueada');
+    const dos = prepararMapa({ ancho: 4, alto: 4, bloqueadas: [{ x: 2, y: 1 }, { x: 1, y: 2 }] });
+    expect(lineaDeVision(dos, { x: 0, y: 0 }, { x: 3, y: 3 })).toBe('bloqueada');
+    const una = prepararMapa({ ancho: 4, alto: 4, bloqueadas: [{ x: 2, y: 1 }] });
+    expect(lineaDeVision(una, { x: 0, y: 0 }, { x: 3, y: 3 })).toBe('cobertura');
   });
 });

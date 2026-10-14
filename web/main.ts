@@ -14,7 +14,7 @@ import duelo from '../ejemplos/duelo.json';
 import ejemploEstilos from '../ejemplos/estilos.json';
 import grupo from '../ejemplos/grupo.json';
 import { correrEnParalelo, type Corrida } from './paralelo';
-import { Tablero, type FichaTablero } from './tablero';
+import { Tablero, type FichaTablero, type Pincel } from './tablero';
 
 type Entrada =
   | { clave: string; nombre: string; tipo: 'hoja'; json: HojaJson }
@@ -35,7 +35,10 @@ interface Integrante {
 interface MapaGuardado {
   ancho: number;
   alto: number;
+  /** Paredes. */
   bloqueadas: Celda[];
+  /** Terreno infranqueable (los mapas guardados antes no lo tienen). */
+  infranqueables?: Celda[];
 }
 
 interface Estado {
@@ -188,7 +191,7 @@ function escenarioActual() {
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
     // Una copia: el mapa del estado se edita en el lugar y el motor guarda lo que preparó con él.
-    mapa: { ...estado.mapa!, bloqueadas: [...estado.mapa!.bloqueadas] },
+    mapa: { ...estado.mapa!, bloqueadas: [...estado.mapa!.bloqueadas], infranqueables: [...(estado.mapa!.infranqueables ?? [])] },
     posiciones: { A: a.celdas, B: b.celdas },
   };
   return { equipoA: a.fichas, equipoB: b.fichas, escenario: opciones };
@@ -203,9 +206,18 @@ function paredes(): Set<string> {
   return new Set(estado.mapa!.bloqueadas.map(claveCelda));
 }
 
-/** Celdas ocupadas por paredes o por otros luchadores. */
+function terreno(): Set<string> {
+  return new Set((estado.mapa!.infranqueables ?? []).map(claveCelda));
+}
+
+/** Celdas que no se pueden pisar: paredes y terreno infranqueable. */
+function noTransitables(): Set<string> {
+  return new Set([...paredes(), ...terreno()]);
+}
+
+/** Celdas ocupadas por paredes, terreno infranqueable o por otros luchadores. */
 function ocupadas(salvo?: Integrante): Set<string> {
-  const s = paredes();
+  const s = noTransitables();
   for (const i of [...estado.equipoA, ...estado.equipoB]) if (i !== salvo && i.pos) s.add(claveCelda(i.pos));
   return s;
 }
@@ -232,7 +244,7 @@ function celdaParaNuevo(equipo: 'A' | 'B'): Celda | undefined {
 /** Ubica a quien no tenga celda, o tenga una que ya no vale (fuera del mapa, pared, repetida). */
 function completarPosiciones() {
   const { ancho, alto } = estado.mapa!;
-  const vistas = paredes();
+  const vistas = noTransitables();
   for (const [equipo, lista] of [['A', estado.equipoA], ['B', estado.equipoB]] as const)
     for (const i of lista) {
       if (i.pos && i.pos.x < ancho && i.pos.y < alto && !vistas.has(claveCelda(i.pos))) {
@@ -263,7 +275,7 @@ function dibujarMapa() {
   const m = estado.mapa!;
   ($('mapaAncho') as HTMLInputElement).value = String(m.ancho);
   ($('mapaAlto') as HTMLInputElement).value = String(m.alto);
-  tablero.mapa = { ancho: m.ancho, alto: m.alto, paredes: paredes() };
+  tablero.mapa = { ancho: m.ancho, alto: m.alto, paredes: paredes(), terreno: terreno() };
   if (tablero.modo === 'editar') {
     tablero.fichas = fichasDelTablero();
     tablero.turno = tablero.sujeto = null;
@@ -274,10 +286,13 @@ function dibujarMapa() {
   tablero.dibujar();
 }
 
-tablero.alCambiarPared = (c, pared) => {
+tablero.alCambiarCelda = (c, tipo) => {
   const m = estado.mapa!;
-  m.bloqueadas = m.bloqueadas.filter((x) => x.x !== c.x || x.y !== c.y);
-  if (pared) m.bloqueadas.push(c);
+  const otra = (x: Celda) => x.x !== c.x || x.y !== c.y;
+  m.bloqueadas = m.bloqueadas.filter(otra);
+  m.infranqueables = (m.infranqueables ?? []).filter(otra);
+  if (tipo === 'pared') m.bloqueadas.push(c);
+  if (tipo === 'terreno') m.infranqueables.push(c);
   guardar();
   dibujarMapa();
 };
@@ -296,6 +311,7 @@ function cambiarTamano() {
   m.ancho = Math.max(4, Math.min(80, Math.round(numeroDe('mapaAncho')) || m.ancho));
   m.alto = Math.max(4, Math.min(80, Math.round(numeroDe('mapaAlto')) || m.alto));
   m.bloqueadas = m.bloqueadas.filter((c) => c.x < m.ancho && c.y < m.alto);
+  m.infranqueables = (m.infranqueables ?? []).filter((c) => c.x < m.ancho && c.y < m.alto);
   completarPosiciones();
   guardar();
   dibujarMapa();
@@ -364,7 +380,7 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
   estado.equipoB = integrantes(esc.equipoB ?? []);
   const o = esc.opciones ?? {};
   if (o.mapa) {
-    estado.mapa = { ancho: o.mapa.ancho, alto: o.mapa.alto, bloqueadas: [...(o.mapa.bloqueadas ?? [])] };
+    estado.mapa = { ancho: o.mapa.ancho, alto: o.mapa.alto, bloqueadas: [...(o.mapa.bloqueadas ?? [])], infranqueables: [...(o.mapa.infranqueables ?? [])] };
     estado.equipoA.forEach((i, n) => (i.pos = o.posiciones?.A?.[n] ?? undefined));
     estado.equipoB.forEach((i, n) => (i.pos = o.posiciones?.B?.[n] ?? undefined));
   } else {
@@ -400,7 +416,7 @@ function sumar(e: Entrada, equipo: 'equipoA' | 'equipoB') {
   const i: Integrante = { clave: e.clave, arma: '', perfil: '' };
   estado[equipo].push(i);
   i.pos = celdaParaNuevo(equipo === 'equipoA' ? 'A' : 'B');
-  if (!i.pos) avisar('No queda lugar libre en el mapa: agrandalo o sacá paredes.');
+  if (!i.pos) avisar('No queda lugar libre en el mapa: agrandalo o sacá paredes o terreno.');
   guardar();
   dibujarEquipos();
 }
@@ -643,7 +659,7 @@ function verEnVivo() {
 
   funcion = { r, semilla, nombres, ids, lineas, indice: -1, reproduciendo: false, temporizador: 0 };
   tablero.modo = 'ver';
-  tablero.mapa = { ancho: r.mapa.ancho, alto: r.mapa.alto, paredes: paredesDe(r) };
+  tablero.mapa = { ancho: r.mapa.ancho, alto: r.mapa.alto, ...celdasDe(r) };
   $('editor').hidden = true;
   $('controles').hidden = false;
   $('narracion').hidden = false;
@@ -652,10 +668,11 @@ function verEnVivo() {
   $('panelMapa').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function paredesDe(r: ResultadoCombate): Set<string> {
-  const s = new Set<string>();
-  r.mapa.muro.forEach((v, i) => v && s.add(`${i % r.mapa.ancho},${Math.floor(i / r.mapa.ancho)}`));
-  return s;
+/** Paredes y terreno infranqueable del mapa con que se jugó. */
+function celdasDe(r: ResultadoCombate): { paredes: Set<string>; terreno: Set<string> } {
+  const paredes = new Set<string>(), terreno = new Set<string>();
+  r.mapa.muro.forEach((v, i) => v && (r.mapa.pared[i] ? paredes : terreno).add(`${i % r.mapa.ancho},${Math.floor(i / r.mapa.ancho)}`));
+  return { paredes, terreno };
 }
 
 /** Metros de un recorrido. */
@@ -821,8 +838,11 @@ for (const p of ['propios', 'genericos'] as const)
   });
 $('mapaAncho').addEventListener('change', cambiarTamano);
 $('mapaAlto').addEventListener('change', cambiarTamano);
+for (const r of document.querySelectorAll<HTMLInputElement>('input[name="pincel"]'))
+  r.addEventListener('change', () => { if (r.checked) tablero.pincel = r.value as Pincel; });
 $('limpiarParedes').addEventListener('click', () => {
   estado.mapa!.bloqueadas = [];
+  estado.mapa!.infranqueables = [];
   guardar();
   dibujarMapa();
 });

@@ -1,26 +1,32 @@
-// Mapa en grilla de celdas de 1 m, al estilo BattleCast: cada celda es transitable o no (pared,
-// abismo, columna…). Un luchador ocupa una celda; está trabado con los que tiene en las 8 de
-// alrededor. Se mueve en 8 direcciones (la diagonal mide √2 m) sin atravesar muros ni cuerpos, y
-// no corta esquinas de muros en diagonal.
+// Mapa en grilla de celdas de 1 m, al estilo BattleCast. Una celda puede ser pared (no se pasa ni se
+// ve a través: muro, columna) o terreno infranqueable (no se pasa pero se ve: abismo, agua profunda,
+// lava). Un luchador ocupa una celda; está trabado con los que tiene en las 8 de alrededor. Se mueve
+// en 8 direcciones (la diagonal mide √2 m) sin atravesar paredes, terreno infranqueable ni cuerpos,
+// y no corta esquinas de paredes en diagonal.
 
 export interface Celda {
   x: number;
   y: number;
 }
 
-/** Lo que se guarda en un escenario: tamaño y celdas no transitables. */
+/** Lo que se guarda en un escenario: tamaño, paredes y terreno infranqueable. */
 export interface Mapa {
   ancho: number;
   alto: number;
-  /** Celdas no transitables. */
+  /** Paredes: no se pasa ni se ve a través. */
   bloqueadas?: Celda[];
+  /** Terreno infranqueable: no se pasa, pero se ve (y se dispara) por encima. */
+  infranqueables?: Celda[];
 }
 
 /** Mapa listo para consultar: muros en un arreglo y campos de distancia ya calculados. */
 export interface MapaListo {
   ancho: number;
   alto: number;
+  /** Celdas que no se pueden pisar: paredes y terreno infranqueable. */
   muro: Uint8Array;
+  /** Paredes: tapan la vista y no dejan cortar la esquina en diagonal. */
+  pared: Uint8Array;
   /** Campo de distancias hacia cada celda (ver `campoHacia`), por índice de celda. */
   campos: Map<number, Float32Array>;
   /** Búfer de : metros hasta cada celda en la última búsqueda. */
@@ -34,7 +40,8 @@ const abiertos = new Map<string, MapaListo>();
 
 /** Tamaño y paredes: si cambian, el mapa preparado ya no sirve. */
 function firma(m: Mapa): string {
-  return `${m.ancho}x${m.alto}:${(m.bloqueadas ?? []).map((c) => `${c.x},${c.y}`).join(';')}`;
+  const lista = (cs?: Celda[]) => (cs ?? []).map((c) => `${c.x},${c.y}`).join(';');
+  return `${m.ancho}x${m.alto}:${lista(m.bloqueadas)}|${lista(m.infranqueables)}`;
 }
 
 /**
@@ -46,8 +53,10 @@ export function prepararMapa(m: Mapa): MapaListo {
   const guardado = listos.get(m);
   if (guardado && guardado.firma === f) return guardado.listo;
   const muro = new Uint8Array(m.ancho * m.alto);
-  for (const c of m.bloqueadas ?? []) if (dentro(m, c)) muro[c.y * m.ancho + c.x] = 1;
-  const p: MapaListo = { ancho: m.ancho, alto: m.alto, muro, campos: new Map(), costos: new Float32Array(muro.length), ocupadas: new Uint8Array(muro.length) };
+  const pared = new Uint8Array(m.ancho * m.alto);
+  for (const c of m.bloqueadas ?? []) if (dentro(m, c)) muro[c.y * m.ancho + c.x] = pared[c.y * m.ancho + c.x] = 1;
+  for (const c of m.infranqueables ?? []) if (dentro(m, c)) muro[c.y * m.ancho + c.x] = 1;
+  const p: MapaListo = { ancho: m.ancho, alto: m.alto, muro, pared, campos: new Map(), costos: new Float32Array(muro.length), ocupadas: new Uint8Array(muro.length) };
   listos.set(m, { firma: f, listo: p });
   return p;
 }
@@ -58,7 +67,7 @@ export function mapaAbierto(ancho: number, alto: number): MapaListo {
   let p = abiertos.get(clave);
   if (!p) {
     const n = ancho * alto;
-    p = { ancho, alto, muro: new Uint8Array(n), campos: new Map(), costos: new Float32Array(n), ocupadas: new Uint8Array(n) };
+    p = { ancho, alto, muro: new Uint8Array(n), pared: new Uint8Array(n), campos: new Map(), costos: new Float32Array(n), ocupadas: new Uint8Array(n) };
     abiertos.set(clave, p);
   }
   return p;
@@ -157,7 +166,7 @@ function dijkstra(
     dist[o] = 0;
     cola.empujar(0, o);
   }
-  const { ancho, alto, muro } = m;
+  const { ancho, alto, muro, pared } = m;
   while (cola.largo) {
     const i = cola.sacar();
     const d = cola.ultimaClave;
@@ -170,8 +179,8 @@ function dijkstra(
       if (nx < 0 || ny < 0 || nx >= ancho || ny >= alto) continue;
       const j = ny * ancho + nx;
       if (muro[j] || (bloqueada && bloqueada[j])) continue;
-      // Sin cortar esquinas de muros en diagonal.
-      if (dx && dy && (muro[y * ancho + nx] || muro[ny * ancho + x])) continue;
+      // Sin cortar esquinas de paredes en diagonal (el borde de un abismo sí se puede rodear).
+      if (dx && dy && (pared[y * ancho + nx] || pared[ny * ancho + x])) continue;
       const nd = d + PASOS[k][2];
       if (nd < dist[j] && nd <= tope) {
         dist[j] = nd;
@@ -196,7 +205,7 @@ export function campoHacia(m: MapaListo, c: Celda): Float32Array {
   for (const [dx, dy] of PASOS) {
     const v = { x: c.x + dx, y: c.y + dy };
     if (!transitable(m, v)) continue;
-    if (dx && dy && (m.muro[c.y * m.ancho + v.x] || m.muro[v.y * m.ancho + c.x])) continue;
+    if (dx && dy && (m.pared[c.y * m.ancho + v.x] || m.pared[v.y * m.ancho + c.x])) continue;
     lados.push(indice(m, v));
   }
   campo = new Float32Array(m.ancho * m.alto);
@@ -231,7 +240,7 @@ export function caminoHasta(m: MapaListo, desde: Celda, hasta: Celda): Celda[] {
       if (nx < 0 || ny < 0 || nx >= m.ancho || ny >= m.alto) continue;
       const j = ny * m.ancho + nx;
       if (costo[j] === Infinity || m.muro[j]) continue;
-      if (dx && dy && (m.muro[ny * m.ancho + x] || m.muro[y * m.ancho + nx])) continue;
+      if (dx && dy && (m.pared[ny * m.ancho + x] || m.pared[y * m.ancho + nx])) continue;
       if (Math.abs(costo[j] + paso - costo[i]) < 1e-3) {
         previo = j;
         break;
@@ -245,12 +254,48 @@ export function caminoHasta(m: MapaListo, desde: Celda, hasta: Celda): Celda[] {
   return res.reverse();
 }
 
-/** Dos celdas están trabadas si se tocan, también en diagonal, sin un muro en la esquina entre ellas. */
+/** Dos celdas están trabadas si se tocan, también en diagonal, sin una pared en la esquina entre ellas. */
 export function adyacentes(m: MapaListo | null, a: Celda, b: Celda): boolean {
   const dx = b.x - a.x, dy = b.y - a.y;
   if (Math.max(Math.abs(dx), Math.abs(dy)) !== 1) return false;
   if (!m || !dx || !dy) return true;
-  return !(m.muro[a.y * m.ancho + b.x] || m.muro[b.y * m.ancho + a.x]);
+  return !(m.pared[a.y * m.ancho + b.x] || m.pared[b.y * m.ancho + a.x]);
+}
+
+/** Lo que ve una línea de visión: nada en medio, algo que da cobertura, o una pared que la corta. */
+export type Vision = 'libre' | 'cobertura' | 'bloqueada';
+
+/**
+ * Línea de visión entre los centros de dos celdas: recorre las celdas que cruza el segmento (sin las
+ * de los extremos). Una pared la corta. Si pasa justo por la esquina entre dos celdas, la cortan dos
+ * paredes y una sola deja al blanco con cobertura. `estorba(i)` marca celdas que dan cobertura (los
+ * cuerpos que se interponen).
+ */
+export function lineaDeVision(m: MapaListo, a: Celda, b: Celda, estorba?: (i: number) => boolean): Vision {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const nx = Math.abs(dx), ny = Math.abs(dy);
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  let x = a.x, y = a.y, ix = 0, iy = 0;
+  let res: Vision = 'libre';
+  while (ix < nx || iy < ny) {
+    // Qué borde cruza primero el segmento: comparación exacta en enteros.
+    const cmp = (1 + 2 * ix) * ny - (1 + 2 * iy) * nx;
+    if (cmp === 0) {
+      const p1 = m.pared[y * m.ancho + x + sx], p2 = m.pared[(y + sy) * m.ancho + x];
+      if (p1 && p2) return 'bloqueada';
+      if (p1 || p2) res = 'cobertura';
+      x += sx; y += sy; ix++; iy++;
+    } else if (cmp < 0) {
+      x += sx; ix++;
+    } else {
+      y += sy; iy++;
+    }
+    if (x === b.x && y === b.y) break;
+    const i = y * m.ancho + x;
+    if (m.pared[i]) return 'bloqueada';
+    if (estorba && estorba(i)) res = 'cobertura';
+  }
+  return res;
 }
 
 /** Celda transitable y libre más cercana a `c` (búsqueda en anillos), o null si no hay ninguna. */
