@@ -1,6 +1,7 @@
 import type { Rng } from './rng';
 import type { TamanoArma, TipoAtaque } from './reglas';
 import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
+import type { EstadoKi } from './ki';
 
 export type Perfil = 'agresivo' | 'equilibrado' | 'cauto' | 'bestia';
 
@@ -49,6 +50,44 @@ export interface Ficha {
   capasArmadura?: CapaArmadura[];
   /** Habilidad secundaria Acrobacias (retirarse del combate, Core p.94). */
   acrobacias?: number;
+  /** Dominios del Ki: reserva, acumulaciones y técnicas (Core p.102-107, Dominus cap. 5). */
+  ki?: KiFicha;
+}
+
+/** Características de las que se acumula Ki (Core p.102). */
+export type CaracteristicaKi = 'AGI' | 'CON' | 'DES' | 'FUE' | 'POD' | 'VOL';
+export const CARACTERISTICAS_KI: readonly CaracteristicaKi[] = ['AGI', 'CON', 'DES', 'FUE', 'POD', 'VOL'];
+
+export interface KiFicha {
+  /** Puntos de Ki de la reserva. Con la Unificación de puntos de Ki es una sola (todas las planillas). */
+  reserva: number;
+  /** Acumulación por asalto de cada característica (Tabla 53 más lo comprado). */
+  acumulacion: Partial<Record<CaracteristicaKi, number>>;
+  tecnicas: Tecnica[];
+}
+
+/** Un efecto de una técnica, como lo resume la planilla: "Habilidad de Ataque (+50)". */
+export interface EfectoTecnica {
+  /** Nombre del efecto del Dominus, sin acentos: "Habilidad de Ataque", "Multiplicador al Dano". */
+  nombre: string;
+  /** Lo que va entre paréntesis: valor y ventajas ("+50", "5 metros de radio", "Eleccion de Blanco"). */
+  opciones: string[];
+  /** Se mantiene de un asalto a otro pagando su mantenimiento (Dominus p.48). */
+  mantenido: boolean;
+}
+
+export interface Tecnica {
+  nombre: string;
+  /** 1 Básica, 2 Mayor, 3 Arcana (Core p.106). */
+  nivel: 1 | 2 | 3;
+  cm: number;
+  /** Ki a acumular de cada característica para ejecutarla. */
+  coste: Partial<Record<CaracteristicaKi, number>>;
+  /** Ki por asalto para mantenerla después de ejecutarla (0 si no se mantiene). */
+  mantenimiento: number;
+  /** Se puede usar junto con otras combinables en una misma acción (Dominus p.49). */
+  combinable: boolean;
+  efectos: EfectoTecnica[];
 }
 
 export interface CapaArmadura {
@@ -136,6 +175,8 @@ export interface Estadisticas {
   asaltosDefensaTotal: number;
   /** Veces que usó cada maniobra. */
   maniobras: Partial<Record<string, number>>;
+  /** Veces que ejecutó cada técnica de Ki. */
+  tecnicas: Partial<Record<string, number>>;
 }
 
 export interface Luchador {
@@ -204,6 +245,9 @@ export interface Luchador {
   huyendo: boolean;
   /** Tabla de 2ª Arma: Estilo Defensivo usada este asalto (la segunda arma defiende, no ataca). */
   estiloDefensivo: boolean;
+
+  /** Dominios del Ki: reserva, Ki concentrado y técnicas activas (null sin técnicas). */
+  ki: EstadoKi | null;
 
   // --- modalidades y recursos de estilos ---
   modo: Modo;

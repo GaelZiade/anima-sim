@@ -140,3 +140,31 @@ describe('de planilla a Ficha del simulador', () => {
     expect(r.victoriasA + r.victoriasB + r.empates).toBe(200);
   });
 });
+
+describe('Ki de las planillas (hoja Ki)', () => {
+  it.skipIf(falta(KAEL))('Kael: reserva, acumulaciones y sus seis técnicas con efectos, coste y mantenimiento', () => {
+    const ki = jsonAFicha(hoja(KAEL)!).ki!;
+    expect(ki.reserva).toBe(109);
+    expect(ki.acumulacion).toEqual({ AGI: 1, CON: 6, DES: 7, FUE: 6, POD: 6, VOL: 1 });
+    expect(ki.tecnicas.map((t) => t.nombre)).toEqual([
+      'Proteccion de Luz', 'Corte del Amanecer', 'Ataque del Campeon', 'Disparo Vital', 'Destruccion Solar', 'Velocidad de la Luz',
+    ]);
+    const campeon = ki.tecnicas[2];
+    expect(campeon).toMatchObject({ nivel: 2, cm: 50, coste: { CON: 6, DES: 5, FUE: 6, POD: 3 }, mantenimiento: 0, combinable: false });
+    expect(campeon.efectos).toEqual([
+      { nombre: 'Habilidad de Ataque', opciones: ['+50'], mantenido: false },
+      { nombre: 'Aumento de Dano', opciones: ['+50'], mantenido: false },
+      { nombre: 'Ataque con Area', opciones: ['5 metros de radio', 'Eleccion de Blanco'], mantenido: false },
+    ]);
+    const velocidad = ki.tecnicas[5];
+    expect(velocidad).toMatchObject({ coste: { CON: 6, DES: 6 }, mantenimiento: 3 });
+    expect(velocidad.efectos).toEqual([{ nombre: 'Incrementar Turno', opciones: ['+100'], mantenido: true }]);
+  });
+
+  it.skipIf(falta(KAITO))('Kaito: sin técnicas; Uso de la energía necesaria le deja gastar 5 de cansancio por asalto', () => {
+    const f = jsonAFicha(hoja(KAITO)!);
+    expect(f.ki!.tecnicas).toEqual([]);
+    expect(f.ki!.reserva).toBe(48);
+    expect(capacidades(f).maxCansancioAsalto).toBe(5);
+  });
+});

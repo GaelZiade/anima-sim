@@ -311,8 +311,90 @@ alguien lo agrega a una lista ordenada por llegada: el orden define frente/flanc
 
 ## Fases
 
-1. **Motor físico + IA + Monte Carlo por consola** ← ahora
+1. **Motor físico + IA + Monte Carlo por consola** ← hecho (auditado contra los manuales, ver AUDITORIA.md)
 2. Interfaz web (Vite) + workers en paralelo ← versión base hecha
-3. Ki: acumulación y técnicas
+3. **Ki** ← ahora (ver abajo)
 4. Magia (zeon, ACT, escudos) y psíquica
-5. Proyectiles, maniobras (derribo, presa, desarmar, área), repetición animada
+5. Proyectiles y repetición animada
+
+## Ki (fase 3)
+
+Dos partes (Core p.102-107, Dominus cap. 2 y 5):
+
+- **Habilidades del Ki y del Némesis**: poderes comprados con CM (columna R de la hoja Ki, en
+  `rasgos.habilidadesKi`). Los bonos fijos (Velocidad incrementada +10 al turno, Daño incrementado y
+  Extensión del aura +10 al daño, Armadura de energía TA 2 ENE) **ya vienen sumados en la planilla**:
+  el motor no los vuelve a sumar. Uso de la energía necesaria deja gastar 5 de cansancio por asalto.
+- **Técnicas**: se acumula Ki por característica cada asalto y se gasta para ejecutarlas. Son sobre
+  todo de los Tecnicistas (Kael). La planilla trae las propias y las de los árboles armados.
+
+### Datos (`hoja/ficha.ts`, `leerKi`)
+
+`Ficha.ki`: reserva (Unificación de puntos de Ki), acumulación por característica y técnicas con
+nivel, CM, coste por característica, mantenimiento por asalto, si es Combinable y sus efectos con
+opciones. Se leen de los bloques de la hoja Ki desde el título "Técnicas de Dominio"; Combinable, de
+"Creación de Técnicas". La variante Akuma Exxet corre las filas: las cabeceras se buscan por etiqueta.
+
+### Motor (`motor/ki.ts`)
+
+| Regla | Fuente |
+|---|---|
+| Acumular es pasivo: cada asalto suma su acumulación de cada característica, sin pasar la reserva | Core p.102 |
+| Si además hace cualquier otra cosa, lo ganado en el asalto queda en la mitad hacia arriba (Acumulación Plena lo evita); dentro del asalto tiene la acumulación entera | Core p.102, p.106; Dominus p.18 |
+| Cada −20 a toda acción baja 1 cada acumulación | Core p.232 |
+| Si deja de acumular, lo concentrado vuelve a la reserva | Core p.102 |
+| Ejecutar: se declara antes de tirar (antes de la iniciativa si cambia el turno); gasta su coste de lo concentrado y de la reserva | Core p.105 |
+| Efectos de tipo Acción valen para esa acción; de tipo Asalto, para todo el asalto | Dominus p.48 |
+| Mantenidas: pagan su mantenimiento cada asalto de la reserva, sin acumular; sus efectos de Acción valen una vez por asalto. Dejar de mantenerlas no cuesta nada | Dominus p.48 |
+| En espera: la técnica declarada antes de empezar a acumular, una vez juntada, queda lista con su Ki apartado (no se pierde al terminar el asalto ni al ejecutar otras) pagando 1, 2 o 3 de Ki por asalto según su nivel | Core p.105 |
+| Defensa adicional +N: las N defensas siguientes del asalto no tienen penalizador por defensa adicional | Dominus p.56 |
+| Los efectos iguales de varias técnicas no se suman: vale el mayor | Core p.106, Dominus p.49 |
+| Multiplicador al Daño antes de sumar otros bonos; área de Ki con el doble de la Presencia + bono de Poder si conviene; sin Elección de blanco alcanza también a los aliados del radio | Dominus p.55, p.58 |
+| Armadura: una capa más contra todo, energía incluida (TA 6 + TA 4 = TA 8) | Dominus p.60 |
+| Ataque y Defensa Predeterminada: valor final fijo, sin dados | Dominus p.51, p.53 |
+
+Efectos que entiende: Habilidad de ataque, de contraataque, de parada y de esquiva (normal, completa
+y limitada), Ataque y Defensa predeterminados, Aumento, Multiplicador y Sustitución de Daño (y sus
+versiones reales), Ataque y Defensa adicional, Incrementar Turno, Ataque con área, Destruir armadura,
+Armadura, Incremento de RF, Dañar energía, Maniobras de combate y apuntar. Los demás se ignoran.
+
+**Interpretaciones confirmadas**:
+
+1. Al ejecutar una técnica, lo sobrante sigue disponible hasta el fin del asalto para otra técnica
+   atada a otra acción del mismo asalto (Core p.106: "pueden realizarse tantas Técnicas como permita
+   el Ki concentrado"). Al terminar el asalto vuelve a la reserva y la acumulación empieza de cero: no
+   se guarda Ki concentrado para asaltos futuros salvo que se siga acumulando sin ejecutar.
+2. El área de Ki pega a todos los del radio (centrada en el blanco elegido) y no se intercepta: la
+   intercepción al parar es sólo de la maniobra Ataque en área con un arma (Core p.92).
+
+**Interpretaciones nuevas** (para confirmar):
+
+3. Defensa adicional +N deja N defensas sin penalizador a partir de la que ejecuta la técnica. El
+   ejemplo del Dominus (p.56) dice que con +3 "se defenderá de los tres primeros golpes con
+   habilidad plena" y el cuarto va a −30: eso daría N − 1 (la primera defensa nunca tiene
+   penalizador), y entonces +1 no haría nada. Se toma N.
+4. Una técnica en espera que se ejecuta no reinicia lo acumulado para otras (Core p.105: "nada
+   impide a un personaje que tiene preparada una Técnica empezar a acumular otras").
+
+### IA
+
+- Acumula siempre que le quede reserva: es pasivo y no cuesta nada.
+- Técnica de ataque: se prueba cada técnica con cada maniobra y se descuenta el Ki gastado a un
+  precio por punto (gastar toda la reserva tiene que rendir la mitad de sus PV; sube al vaciarse).
+  Guarda Ki si una técnica mejor estará lista en 1 a 3 asaltos y rinde más que la de ahora en todos
+  esos asaltos.
+- Técnica de defensa: si lo que le ahorra del golpe (y de los siguientes del asalto, con efectos de
+  Asalto) vale más que el Ki.
+- Técnica de turno: antes de la iniciativa, por la chance de actuar primero y de sorprender.
+- Mantenidas: al empezar cada asalto deja de mantener la que rinde menos que su mantenimiento.
+- En espera: al empezar a acumular de cero declara la técnica (de las que tardan más de un asalto)
+  que más rinde por asalto de acumulación; si al final de un asalto la juntó y no la usó, la deja en
+  espera. Si pasa más de 3 asaltos en espera sin usarse, la deja ir.
+
+### Pendiente del Ki
+
+- Técnicas Combinables usadas juntas en una misma acción.
+- Habilidades activas: Aumento de características, Destrucción por Ki, Armadura de energía mayor,
+  Aura de combate, Forzar Técnicas, Absorción de energía.
+- Efectos sobrenaturales (Estados, Apresamiento, Impacto, Escudo de energía…) y técnicas a distancia.
+- Velocidad: con Ki la IA evalúa más opciones (Kael simula unos 950 combates/s contra 1.900 sin Ki).

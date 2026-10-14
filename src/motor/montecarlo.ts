@@ -21,6 +21,8 @@ export interface ResumenLuchador {
   defensaTotalPorCombate: number;
   /** Veces por combate que usó cada maniobra (sin contar los ataques normales). */
   maniobras: Record<string, number>;
+  /** Veces por combate que ejecutó cada técnica de Ki. */
+  tecnicas: Record<string, number>;
 }
 
 export interface ResultadoMonteCarlo {
@@ -43,7 +45,7 @@ export function monteCarlo(
   const acum = [...equipoA, ...equipoB].map((f, i) => ({
     nombre: f.nombre, equipo: (i < equipoA.length ? 'A' : 'B') as Equipo,
     vivo: 0, huyo: 0, causado: 0, recibido: 0, bajas: 0, criticos: 0, caidas: 0, sumaCaida: 0,
-    ataques: 0, contras: 0, cansancio: 0, defensaTotal: 0, maniobras: {} as Record<string, number>,
+    ataques: 0, contras: 0, cansancio: 0, defensaTotal: 0, maniobras: {} as Record<string, number>, tecnicas: {} as Record<string, number>,
   }));
 
   for (let i = 0; i < combates; i++) {
@@ -65,6 +67,7 @@ export function monteCarlo(
       a.cansancio += l.stats.cansancioGastado;
       a.defensaTotal += l.stats.asaltosDefensaTotal;
       for (const [m, n] of Object.entries(l.stats.maniobras)) if (m !== 'normal') a.maniobras[m] = (a.maniobras[m] ?? 0) + (n ?? 0);
+      for (const [k, n] of Object.entries(l.stats.tecnicas)) a.tecnicas[k] = (a.tecnicas[k] ?? 0) + (n ?? 0);
       if (l.stats.asaltoCaida !== null) {
         a.caidas++;
         a.sumaCaida += l.stats.asaltoCaida;
@@ -91,6 +94,7 @@ export function monteCarlo(
       cansancioPorCombate: a.cansancio / combates,
       defensaTotalPorCombate: a.defensaTotal / combates,
       maniobras: Object.fromEntries(Object.entries(a.maniobras).map(([m, n]) => [m, n / combates])),
+      tecnicas: Object.fromEntries(Object.entries(a.tecnicas).map(([m, n]) => [m, n / combates])),
     })),
   };
 }
@@ -111,8 +115,10 @@ export function combinar(partes: ResultadoMonteCarlo[]): ResultadoMonteCarlo {
       const m = (f: (l: ResumenLuchador) => number) => media((p) => f(p.luchadores[j]));
       const caidas = m((l) => l.caidas);
       const maniobras: Record<string, number> = {};
+      const tecnicas: Record<string, number> = {};
       for (const p of partes) {
         for (const [k, n] of Object.entries(p.luchadores[j].maniobras)) maniobras[k] = (maniobras[k] ?? 0) + (n * p.combates) / combates;
+        for (const [k, n] of Object.entries(p.luchadores[j].tecnicas ?? {})) tecnicas[k] = (tecnicas[k] ?? 0) + (n * p.combates) / combates;
       }
       return {
         nombre: l0.nombre, equipo: l0.equipo,
@@ -129,6 +135,7 @@ export function combinar(partes: ResultadoMonteCarlo[]): ResultadoMonteCarlo {
         cansancioPorCombate: m((l) => l.cansancioPorCombate),
         defensaTotalPorCombate: m((l) => l.defensaTotalPorCombate),
         maniobras,
+        tecnicas,
       };
     }),
   };

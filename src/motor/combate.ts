@@ -18,6 +18,7 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
+import { crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, type ModKi } from './ki';
 
 export interface OpcionesCombate {
   semilla?: number;
@@ -38,7 +39,7 @@ export interface ResultadoCombate {
 }
 
 export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number): Luchador {
-  return {
+  const l: Luchador = {
     ficha, equipo, pos: { x, y }, cap: capacidades(ficha), entorno: {},
     pv: ficha.pv,
     cansancio: ficha.cansancio ?? ficha.constitucion,
@@ -53,12 +54,14 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
-      ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {},
+      ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
     },
   };
+  l.ki = crearEstadoKi(l);
+  return l;
 }
 
 /** D100 abierta con el umbral de pifia de esa tirada (ver `umbralPifia`). */
@@ -154,6 +157,22 @@ function jugarAsalto(ctx: Contexto) {
       d.ataqueFinal ? 'Ataque Final' : '', d.bonoVariableEn ? `bono variable al ${d.bonoVariableEn}` : '',
     ].filter(Boolean);
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
+    // Ki: suelta lo que ya no conviene mantener, paga mantenidas y técnicas en espera, y acumula
+    // (acumular es pasivo, Core p.102). Una técnica que cambia el turno se declara antes de calcular
+    // la iniciativa (Core p.105).
+    if (l.ki) {
+      const decision = ia.decisionKi(ctx, l, d.acumularKi);
+      for (const t of decision.soltar) log(ctx, () => `${l.ficha.nombre} deja de mantener ${t.nombre}.`);
+      for (const t of decision.liberar) log(ctx, () => `${l.ficha.nombre} deja ir ${t.nombre}, que tenía en espera.`);
+      empezarAsalto(l, decision, penAccion(l), ctx.asalto);
+      const tecnica = ia.tecnicaDeTurno(ctx, l);
+      if (tecnica) {
+        ejecutar(l, tecnica);
+        l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+        log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre}.`);
+      }
+      if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
+    }
   }
 
   // 2. Iniciativa: turno + d100 abierta. Una pifia en turno actúa automáticamente último, sin nivel
@@ -209,6 +228,15 @@ function jugarAsalto(ctx: Contexto) {
     l.penDolor = Math.max(0, l.penDolor - 5);
     if (l.paralisisTurnos > 0 && --l.paralisisTurnos === 0) l.paralisisInducida = 0;
     sangreDeOrochi(ctx, l);
+    // Si junta la técnica que declaró al empezar a acumular y no la usó, la deja en espera para no
+    // perder ese Ki al terminar el asalto (Core p.105).
+    const espera = ia.tecnicaParaEspera(ctx, l);
+    if (espera) {
+      ponerEnEspera(l, espera);
+      log(ctx, () => `${l.ficha.nombre} deja ${espera.nombre} en espera.`);
+    }
+    // Si además de acumular hizo cualquier otra cosa, lo ganado este asalto queda en la mitad.
+    terminarAsalto(l, l.defensaTotal || l.defensasHechas > 0 || l.metrosMovidos > 0 || l.ataquesRestantes < l.planAtaques.length);
   }
 }
 
@@ -348,6 +376,13 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const m = plan.maniobra;
   atk.stats.maniobras[m] = (atk.stats.maniobras[m] ?? 0) + 1;
   if (plan.especial) atk.maniobraEspecialUsada = true;
+  // Técnica de Ki: se declara antes de tirar y gasta lo concentrado (Core p.105). Sin técnica nueva
+  // valen los efectos de Asalto activos y, una vez por asalto, los de Acción de una mantenida.
+  let ki: ModKi | undefined;
+  if (plan.tecnica) {
+    ki = ejecutar(atk, plan.tecnica);
+    atk.stats.tecnicas[plan.tecnica.nombre] = (atk.stats.tecnicas[plan.tecnica.nombre] ?? 0) + 1;
+  } else ki = modDeAccion(atk, 'ataque', true);
   const cAtk = ia.cansancioAtaque(ctx, atk, def, bono, plan);
   gastarCansancio(atk, cAtk);
   const samielAtk = ia.gastoSamiel(atk, def, 'ataque');
@@ -355,9 +390,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const ranura = proximaRanura(atk);
   const opcionesAtk = {
     bono, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
-    estadoMushin: plan.estadoMushin ?? null,
+    estadoMushin: plan.estadoMushin ?? null, ki,
   };
-  const habAtk = ataqueFinal(atk, def, opcionesAtk);
+  // Ataque Predeterminado: la habilidad final es un valor fijo y no se tiran dados (Dominus p.51).
+  const fijo = ki?.ataqueFijo ?? 0;
+  const habAtk = fijo || ataqueFinal(atk, def, opcionesAtk);
   if (samielAtk) atk.samiel.set(def, (atk.samiel.get(def) ?? 0) - samielAtk);
   if (!a.esContra || !atk.cap.est.contrasIlimitadas) atk.ataquesRestantes--;
   if (!ranura.sinArmas) atk.enfundada = false;
@@ -367,32 +404,42 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.sorprendeA.clear(); // la sorpresa sólo vale para su primera acción
   atk.previenePendiente.delete(def);
 
-  const tA = tirar(ctx, atk.cap.umbralAtaque);
-  const etiqueta = `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${def.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}`;
+  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}`;
 
-  if (tA.pifia) {
-    atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
-    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
-    ofrecerContra(ctx, def, atk, tA.nivelPifia);
-    return;
-  }
-
-  // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92).
-  const blancos = m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
-  const contras: { quien: Luchador; bono: number }[] = [];
-  for (const blanco of blancos) {
-    if (!activo(blanco) || !activo(atk)) continue;
-    const r = resolverDefensa(ctx, atk, blanco, habAtk, tA, opcionesAtk, etiqueta);
-    if (r.contra !== null) {
-      contras.push({ quien: r.defensor, bono: r.contra });
-      // Parar un ataque en área lo intercepta: los demás no tienen que defenderse.
-      if (m === 'area' && (r.defensor.ficha.tipoDefensa ?? 'parada') === 'parada') break;
+  // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55). Si
+  // una contra lo pone a la defensiva, no sigue.
+  const golpes = 1 + (ki?.ataquesAdicionales ?? 0);
+  for (let g = 0; g < golpes; g++) {
+    if (!activo(atk) || !activo(def) || (g > 0 && atk.aLaDefensiva)) break;
+    const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque);
+    if (tA.pifia) {
+      atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
+      log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+      ofrecerContra(ctx, def, atk, tA.nivelPifia);
+      return;
     }
+
+    // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92). Un
+    // área de Ki alcanza a todos los del radio (Dominus p.58); sin Elección de blanco, aliados incluidos.
+    const blancos = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    const contras: { quien: Luchador; bono: number }[] = [];
+    for (const blanco of blancos) {
+      if (!activo(blanco) || !activo(atk)) continue;
+      const r = resolverDefensa(ctx, atk, blanco, habAtk, tA, opcionesAtk, etiquetaPara(blanco));
+      if (r.contra !== null) {
+        contras.push({ quien: r.defensor, bono: r.contra });
+        // Parar la maniobra de Ataque en área la intercepta: los demás no tienen que defenderse.
+        if (m === 'area' && !ki?.area && (r.defensor.ficha.tipoDefensa ?? 'parada') === 'parada') break;
+      }
+    }
+    // Engatillar: la amenaza se consume cuando quien amenaza ataca a su amenazado.
+    if (def.amenazadoPor === atk && m !== 'engatillar') def.amenazadoPor = null;
+    for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
   }
-  // Engatillar: la amenaza se consume cuando quien amenaza ataca a su amenazado.
-  if (def.amenazadoPor === atk && m !== 'engatillar') def.amenazadoPor = null;
-  for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
 }
+
+/** Tirada de un Ataque o Defensa Predeterminada: no se tiran dados. */
+const DADO_FIJO: TiradaD100 = { valor: 0, natural: 0, abiertas: 0, pifia: false, nivelPifia: 0 };
 
 /** Quien amenaza pierde la amenaza si lo impactan o cae (interpretación: la regla no lo precisa). */
 function liberarAmenazados(ctx: Contexto, l: Luchador) {
@@ -407,6 +454,8 @@ interface ResultadoDefensa {
 
 interface Golpe {
   maniobra: Maniobra;
+  /** Efectos de Ki del atacante en este golpe. */
+  ki?: ModKi;
   estadoMushin?: EstadoMushin | null;
   esContra: boolean;
   tipo?: TipoAtaque;
@@ -432,7 +481,14 @@ function resolverDefensa(
   gastarCansancio(quienDefiende, cDef);
   const samielDef = ia.gastoSamiel(quienDefiende, atk, 'defensa');
   if (samielDef) quienDefiende.samiel.set(atk, (quienDefiende.samiel.get(atk) ?? 0) - samielDef);
-  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef }) - (proteccion?.pen ?? 0);
+  // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
+  const tecnica = quienDefiende.ficha.acumulacion ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
+  let kiDef: ModKi | undefined;
+  if (tecnica) {
+    kiDef = ejecutar(quienDefiende, tecnica);
+    quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+  } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
+  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef }) - (proteccion?.pen ?? 0);
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
@@ -443,14 +499,17 @@ function resolverDefensa(
     resultado = habAtk + tA.valor;
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`);
   } else {
-    const tD = tirar(ctx, quienDefiende.cap.umbralDefensa);
+    // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53).
+    const fija = kiDef?.defensaFija ?? 0;
+    const tD = fija ? DADO_FIJO : tirar(ctx, quienDefiende.cap.umbralDefensa);
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
     // La defensa final nunca es negativa.
-    const total = Math.max(0, habDef + valorDef);
+    const total = fija || Math.max(0, habDef + valorDef);
     resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${textoTirada(habDef, tD)}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
+    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : '';
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
     if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
@@ -461,13 +520,14 @@ function resolverDefensa(
       // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
       if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
     }
-    return { defensor: quienDefiende, contra: resultado < 0 ? bonoContraataque(resultado) : null };
+    // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
+    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra ? bonoContraataque(resultado) : null };
   }
 
   // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
   // si lo supera, recibe el daño pleno y queda a la defensiva.
   if (sacrificio) {
-    const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura), porcentajeDano(resultado, absorcionContra(def, atk, esManiobraDeControl(o.maniobra) ? 'normal' : o.maniobra, o.tipo, o.ranura)));
+    const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura, o.ki), porcentajeDano(resultado, absorcionContra(def, atk, esManiobraDeControl(o.maniobra) ? 'normal' : o.maniobra, o.tipo, o.ranura, o.ki)));
     if (golpe <= 2 * sacrificio) {
       log(ctx, () => `  La sombra de sangre recibe el golpe (${golpe} de ${2 * sacrificio}).`);
       return { defensor: def, contra: null };
@@ -480,7 +540,7 @@ function resolverDefensa(
   if (!def.ficha.acumulacion && !resiste && def.modo.seraphite !== 3) def.aLaDefensiva = true;
   liberarAmenazados(ctx, def);
   const m = o.maniobra;
-  const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura));
+  const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
 
   if (esManiobraDeControl(m)) {
     if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra);
@@ -489,13 +549,13 @@ function resolverDefensa(
   }
 
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
-  let base = danoBase(atk, def, o.esContra, o.ranura);
+  let base = danoBase(atk, def, o.esContra, o.ranura, o.ki);
   if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
   // apuntado, la de la zona.
-  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura);
+  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura, o.ki);
   const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  const frena = barreraFrena(def, atk, base);
+  const frena = barreraFrena(def, atk, base, o.ki);
   let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
   // Sangre de Aeon: daño de su elemento a la mitad.
   if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
@@ -797,7 +857,8 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const nivel = nivelCritico(dano + bono, dadoCritico, !!def.ficha.acumulacion);
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico;
+  // Incremento de Resistencia Física (Ki) suma a la RF durante el asalto (Dominus p.61).
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico + (def.ki?.activo.rf ?? 0);
   const res = baseRf + dadoRf;
   const tiradas = () => {
     const suma = dano + bono + dadoCritico;

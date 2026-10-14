@@ -107,5 +107,6 @@ if (modo === 'ver') {
     cansancio: l.cansancioPorCombate.toFixed(2),
     'def. total': l.defensaTotalPorCombate.toFixed(2),
     maniobras: Object.entries(l.maniobras).map(([m, n]) => `${m} ${n.toFixed(1)}`).join(', ') || '-',
+    técnicas: Object.entries(l.tecnicas).map(([m, n]) => `${m} ${n.toFixed(1)}`).join(', ') || '-',
   })));
 }

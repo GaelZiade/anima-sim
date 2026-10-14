@@ -4,7 +4,7 @@
 // `penalty_rules.dart`), que citan Core Exxet y Dominus Exxet.
 
 import type { Ficha } from './modelo';
-import { umbralPifia, type TamanoArma } from './reglas';
+import { MAX_CANSANCIO_ASALTO, umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
 
 /** Minúsculas, sin acentos ni espacios repetidos (`CombatData.normalizeTrait`). */
@@ -185,6 +185,8 @@ export interface Capacidades {
   dobleCansancio: boolean;
   mitadDolorCritico: boolean;
   sinDolorNiCansancio: boolean;
+  /** Cansancio que puede gastar por asalto: 2; con Uso de la energía necesaria, 5 (Core p.104). */
+  maxCansancioAsalto: number;
   /** Ventaja Buena suerte: pifia con un número menos (Core p.10). */
   buenaSuerte: boolean;
   /** Ajuste al umbral de pifia por ventajas: Buena suerte −1, Mala suerte +2 (Core p.21, p.25). */
@@ -290,6 +292,7 @@ function calcularCapacidades(f: Ficha): Capacidades {
     // sólo la reduce con Eliminación de penalizadores.
     mitadDolorCritico: inmunidad || eliminacion,
     sinDolorNiCansancio: tiene(r.habilidadesKi, 'esencia de vacio'),
+    maxCansancioAsalto: tiene(r.habilidadesKi, 'uso de la energia necesaria') ? 5 : MAX_CANSANCIO_ASALTO,
     buenaSuerte,
     ajustePifia,
     umbralAtaque: umbralPifia(f.ataque, ajustePifia, compleja),

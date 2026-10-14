@@ -287,7 +287,7 @@ function mostrarResultado(r: ResultadoMonteCarlo, final: boolean) {
 
   const huida = r.luchadores.some((l) => l.huida > 0);
   const columnas = ['Luchador', 'Sobrevive', ...(huida ? ['Huye'] : []), 'Daño hecho', 'Daño recibido', 'Críticos',
-    'Cae en asalto', 'Ataques', 'Contras', 'Cansancio', 'Def. total', 'Maniobras'];
+    'Cae en asalto', 'Ataques', 'Contras', 'Cansancio', 'Def. total', 'Maniobras', 'Técnicas de Ki'];
   const filas = r.luchadores.map((l) => [
     crear('span', {}, crear('span', { className: `marca ${l.equipo.toLowerCase()}` }), ` ${l.nombre}`),
     `${(l.supervivencia * 100).toFixed(1)}%`,
@@ -297,6 +297,7 @@ function mostrarResultado(r: ResultadoMonteCarlo, final: boolean) {
     l.cansancioPorCombate.toFixed(2), l.defensaTotalPorCombate.toFixed(2),
     // Veces por combate; las que casi no se usan no se muestran.
     Object.entries(l.maniobras).filter(([, n]) => n >= 0.005).map(([m, n]) => `${m} ${n.toFixed(2)}`).join(', ') || '-',
+    Object.entries(l.tecnicas).filter(([, n]) => n >= 0.005).map(([m, n]) => `${m} ${n.toFixed(2)}`).join(', ') || '-',
   ]);
   $('tabla').replaceChildren(
     crear('thead', {}, crear('tr', {}, ...columnas.map((c) => crear('th', {}, c)))),

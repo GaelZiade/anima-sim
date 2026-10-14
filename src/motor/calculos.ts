@@ -12,6 +12,7 @@ import {
   type EstadoMushin, type Maniobra,
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
+import type { ModKi } from './ki';
 
 export const ALCANCE = 2;
 /** Ceguera absoluta (Tabla 43) contra ataques invisibles de Velez arcano. */
@@ -106,6 +107,7 @@ export function umbralPifiaTurno(l: Luchador): number {
 /** Turno para la iniciativa, sin el dado. El negativo a toda acción cuenta la mitad (Core p.232). */
 export function turnoFinal(l: Luchador): number {
   return l.ficha.turno - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
+    (l.ki?.activo.turno ?? 0) +
     (l.amenazadoPor ? AMENAZADO.turno : 0);
 }
 
@@ -153,6 +155,8 @@ export interface OpcionesAtaque {
   samiel?: number;
   /** Mushin arcano: estado a inducir, con su penalizador al ataque (Dominus p.42). */
   estadoMushin?: EstadoMushin | null;
+  /** Efectos de Ki de este ataque (técnica ejecutada o mantenida). Por defecto, los de Asalto activos. */
+  ki?: ModKi;
 }
 
 /** El Xing Quan da su bono si atacó en su turno, sin defenderse antes, siempre al mismo rival. */
@@ -170,6 +174,7 @@ export function puedeManiobraEspecial(atk: Luchador, def: Luchador): boolean {
 
 export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}): number {
   const e = atk.cap.est;
+  const ki = o.ki ?? atk.ki?.activo;
   const declarados = Math.max(1, o.declarados ?? atk.ataquesDeclarados);
   const ranura = o.ranura ?? proximaRanura(atk);
   const perfil = perfilDe(atk, ranura);
@@ -184,7 +189,9 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   return (
     perfil.ataque - pen - activa - penAccion(atk) - secundario - penEspacio(atk, 'ataque') -
     (ranura.sinArmas ? 0 : penDesenfundar(atk, 'ataque')) -
-    penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) +
+    // Maniobras de combate y apuntar (Ki) reduce el penalizador de la maniobra, hasta 0.
+    Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) - (ki?.precision ?? 0)) +
+    (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
     (atk.paralisis === 3 ? 0 : modPosicionAtaque(atk, def)) + modEstados(atk).ataque + desequilibrio(atk, def) +
     // Contra un rival derribado se suma la posición superior (Tabla 43, Dominus p.38).
@@ -212,6 +219,8 @@ export interface OpcionesDefensa {
   resistir?: boolean;
   defensaTotal?: boolean;
   samiel?: number;
+  /** Efectos de Ki de esta defensa. Por defecto, los de Asalto activos. */
+  ki?: ModKi;
 }
 
 /** Ataques intangibles (Velez arcano): sólo se paran si se puede parar energía. */
@@ -253,8 +262,11 @@ export function desequilibrio(l: Luchador, rival: Luchador): number {
 export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = {}): number {
   if (def.ficha.acumulacion) return 0;
   const e = def.cap.est;
-  // Lama, Lama Tsu y la Tabla de 2ª Arma: Estilo Defensivo eximen algunas defensas.
-  const libres = def.cap.defensasLibres + (def.estiloDefensivo ? 1 : 0);
+  const ki = o.ki ?? def.ki?.activo;
+  // Lama, Lama Tsu y la Tabla de 2ª Arma: Estilo Defensivo eximen algunas defensas; Defensa
+  // adicional (Ki) también (Dominus p.56).
+  const libres = def.cap.defensasLibres + (def.estiloDefensivo ? 1 : 0) +
+    Math.max(ki?.defensasAdicionales ?? 0, def.ki?.defensasLibres ?? 0);
   const previas = Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
   const total = o.defensaTotal ?? def.defensaTotal;
   // Al retirarse, quien lo ataca lo tiene de flanco, salvo Uroboros (Core p.94, Dominus p.79).
@@ -275,7 +287,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) -
     (def.modo.seraphite === 3 ? 50 : def.modo.seraphite === 1 ? 30 : 0) -
     (def.modo.berserker ? 20 : 0) + bonoVariable(def, 'defensa') + bonoOrochi(def) +
-    Math.min(150, o.samiel ?? 0) +
+    Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   if (paradaAnulada(def, atk)) h = Math.min(h, 0);
@@ -289,13 +301,22 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
  */
 export function absorcionContra(
   def: Luchador, atk: Luchador, maniobra: Maniobra = 'normal', tipo?: TipoAtaque, ranura?: Ranura,
+  ki: ModKi | undefined = atk.ki?.activo, kiDef: ModKi | undefined = def.ki?.activo,
 ): number {
   if (esManiobraDeControl(maniobra)) return absorcion(0);
+  // Destruir armadura "Sin armadura" ignora toda la TA (Dominus p.60).
+  if (ki?.sinArmadura) return absorcion(0);
   const r = ranura ?? proximaRanura(atk);
   const t = tipo ?? perfilDe(atk, r).tipoAtaque;
   const zona = zonaDe(maniobra);
-  const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) + reduccionHakyoukuken(def, atk, t, zona);
-  return absorcion(Math.max(0, taZona(def.ficha, zona, t) - reduccion));
+  const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) +
+    reduccionHakyoukuken(def, atk, t, zona) + (ki?.reduccionTA ?? 0);
+  let ta = taZona(def.ficha, zona, t);
+  // Armadura (Ki): una capa más contra todo, energía incluida: la mayor más la mitad de la otra
+  // (Dominus p.60, Core p.83).
+  const extra = kiDef?.ta ?? 0;
+  if (extra) ta = Math.max(ta, extra) + Math.floor(Math.min(ta, extra) / 2);
+  return absorcion(Math.max(0, ta - reduccion));
 }
 
 export type ZonaArmadura = 'cuerpo' | 'cabeza' | 'extremidad';
@@ -372,9 +393,18 @@ function reduccionHakyoukuken(def: Luchador, atk: Luchador, t: TipoAtaque, zona:
 }
 
 /** Daño base de este ataque: Godhand, Kung Fu en daño y Aikido en las contras. */
-export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?: Ranura): number {
+export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?: Ranura, ki: ModKi | undefined = atk.ki?.activo): number {
   const e = atk.cap.est;
-  let d = perfilDe(atk, ranura ?? proximaRanura(atk)).danoBase + bonoVariable(atk, 'dano');
+  let arma = perfilDe(atk, ranura ?? proximaRanura(atk)).danoBase;
+  if (ki) {
+    // Sustitución de Daño reemplaza el del arma; un ataque en área de Ki puede usar el doble de la
+    // Presencia base más el bono de Poder (Dominus p.55, p.58). El multiplicador va antes de sumar
+    // cualquier otro bono (p.55).
+    if (ki.danoFijo) arma = ki.danoFijo;
+    if (ki.area) arma = Math.max(arma, 2 * (atk.ficha.presencia ?? 0) + bonoCaracteristica(atributo(atk, 'POD')));
+    arma = arma * ki.multDano + ki.dano;
+  }
+  let d = arma + bonoVariable(atk, 'dano');
   if (atk.godhandListo && e.godhand) d += e.godhand.dano;
   // Aikido: en un contraataque suma 2× (supremo 4×) el bono de FUE del rival, mínimo +5 (Dominus p.31).
   if (esContra && e.aikidoMultiplicadorFue)
@@ -383,8 +413,8 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
 }
 
 /** La barrera de daño del defensor frena el ataque: daño base menor y no daña energía. */
-export function barreraFrena(def: Luchador, atk: Luchador, base = atk.ficha.danoBase): boolean {
-  return def.cap.barrera > 0 && !atk.cap.danaEnergia && base < def.cap.barrera;
+export function barreraFrena(def: Luchador, atk: Luchador, base = atk.ficha.danoBase, ki: ModKi | undefined = atk.ki?.activo): boolean {
+  return def.cap.barrera > 0 && !atk.cap.danaEnergia && !ki?.danaEnergia && base < def.cap.barrera;
 }
 
 const RANURA_COMUN: Ranura = { pen: 0, sinArmas: false };
@@ -431,19 +461,23 @@ export interface OpcionesPronostico {
   ranura?: Ranura;
   /** Multiplica el daño base (Inutilizar e Inconsciencia hacen la mitad). */
   factorDano?: number;
+  /** Efectos de Ki del atacante en este ataque y del defensor (por defecto, sus efectos de Asalto). */
+  ki?: ModKi;
+  kiDef?: ModKi;
 }
 
 /** Lo que comparten `pronostico` y `danoEsperado`: tabla, ventaja, absorciones y daño base. */
 function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico) {
   const m = o.maniobra ?? 'normal';
-  const abs = absorcionContra(def, atk, m, o.tipo, o.ranura);
-  let base = danoBase(atk, def, o.esContra, o.ranura);
+  const kiDef = o.kiDef ?? def.ki?.activo;
+  const abs = absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki, kiDef);
+  let base = danoBase(atk, def, o.esContra, o.ranura, o.ki);
   // Derribo y Presa dañan a la mitad (contra la armadura real) si el atacante quiere; Desarmar no daña.
   if (m === 'desarmar') base = 0;
   else if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
-  const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura) : abs;
-  const nulo = base === 0 || barreraFrena(def, atk, base);
+  const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura, o.ki, kiDef) : abs;
+  const nulo = base === 0 || barreraFrena(def, atk, base, o.ki);
   return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
 }
 

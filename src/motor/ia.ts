@@ -1,15 +1,19 @@
 // IA por heurística: cada decisión puntúa sus opciones en "PV esperados" y elige la mejor.
 // No tira dados ni mira hacia adelante; todas las probabilidades salen de las tablas precalculadas.
 
-import type { Contexto, Luchador, Perfil } from './modelo';
+import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
-  danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  danoBase, danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
-import { MAX_CANSANCIO_ASALTO, negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
+import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
+import {
+  asaltosQueFaltan, combinar, costeKi, efectosDe, modDeAccion, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  vistaPrevia, type DecisionKi, type ModKi,
+} from './ki';
 import type { Localizacion } from './reglas';
 import {
   caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
@@ -248,6 +252,8 @@ export interface Declaracion {
   despertarOrochi: boolean;
   /** Prever Sorpresa contra estos enemigos (Dominus p.14). */
   preverSorpresa: Luchador[];
+  /** Acumula Ki este asalto (Core p.102). */
+  acumularKi: boolean;
 }
 
 const SIN_MODOS = {
@@ -256,6 +262,10 @@ const SIN_MODOS = {
 };
 
 export function declarar(ctx: Contexto, l: Luchador): Declaracion {
+  return { ...declararSinKi(ctx, l), acumularKi: acumulaKi(l) };
+}
+
+function declararSinKi(ctx: Contexto, l: Luchador): Omit<Declaracion, 'acumularKi'> {
   nuevaDecision(ctx);
   const max = l.cap.maxAtaques;
   const objetivos = enemigos(ctx, l).filter((e) => alcanzable(l, e));
@@ -375,7 +385,7 @@ function valorDelAsalto(l: Luchador, n: number, objetivos: Luchador[], entrantes
 /** Modalidades declaradas antes de la iniciativa: se prueba cada una y se queda con la mejor. */
 function elegirModos(
   ctx: Contexto, l: Luchador, n: number, objetivos: Luchador[], entrantes: { e: Luchador; peso: number }[],
-): Omit<Declaracion, 'defensaTotal' | 'ataques'> {
+): Omit<Declaracion, 'defensaTotal' | 'ataques' | 'acumularKi'> {
   const e = l.cap.est;
   const original = { modo: l.modo, bonoVariableEn: l.bonoVariableEn };
   const probar = (modo: Luchador['modo'], bonoVariableEn: Luchador['bonoVariableEn']) => {
@@ -541,7 +551,7 @@ function agota(l: Luchador, k: number): boolean {
  * Sólo se gastan puntos que no agotan: el agotamiento penaliza toda acción el resto del combate.
  */
 function decidirCansancio(l: Luchador, ganancia: (k: number) => number, referencia: number): number {
-  const disponibles = Math.min(MAX_CANSANCIO_ASALTO - l.cansancioAsalto, l.cansancio);
+  const disponibles = Math.min(l.cap.maxCansancioAsalto - l.cansancioAsalto, l.cansancio);
   if (disponibles <= 0 || perfil(l) === 'bestia') return 0;
   let gastar = 0;
   for (let k = 1; k <= disponibles && !agota(l, k); k++) {
@@ -570,9 +580,11 @@ export function cansancioDefensa(ctx: Contexto, def: Luchador, atk: Luchador, ha
     pronostico(atk, def, habAtaque, defensaFinal(def, atk, { cansancio: k, resistir: resistiendo }));
   const gastar = decidirCansancio(def, (k) => -(pron(k).dano + pron(k).pBaja * def.pv), Math.max(1, def.pv));
   if (gastar > 0) return gastar;
-  // Desesperado: agotarse sólo si baja mucho la chance de quedar fuera de combate ahora.
-  const disponibles = Math.min(MAX_CANSANCIO_ASALTO - def.cansancioAsalto, def.cansancio);
-  for (let k = disponibles; k >= 1; k--) if (pron(0).pBaja - pron(k).pBaja >= 0.2) return k;
+  // Desesperado: agotarse sólo si baja mucho la chance de quedar fuera de combate ahora, y con lo
+  // mínimo que lo logra (con Uso de la energía necesaria podría quemar 5 de golpe).
+  const disponibles = Math.min(def.cap.maxCansancioAsalto - def.cansancioAsalto, def.cansancio);
+  const pBaja = pron(0).pBaja;
+  for (let k = 1; k <= disponibles; k++) if (pBaja - pron(k).pBaja >= 0.2) return k;
   return 0;
 }
 
@@ -584,6 +596,8 @@ export interface PlanAtaque {
   especial: boolean;
   /** Mushin arcano: estado a inducir con los puntos de presión. */
   estadoMushin?: EstadoMushin | null;
+  /** Técnica de Ki que ejecuta con este ataque. */
+  tecnica?: Tecnica;
 }
 
 const NORMAL: PlanAtaque = { maniobra: 'normal', especial: false };
@@ -620,14 +634,36 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
 }
 
 /**
- * Elige maniobra, tipo de crítico y si usa la Maniobra Especial para este ataque. Cada opción se
- * valora como un ataque normal (daño, chance de baja y de crítico, riesgo de contra) más lo que deja
- * la maniobra: un rival derribado o apresado pega y defiende peor, uno desarmado amenaza menos.
+ * Elige maniobra, tipo de crítico, técnica de Ki y si usa la Maniobra Especial para este ataque. Cada
+ * técnica que puede ejecutar se prueba con cada maniobra (Disparo Vital rinde más apuntando a la
+ * cabeza) y se descuenta lo que vale el Ki que gasta.
  */
 export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number): PlanAtaque {
   nuevaDecision(ctx);
   const sin = ctx.opciones.sinManiobras;
-  if (perfil(atk) === 'bestia' || sin === true || sin === atk.equipo) return NORMAL;
+  const soloNormal = perfil(atk) === 'bestia' || sin === true || sin === atk.equipo;
+  const base = mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal);
+  if (!atk.ki) return base.plan;
+  let mejor = base;
+  let mejorNeto = base.valor;
+  let elegida: Tecnica | undefined;
+  for (const tec of tecnicasPara(atk, 'ataque', esContra)) {
+    const r = mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tec), soloNormal);
+    const neto = r.valor - precioKi(atk) * costeKi(tec);
+    if (neto > mejorNeto) {
+      mejor = r;
+      mejorNeto = neto;
+      elegida = tec;
+    }
+  }
+  if (!elegida || convieneGuardar(ctx, atk, def, elegida, mejorNeto - base.valor)) return base.plan;
+  return { ...mejor.plan, tecnica: elegida };
+}
+
+/** La mejor maniobra con estos efectos de Ki, y lo que vale en PV. */
+function mejorManiobra(
+  ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, ki: ModKi | undefined, soloNormal: boolean,
+): { plan: PlanAtaque; valor: number } {
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
   const habDef = defensaFinal(def, atk);
@@ -641,10 +677,10 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
   };
 
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
-    const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin });
-    const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
+    const hab = ki?.ataqueFijo || ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki });
+    const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, ki });
     // Inutilizar e Inconsciencia: la mitad de daño (y de chance de tumbarlo por PV); el crítico, pleno.
-    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5 }) : p;
+    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5, ki }) : p;
     // Los ataques que no dañan (engatillar, puntos de presión) se valoran sólo por su efecto.
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
     const danoEste = sinDano ? 0 : real.dano;
@@ -658,9 +694,9 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
     const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
     if (!sinDano && vulnerable) {
       const t = tablaPara(atk, def);
-      const base = Math.max(1, atk.ficha.danoBase);
+      const base = Math.max(1, danoBase(atk, def, esContra, undefined, ki));
       const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
-      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo), pct);
+      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo, undefined, ki), pct);
       v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste);
     } else if (!sinDano) {
       v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste);
@@ -711,7 +747,7 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
   if (sec && sec !== atk.ficha.tipoAtaque && valor('normal', sec) > valor('normal')) tipo = sec;
 
   const opciones: Maniobra[] = ['normal'];
-  if (!def.ficha.acumulacion) {
+  if (!def.ficha.acumulacion && !soloNormal) {
     if (!def.derribado) opciones.push('derribo');
     if (e.puedePresar && !def.apresadoPor && !atk.apresando) opciones.push('presa');
     if (!def.cap.desarmado) opciones.push('desarmar');
@@ -719,8 +755,9 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
     opciones.push('inconsciencia', 'engatillar');
     if (e.mushin) opciones.push('puntosPresion');
   }
-  // No se puede aprovechar una contra para un ataque en área (Core p.89).
-  const area = esContra ? [] : blancosArea(ctx, atk, def);
+  // No se puede aprovechar una contra para un ataque en área (Core p.89). Con un área de Ki la
+  // maniobra sobra: la técnica ya alcanza a todos los del radio.
+  const area = esContra || soloNormal || ki?.area ? [] : blancosArea(ctx, atk, def);
   if (area.length >= 2) opciones.push('area');
 
   let mejor: PlanAtaque = { maniobra: 'normal', tipo, especial: false };
@@ -753,20 +790,20 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
         }
       }
       continue;
-    } else v = valor(m, tipo);
+    } else v = valor(m, tipo) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, tipo) : 0);
     if (v > mejorValor) {
       mejorValor = v;
       mejor = { maniobra: m, tipo, especial: false };
     }
   }
   // Maniobra Especial (+20, una vez): se usa cuando sube claramente la chance de baja o de crítico.
-  if (mejor.maniobra !== 'area' && puedeManiobraEspecial(atk, def)) {
-    const h = (especial: boolean) => ataqueFinal(atk, def, { bono, maniobra: mejor.maniobra, esContra, tipo, especial });
-    const sin = pronostico(atk, def, h(false), habDef, { maniobra: mejor.maniobra, tipo });
-    const con = pronostico(atk, def, h(true), habDef, { maniobra: mejor.maniobra, tipo });
+  if (mejor.maniobra !== 'area' && !ki?.ataqueFijo && puedeManiobraEspecial(atk, def)) {
+    const h = (especial: boolean) => ataqueFinal(atk, def, { bono, maniobra: mejor.maniobra, esContra, tipo, especial, ki });
+    const sin = pronostico(atk, def, h(false), habDef, { maniobra: mejor.maniobra, tipo, ki });
+    const con = pronostico(atk, def, h(true), habDef, { maniobra: mejor.maniobra, tipo, ki });
     if (con.pBaja + con.pCritico - sin.pBaja - sin.pCritico >= 0.1) mejor.especial = true;
   }
-  return mejor;
+  return { plan: mejor, valor: mejorValor };
 }
 
 /**
@@ -864,4 +901,244 @@ export function quiereHuir(ctx: Contexto, l: Luchador): boolean {
   // El Berserker no comprende cuándo debe retirarse (Dominus p.84).
   if (perfil(l) === 'agresivo' || l.modo.berserker) return false;
   return l.pv < l.ficha.pv / 4 && ctx.ventaja[l.equipo] < 0.5;
+}
+
+// --------------------------------------------------------------------------- Ki
+
+/**
+ * Lo que vale un punto de Ki, en PV: gastar toda la reserva tiene que rendir al menos la mitad de
+ * sus PV. Sube a medida que se vacía la reserva.
+ */
+function precioKi(l: Luchador): number {
+  const inicial = Math.max(1, l.ficha.ki?.reserva ?? 1);
+  const queda = Math.max(1, l.ki?.reserva ?? 0);
+  return ((0.5 * l.ficha.pv) / inicial) * Math.sqrt(inicial / queda);
+}
+
+/** Acumular es pasivo y no cuesta nada: se acumula mientras quede reserva y tenga técnicas. */
+function acumulaKi(l: Luchador): boolean {
+  return !!l.ki && l.ki.reserva > 0;
+}
+
+/**
+ * Guardar Ki para una técnica de ataque mejor que todavía no alcanza: ejecutar ahora devuelve lo
+ * sobrante a la reserva y empieza de cero. Conviene esperar si lo que gana con la otra, descontado
+ * por los asaltos que faltan, supera lo que gana ahora en todos esos asaltos.
+ */
+function convieneGuardar(ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number): boolean {
+  const sinTecnica = mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
+  for (const t of l.ficha.ki!.tecnicas) {
+    if (t === elegida || efectosDe(t).clase !== 'ataque' || l.ki!.mantenidas.has(t)) continue;
+    const faltan = asaltosQueFaltan(l, t);
+    if (faltan < 1 || faltan > 3) continue;
+    const otra = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica - precioKi(l) * costeKi(t);
+    if (otra * Math.pow(0.8, faltan) > ganancia * (1 + faltan)) return true;
+  }
+  return false;
+}
+
+/**
+ * Blancos de un ataque en área de Ki: todos los que estén en el radio alrededor del blanco. Sin
+ * Elección de blanco no puede excluir a nadie, aliados incluidos (Dominus p.58).
+ */
+export function blancosAreaKi(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi): Luchador[] {
+  const otros = ctx.luchadores.filter(
+    (x) => x !== atk && x !== def && activo(x) && distancia(x, def) <= ki.area && (!ki.eleccionBlanco || x.equipo !== atk.equipo),
+  );
+  return [def, ...otros];
+}
+
+/** Lo que suma un área de Ki por los demás blancos del radio (los aliados restan). */
+function valorAreaKi(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, bono: number, tipo?: TipoAtaque): number {
+  let v = 0;
+  for (const b of blancosAreaKi(ctx, atk, def, ki)) {
+    if (b === def) continue;
+    const hab = ki.ataqueFijo || ataqueFinal(atk, b, { bono, tipo, ki });
+    const p = pronostico(atk, b, hab, defensaFinal(b, atk), { tipo, ki });
+    if (b.equipo === atk.equipo) {
+      v -= p.dano + p.pBaja * amenaza(atk, b);
+      continue;
+    }
+    let vb = valorGolpe(atk, b, p, 0);
+    if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) vb += p.pImpacto * amenaza(b, atk);
+    if (b.ataquesRestantes > 0 && puedeActuar(b)) vb -= lambda(atk) * p.pContra * golpeDe(b, atk);
+    v += vb;
+  }
+  return v;
+}
+
+/**
+ * Técnica de defensa a ejecutar contra este golpe, o null. Se compara lo que le cuesta el golpe
+ * (daño, baja, crítico, menos la contra que pueda devolver) con y sin ella. Sus efectos de Asalto
+ * (Armadura, parada completa) protegen también de los demás golpes del asalto.
+ */
+export function elegirTecnicaDefensa(
+  ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number,
+  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean },
+): Tecnica | null {
+  if (!def.ki || perfil(def) === 'bestia') return null;
+  const candidatas = tecnicasPara(def, 'defensa');
+  if (!candidatas.length) return null;
+  nuevaDecision(ctx);
+  const costo = (mod: ModKi | undefined) => {
+    // Defensa Predeterminada: equivale a una habilidad unos 50 por debajo (lo que suma el d100 medio).
+    const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod });
+    const p = pronostico(atk, def, habAtk, hab, { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, kiDef: mod, esContra: g.esContra });
+    const contra = !mod?.sinContra && def.ataquesRestantes > 0 && puedeActuar(def) ? p.pContra * golpeDe(def, atk) : 0;
+    return valorGolpe(atk, def, p, 0) - contra;
+  };
+  const sinTecnica = costo(modDeAccion(def, 'defensa', false));
+  // Ataques que probablemente reciba después en el asalto (para los efectos de Asalto).
+  let otros = 0;
+  for (const e of enemigos(ctx, def)) if (e !== atk && !e.haActuado && puedeActuar(e) && alcanzable(e, def)) otros += 0.5;
+  let mejor: Tecnica | null = null;
+  let mejorNeto = 0;
+  for (const t of candidatas) {
+    const ef = efectosDe(t);
+    const ganancia = sinTecnica - costo(vistaPrevia(def, t));
+    const deAsalto = ef.asalto.ta || ef.asalto.parada || ef.asalto.esquiva ? otros : 0;
+    const neto = ganancia * (1 + deAsalto) - precioKi(def) * costeKi(t);
+    if (neto > mejorNeto) {
+      mejor = t;
+      mejorNeto = neto;
+    }
+  }
+  if (mejor && convieneGuardar(ctx, def, atk, mejor, mejorNeto)) return null;
+  return mejor;
+}
+
+/**
+ * Técnica que sube el turno, a ejecutar antes de la iniciativa (Core p.105), o null. Vale lo que
+ * gana actuando antes que cada rival (lo deja sin asalto si lo impacta) y la chance de sorprenderlo.
+ */
+export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  nuevaDecision(ctx);
+  let mejor: Tecnica | null = null;
+  let mejorNeto = 0;
+  for (const t of l.ficha.ki!.tecnicas) {
+    const bono = efectosDe(t).asalto.turno;
+    if (!bono || efectosDe(t).clase !== 'variable' || l.ki.mantenidas.has(t) || !puedeEjecutar(l, t)) continue;
+    const neto = valorTurno(ctx, l, bono) - precioKi(l) * costeKi(t);
+    if (neto > mejorNeto) {
+      mejor = t;
+      mejorNeto = neto;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Lo que vale subir el turno en `bono` este asalto: actuar antes que cada rival (lo deja sin asalto si
+ * lo impacta) y la chance de sorprenderlo. Se mide sobre el turno sin las técnicas que ya lo suben.
+ */
+function valorTurno(ctx: Contexto, l: Luchador, bono: number): number {
+  const propio = turnoFinal(l) - (l.ki?.activo.turno ?? 0);
+  let valor = 0;
+  for (const e of enemigos(ctx, l)) {
+    if (!alcanzable(l, e) && !alcanzable(e, l)) continue;
+    const tb = tabla(umbralPifiaTurno(l), umbralPifiaTurno(e), false);
+    const dif = propio - turnoFinal(e);
+    const sorpresa = (s: number) => tb.pImpacto(s - l.cap.est.diferenciaSorpresa + 1);
+    const b = base(l, e);
+    const conSorpresa = danoEsperado(l, e, b.hab, b.def - 90) - b.golpe;
+    valor += (tb.pImpacto(dif + bono) - tb.pImpacto(dif)) * amenaza(e, l) * 0.5 +
+      (sorpresa(dif + bono) - sorpresa(dif)) * conSorpresa;
+  }
+  return valor;
+}
+
+/** El mejor rival para valorar una técnica de ataque: al que más le pega hoy. */
+function rivalPrincipal(ctx: Contexto, l: Luchador): Luchador | null {
+  let mejor: Luchador | null = null;
+  for (const e of enemigos(ctx, l)) if (!mejor || golpeDe(l, e) > golpeDe(l, mejor)) mejor = e;
+  return mejor;
+}
+
+/** Lo que gana un ataque contra `rival` con estos efectos de Ki, frente a uno sin técnica. */
+function gananciaAtaque(ctx: Contexto, l: Luchador, rival: Luchador, ki: ModKi): number {
+  return mejorManiobra(ctx, l, rival, false, 0, ki, false).valor -
+    mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
+}
+
+/**
+ * Lo que rinde un asalto más de una técnica mantenida: el turno, un ataque con sus efectos, o lo que
+ * le ahorra a su defensa contra quienes pueden atacarlo.
+ */
+function valorMantener(ctx: Contexto, l: Luchador, t: Tecnica): number {
+  const ef = efectosDe(t);
+  let v = ef.asalto.turno ? valorTurno(ctx, l, ef.asalto.turno) : 0;
+  const rival = rivalPrincipal(ctx, l);
+  if (rival && ef.clase === 'ataque') v += gananciaAtaque(ctx, l, rival, combinar(ef.asalto, ef.accion));
+  if (ef.clase === 'defensa') {
+    const sube = combinar(ef.asalto, ef.accion);
+    for (const e of enemigos(ctx, l)) {
+      if (!alcanzable(e, l)) continue;
+      const hab = ataqueFinal(e, l);
+      const ataques = Math.max(1, e.ataquesDeclarados || 1);
+      v += ataques * (danoEsperado(e, l, hab, defensaFinal(l, e, { ki: SIN_KI })) -
+        danoEsperado(e, l, hab, defensaFinal(l, e, { ki: sube }), { kiDef: sube }));
+    }
+  }
+  return v;
+}
+
+/** Asaltos para juntar el coste de una técnica empezando de cero (el primero entero, después la mitad). */
+function asaltosDesdeCero(l: Luchador, t: Tecnica): number {
+  let n = 1;
+  for (const c of CARACTERISTICAS_KI) {
+    const k = t.coste[c] ?? 0;
+    if (!k) continue;
+    const acu = l.ficha.ki?.acumulacion[c] ?? 0;
+    if (!acu) return Infinity;
+    if (k > acu) n = Math.max(n, 1 + Math.ceil((k - acu) / Math.ceil(acu / 2)));
+  }
+  return n;
+}
+
+/**
+ * Decisiones de Ki al empezar el asalto:
+ * - Deja de mantener una técnica si un asalto más rinde menos que su mantenimiento (soltarla es
+ *   gratis, Dominus p.48).
+ * - Deja ir una técnica que lleva más de 3 asaltos en espera sin usarse.
+ * - Si empieza a acumular de cero, declara la técnica de ataque que más rinde por asalto de
+ *   acumulación entre las que tardan más de un asalto en juntarse, para poder dejarla en espera
+ *   cuando la junte (Core p.105).
+ */
+export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): DecisionKi {
+  const e = l.ki;
+  if (!e || perfil(l) === 'bestia') return { acumula, soltar: [], liberar: [], objetivo: null };
+  nuevaDecision(ctx);
+  const soltar = [...e.mantenidas.keys()].filter((t) => valorMantener(ctx, l, t) < precioKi(l) * t.mantenimiento);
+  const liberar = [...e.enEspera].filter(([, desde]) => ctx.asalto - desde > 3).map(([t]) => t);
+  let objetivo: Tecnica | null = null;
+  const rival = rivalPrincipal(ctx, l);
+  if (acumula && rival && !CARACTERISTICAS_KI.some((c) => e.acumulado[c])) {
+    let mejorRitmo = 0;
+    // Sólo vale declarar las que tardan más de un asalto en juntarse: las demás se usan en el asalto.
+    const candidatas = l.ficha.ki!.tecnicas.filter(
+      (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosDesdeCero(l, t) >= 2,
+    );
+    const sinTecnica = candidatas.length ? mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor : 0;
+    for (const t of candidatas) {
+      const ganancia = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica;
+      const ritmo = (ganancia - precioKi(l) * costeKi(t)) / asaltosDesdeCero(l, t);
+      if (ritmo > mejorRitmo) {
+        mejorRitmo = ritmo;
+        objetivo = t;
+      }
+    }
+  }
+  return { acumula, soltar, liberar, objetivo };
+}
+
+/**
+ * Técnica a dejar en espera al final del asalto: la declarada al empezar a acumular, si le alcanza y
+ * no la usó. En espera su Ki queda apartado: no se pierde al terminar el asalto, puede seguir
+ * acumulando y ejecutar otras sin perderla (Core p.105).
+ */
+export function tecnicaParaEspera(ctx: Contexto, l: Luchador): Tecnica | null {
+  const t = l.ki?.objetivo;
+  if (!t || !puedePonerEnEspera(l, t)) return null;
+  return t;
 }

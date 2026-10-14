@@ -1,6 +1,6 @@
 // De la planilla (JSON de la macro) a la Ficha del simulador.
 
-import type { Atributo, Ficha, Perfil } from '../motor/modelo';
+import { CARACTERISTICAS_KI, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type KiFicha, type Perfil, type Tecnica } from '../motor/modelo';
 import type { TamanoArma, TipoAtaque } from '../motor/reglas';
 import { Libro, normalizar } from './libro';
 import { esDesarmado, leerLocalizacion, localizacionArmadura, tamanoPorNombre } from '../motor/rasgos';
@@ -33,6 +33,65 @@ export function claseArmadura(nombre: string): 'blanda' | 'dura' {
   // Yelmos (Tabla 39): sólo las capuchas son blandas.
   if (localizacionArmadura(nombre) === 'cabeza') return n.includes('capucha') ? 'blanda' : 'dura';
   return ['acolchad', 'cuero', 'gabardina', 'piel', 'malla', 'anilla'].some((x) => n.includes(x)) ? 'blanda' : 'dura';
+}
+
+/** "CON 6, DES 5, FUE 5" → { CON: 6, DES: 5, FUE: 5 }; el mantenimiento va aparte: "(3)". */
+export function leerCosteKi(texto: string): { coste: Partial<Record<CaracteristicaKi, number>>; mantenimiento: number } {
+  const coste: Partial<Record<CaracteristicaKi, number>> = {};
+  for (const m of texto.matchAll(/\b(AGI|CON|DES|FUE|POD|VOL)\s+(\d+)/g)) coste[m[1] as CaracteristicaKi] = Number(m[2]);
+  const mant = /\((\d+)\)/.exec(texto);
+  return { coste, mantenimiento: mant ? Number(mant[1]) : 0 };
+}
+
+/**
+ * "Habilidad de Ataque (+50), Ataque con Area (5 metros de radio, Eleccion de Blanco)" → efectos con
+ * sus opciones. Las comas dentro de los paréntesis no separan efectos.
+ */
+export function leerEfectosTecnica(texto: string): EfectoTecnica[] {
+  const partes: string[] = [];
+  let nivel = 0;
+  let actual = '';
+  for (const c of texto) {
+    if (c === '(') nivel++;
+    if (c === ')') nivel--;
+    if (c === ',' && nivel === 0) {
+      partes.push(actual);
+      actual = '';
+    } else actual += c;
+  }
+  partes.push(actual);
+  const out: EfectoTecnica[] = [];
+  for (const p of partes) {
+    const m = /^\s*([^(]+?)\s*(?:\((.*)\))?\s*$/.exec(p);
+    if (!m || !m[1] || m[1] === '-') continue;
+    const opciones = (m[2] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    out.push({
+      nombre: m[1],
+      opciones: opciones.filter((x) => normalizar(x) !== 'mantenido'),
+      mantenido: opciones.some((x) => normalizar(x) === 'mantenido'),
+    });
+  }
+  return out;
+}
+
+/** Reserva, acumulaciones y técnicas de la hoja Ki. Sin Ki (ni reserva ni técnicas), undefined. */
+function leerKi(json: HojaJson): KiFicha | undefined {
+  const acumulacion: Partial<Record<CaracteristicaKi, number>> = {};
+  for (const c of CARACTERISTICAS_KI) {
+    const v = numero(json.Ki.Acumulaciones[c], 0);
+    if (v) acumulacion[c] = v;
+  }
+  const tecnicas: Tecnica[] = json.Ki.tecnicas.map((t) => ({
+    nombre: t.nombre,
+    nivel: numero(t.nivel, 1) as 1 | 2 | 3,
+    cm: numero(t.cm, 0),
+    ...leerCosteKi(t.coste),
+    combinable: booleano(t.combinable),
+    efectos: leerEfectosTecnica(t.efectos),
+  }));
+  const reserva = numero(json.Ki.acumulacionMax, 0);
+  if (!reserva && !tecnicas.length) return undefined;
+  return { reserva, acumulacion, tecnicas };
 }
 
 /** Como `CombatData.hasTrait`: contiene, sin acentos ni mayúsculas. */
@@ -143,6 +202,7 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
       entereza: numero(c.Entereza, 10),
     })),
     acrobacias: json.Habilidades.Acrobacias !== undefined ? numero(json.Habilidades.Acrobacias, 0) : undefined,
+    ki: leerKi(json),
     presencia: numero(json.Resistencias['Pres. Base'], 0),
     ta,
     rf: numero(json.Resistencias.RF, 0),

@@ -1,7 +1,7 @@
 // Convierte una planilla de personaje de Ánima al JSON de la macro `ExportJson.bas`.
 // Port 1:1 de `sheet_to_json.dart` de animaMasterToolkit: mismas celdas, mismo resultado.
 
-import { Libro, quitarAcentos } from './libro';
+import { Libro, normalizar, quitarAcentos } from './libro';
 
 const PRINCIPAL = 'Principal';
 const COMBATE = 'Combate';
@@ -40,7 +40,12 @@ export interface HojaJson {
     desventajas: string[];
     habilidadesKi: string[];
   };
-  Ki: { Acumulaciones: Tabla; Habilidades: Tabla; Maximos: Tabla; acumulacionMax: string; acumulacionGenerica: string };
+  Ki: {
+    Acumulaciones: Tabla; Habilidades: Tabla; Maximos: Tabla; acumulacionMax: string; acumulacionGenerica: string;
+    /** "Si" si la planilla usa la Unificación de puntos de Ki (una sola reserva). */
+    unificacion: string;
+    tecnicas: TecnicaJson[];
+  };
   Elan: Tabla;
   Misticos: Record<string, string | Tabla>;
   Psiquicos: Record<string, string | Tabla>;
@@ -105,7 +110,59 @@ function datosKi(libro: Libro): HojaJson['Ki'] {
     Maximos: rangoATabla(libro, KI, 'C12:F23', 1, 6),
     acumulacionMax: texto(libro, KI, 'F24'),
     acumulacionGenerica: texto(libro, KI, 'D24'),
+    unificacion: texto(libro, KI, 'I10'),
+    tecnicas: tecnicas(libro),
   };
+}
+
+export interface TecnicaJson {
+  nombre: string;
+  /** "CON 6, DES 5, FUE 5"; con mantenimiento, el Ki por asalto entre paréntesis: "CON 6, DES 6 (3)". */
+  coste: string;
+  nivel: string;
+  cm: string;
+  /** "Habilidad de Ataque (+50), Aumento de Daño (+50), Ataque con Área (5 metros de radio, …)". */
+  efectos: string;
+  /** "Si" / "No", de la hoja de creación (sólo las técnicas propias la tienen). */
+  combinable: string;
+}
+
+/**
+ * Técnicas de la hoja Ki: bloques de 8 filas desde el título "Técnicas de Dominio", dos por fila
+ * (columnas V y AD). Cada uno trae nombre, coste, nivel, CM y el resumen de efectos, tanto de las
+ * técnicas propias como de las de los árboles ya armados. Si es Combinable sólo figura en "Creación
+ * de Técnicas", en la cabecera de cada técnica, y se busca por nombre.
+ */
+function tecnicas(libro: Libro): TecnicaJson[] {
+  if (!libro.tieneHoja(KI)) return [];
+  const combinable = new Map<string, string>();
+  const CREACION = 'Creación de Técnicas';
+  // Las cabeceras de cada técnica ("Técnica N | nombre | Nivel: …") no están a distancia fija.
+  if (libro.tieneHoja(CREACION))
+    for (let fila = 1; fila <= 2000; fila++) {
+      if (texto(libro, CREACION, `O${fila}`) !== 'Nivel:') continue;
+      const nombre = texto(libro, CREACION, `D${fila}`);
+      if (nombre && !combinable.has(normalizar(nombre))) combinable.set(normalizar(nombre), texto(libro, CREACION, `S${fila}`));
+    }
+  const out: TecnicaJson[] = [];
+  // Los bloques empiezan dos filas después del título "Técnicas de Dominio" (fila 24, o 38 en la
+  // variante Akuma Exxet, que tiene más sellos antes).
+  const desde = (libro.buscarFila(KI, 'V', 'Tecnicas de Dominio', 10, 120) ?? 24) + 2;
+  for (let fila = desde; fila <= desde + 8 * 40; fila += 8)
+    for (const [c, nivel, cm] of [['V', 'AA', 'AB'], ['AD', 'AI', 'AJ']]) {
+      const nombre = texto(libro, KI, `${c}${fila}`);
+      // Sólo bloques de técnica de verdad (nivel 1 a 3): los vacíos muestran "Nivel: 0".
+      if (!nombre || nombre === '-' || !/^[123]$/.test(texto(libro, KI, `${nivel}${fila + 1}`))) continue;
+      out.push({
+        nombre,
+        coste: texto(libro, KI, `${c}${fila + 1}`),
+        nivel: texto(libro, KI, `${nivel}${fila + 1}`),
+        cm: texto(libro, KI, `${cm}${fila + 1}`),
+        efectos: texto(libro, KI, `${c}${fila + 2}`),
+        combinable: combinable.get(normalizar(nombre)) ?? '',
+      });
+    }
+  return out;
 }
 
 function datosMisticos(libro: Libro): HojaJson['Misticos'] {
@@ -228,14 +285,18 @@ function habilidadesKi(libro: Libro): string[] {
     }
     return '';
   };
+  // La variante Akuma Exxet agrega habilidades (el árbol llega a la columna O y a la fila 66): el
+  // final se busca por etiqueta, como hace el toolkit con las filas corridas.
+  const fin = libro.buscarFila(KI, 'K', 'Ventajas innatas', 10, 120) ?? 66;
   const out: string[] = [];
-  for (let fila = 10; fila <= 64; fila++) {
+  for (let fila = 10; fila < fin; fila++) {
     const marca = texto(libro, KI, `R${fila}`);
     const comprada = marca === '1' || (marca === '' && texto(libro, KI, `P${fila}`) === '-');
-    const nombre = nombreEn(fila, ['K', 'L', 'M', 'N']);
+    const nombre = nombreEn(fila, ['K', 'L', 'M', 'N', 'O']);
     if (comprada && nombre) out.push(nombre);
   }
-  for (let fila = 45; fila <= 64; fila++) {
+  const nemesis = libro.buscarFila(KI, 'C', 'Uso del Nemesis', 30, 80) ?? 43;
+  for (let fila = nemesis + 2; fila <= nemesis + 40; fila++) {
     const nombre = nombreEn(fila, ['C', 'D', 'E']);
     if (texto(libro, KI, `B${fila}`) === '1' && nombre) out.push(nombre);
   }
