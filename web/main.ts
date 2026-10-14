@@ -546,7 +546,7 @@ function mostrarResultado(r: ResultadoMonteCarlo, final: boolean) {
 
   const huida = r.luchadores.some((l) => l.huida > 0);
   const columnas = ['Luchador', 'Sobrevive', ...(huida ? ['Huye'] : []), 'Daño hecho', 'Daño recibido', 'Críticos',
-    'Cae en asalto', 'Ataques', 'Contras', 'Cansancio', 'Def. total', 'Maniobras', 'Técnicas de Ki'];
+    'Cae en asalto', 'Ataques', 'Contras', 'Cansancio', 'Def. total', 'Maniobras', 'Técnicas y conjuros'];
   const filas = r.luchadores.map((l) => [
     crear('span', {}, crear('span', { className: `marca ${l.equipo.toLowerCase()}` }), ` ${l.nombre}`),
     `${(l.supervivencia * 100).toFixed(1)}%`,

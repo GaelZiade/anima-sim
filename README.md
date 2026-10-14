@@ -143,7 +143,9 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 
 **Próximos pasos, en orden:**
 
-1. **Magia** (zeon, ACT, conjuros, escudos; Arcana) **y psíquica** (CV, potencial; Rita).
+1. **Magia**, por partes (DISENO.md, "Magia"): hecha la 1 (núcleo); siguen el catálogo de combate de
+   las vías de la mesa, las reglas avanzadas (conjuro preparado, magia innata, choque de descargas,
+   metamagia, subvías) y la psíquica (CV, potencial; Rita).
 2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.
 3. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope

@@ -3,6 +3,19 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 14/10/2026 (noche): magia, parte 1 (núcleo)
+
+- **Magia** (Core cap. 11): zeon, ACT, acumular (la mitad si hace otra cosa), soltar con −10,
+  grados por zeon e Inteligencia, mantener, perder la concentración al recibir daño, Proyección
+  Mágica sin penalizadores de combate y +40 en contacto.
+- **Conjuros** de Stéphan: Descarga de Luz, Bola de Fuego (área), Descarga de Calor, Escudo de Luz
+  (escudo mágico, pasivo) y Armadura de Luz. Se leen zeon, ACT, Proyección, vías y libres de la
+  planilla.
+- **IA**: acumula, lanza lo que rinde más que su zeon, levanta el escudo al defenderse.
+- **Medición** (500 combates, % de victorias de Stéphan): contra Teseo 0 → 7,4; Kaito 0 → 2,6;
+  Kiran 0 → 0; cuatro soldados 0 → 100.
+- La columna "Técnicas de Ki" de la página pasa a "Técnicas y conjuros".
+
 ## 14/10/2026 (noche): cierre de los proyectiles
 
 - **Escudos** contra proyectiles (−30 a disparos, nada a lanzamientos, Core p.79); **blanco grande**

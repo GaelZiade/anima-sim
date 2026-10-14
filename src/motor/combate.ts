@@ -10,7 +10,7 @@ import {
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
-  enAlcance, metrosTotales, modControl, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, modProyectil, visionEntre, PEN_COBERTURA, alcanceMaximo, type ZonaArmadura,
+  enAlcance, metrosTotales, modControl, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, alcanceMaximo, type ZonaArmadura,
 } from './calculos';
 import {
   atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
@@ -18,6 +18,8 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
+import { GRADOS } from './conjuros';
+import { crearEstadoMagia, danoAlAcumular, empezarAsaltoMagia, lanzar, romperEscudo, terminarAsaltoMagia } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
   buscarCamino, campoHacia, caminoHasta, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
@@ -63,13 +65,14 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
     },
   };
   l.ki = crearEstadoKi(l);
+  l.magia = crearEstadoMagia(l);
   l.balas = l.cap.est.leo ? 6 : 0;
   return l;
 }
@@ -261,6 +264,11 @@ function jugarAsalto(ctx: Contexto) {
       d.ataqueFinal ? 'Ataque Final' : '', d.bonoVariableEn ? `bono variable al ${d.bonoVariableEn}` : '',
     ].filter(Boolean);
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
+    // Magia: paga los conjuros mantenidos y acumula su ACT (pasivo, Core p.117).
+    if (l.magia) {
+      empezarAsaltoMagia(l, ia.acumulaMagia(ctx, l));
+      if (l.magia.ganado) log(ctx, () => `${l.ficha.nombre} acumula zeon: ${l.magia!.acumulado} (reserva ${l.magia!.reserva}).`);
+    }
     // Ki: suelta lo que ya no conviene mantener, paga mantenidas y técnicas en espera, y acumula
     // (acumular es pasivo, Core p.102). Una técnica que cambia el turno se declara antes de calcular
     // la iniciativa (Core p.105).
@@ -355,6 +363,7 @@ function jugarAsalto(ctx: Contexto) {
     }
     // Si además de acumular hizo cualquier otra cosa, lo ganado este asalto queda en la mitad.
     terminarAsalto(l, l.defensaTotal || l.defensasHechas > 0 || l.metrosMovidos > 0 || l.ataquesRestantes < l.planAtaques.length);
+    terminarAsaltoMagia(l);
   }
 }
 
@@ -376,6 +385,13 @@ function turno(ctx: Contexto, l: Luchador) {
     if (l.apresadoPor && !zafarse(ctx, l)) l.ataquesRestantes = 0;
     ia.prepararGodhand(ctx, l);
     // Un arma a distancia: disparar, recargar o apuntar ocupa el turno (Core p.94-96).
+    // Magia: lanzar los conjuros que convengan, o esperar acumulando (Core p.117).
+    const magia = l.ataquesRestantes > 0 && puedeActuar(l) ? ia.accionMagica(ctx, l) : null;
+    if (magia) {
+      if ('lanzar' in magia) for (const x of magia.lanzar) if (puedeActuar(l) && !terminado(ctx)) lanzarConjuro(ctx, l, x);
+      l.ataquesRestantes = 0;
+      l.disparo = true;
+    }
     const distancia0 = l.ataquesRestantes > 0 && puedeActuar(l) ? ia.accionADistancia(ctx, l) : null;
     if (distancia0) accionADistancia(ctx, l, distancia0);
     while (l.ataquesRestantes > 0 && puedeActuar(l) && !terminado(ctx)) {
@@ -603,6 +619,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   ctx.ataquesEnAsalto++;
   atk.stats.ataquesHechos++;
   if (a.esContra) atk.stats.contrasHechas++;
+  // Atacar es hacer otra cosa que lanzar: si acumulaba magia, este asalto acumula la mitad (Core p.117).
+  if (atk.magia) atk.magia.otraAccion = true;
 
   // Selene: dobla el bono del contraataque peleando sin armas (Dominus p.39).
   const bono = a.esContra && atk.cap.est.doblaBonoContra ? a.bono * 2 : a.bono;
@@ -787,6 +805,44 @@ function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
 }
 
 /**
+ * Lanza un conjuro (Core p.117-122). Los de efecto (Armadura de Luz) quedan activos; los de ataque
+ * tiran la Proyección Mágica: con pifia el conjuro falla aunque gaste el zeon; si no, cada blanco (en
+ * área, todos los del radio) se defiende como de un proyectil disparado sobrenatural.
+ */
+function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
+  const c = x.conjuro;
+  const g = lanzar(l, c, x.grado);
+  const nombre = `${c.nombre} (${GRADOS[x.grado]})`;
+  l.stats.tecnicas[nombre] = (l.stats.tecnicas[nombre] ?? 0) + 1;
+  const zeon = `[zeon ${g.zeon}; acumulado ${l.magia!.acumulado}, reserva ${l.magia!.reserva}]`;
+  if (!x.objetivo) {
+    log(ctx, () => `${l.ficha.nombre} lanza ${nombre} ${zeon}.`);
+    return;
+  }
+  ctx.ataquesEnAsalto++;
+  l.stats.ataquesHechos++;
+  const obj = x.objetivo;
+  const t = tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion));
+  const etiqueta = (b: Luchador) => `${l.ficha.nombre} lanza ${nombre} contra ${b.ficha.nombre}${enAlcance(l, b) ? '' : ` desde ${distancia(l, b).toFixed(0)} m`} ${zeon}`;
+  if (t.pifia) {
+    log(ctx, () => `${etiqueta(obj)}: ¡pifia! (sacó ${t.natural}, nivel ${t.nivelPifia}): el conjuro falla.`,
+      () => ({ ataque: { de: nro(ctx, l), a: nro(ctx, obj), contra: false, resultado: null } }));
+    return;
+  }
+  const contras: { quien: Luchador; bono: number }[] = [];
+  for (const b of ia.blancosConjuro(ctx, l, obj, g)) {
+    if (!activo(b) || !activo(l)) continue;
+    const golpe: Golpe = {
+      maniobra: 'normal', esContra: false, tipo: c.ta, ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b),
+    };
+    const r = resolverDefensa(ctx, l, b, ataqueMagico(l, b), t, golpe, etiqueta(b));
+    if (r.contra !== null) contras.push({ quien: r.defensor, bono: r.contra });
+  }
+  l.sorprendeA.clear();
+  for (const k of contras) ofrecerContra(ctx, k.quien, l, k.bono);
+}
+
+/**
  * Trucos de manos contra un proyectil (Core p.94): contra la dificultad del proyectil, o enfrentado
  * con el ataque final si es sobrenatural (una técnica de Ki a distancia). −25 por cada control de
  * más en el asalto. Devuelve si lo atrapó.
@@ -915,14 +971,27 @@ function resolverDefensa(
     if (atrapar(ctx, def, atk, habAtk + tA.valor, o)) return { defensor: def, contra: null, impacto: false };
     trasAtrapar = PEN_ESQUIVA_TRAS_ATRAPAR;
   }
+  // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
+  // defiende con él (no se combina con parar o esquivar).
+  if (!proteccion && def.magia && !def.ficha.acumulacion) {
+    const nuevo = ia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
+    if (nuevo) {
+      const g = lanzar(def, nuevo.conjuro, nuevo.grado);
+      def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] = (def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] ?? 0) + 1;
+      log(ctx, () => `${def.ficha.nombre} levanta ${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]}, ${g.resistencia} de resistencia) [zeon ${g.zeon}; reserva ${def.magia!.reserva}].`);
+    }
+  }
+  const conEscudo = !proteccion && ia.defiendeConEscudoMagico(def, atk, o);
+  // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
+  if (quienDefiende.magia && !conEscudo) quienDefiende.magia.otraAccion = true;
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
-  const tecnica = quienDefiende.ficha.acumulacion ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
+  const tecnica = quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
   let kiDef: ModKi | undefined;
   if (tecnica) {
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined }) - (proteccion?.pen ?? 0) - trasAtrapar;
+  const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined }) - (proteccion?.pen ?? 0) - trasAtrapar;
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
@@ -943,10 +1012,10 @@ function resolverDefensa(
     const total = fija || Math.max(0, habDef + valorDef);
     resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : '';
+    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${def.magia!.escudo!.conjuro.nombre}` : '';
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-    if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
+    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
   // Escudo de energía (Ki): si detiene el golpe recibe su daño base (+10 por punto de TA que reste),
@@ -964,6 +1033,26 @@ function resolverDefensa(
         quienDefiende.escudoKi = 0;
         resultado = habAtk + tA.valor;
         log(ctx, () => `  ¡El golpe rompe el escudo de energía de ${quienDefiende.ficha.nombre}! Pasa con daño ${baseTrasEscudo} → ${resultado}.`);
+      }
+    }
+  }
+
+  // Escudo mágico: si detiene el golpe recibe su daño base (+10 por TA que reste); el de Luz sólo lo
+  // dañan los ataques sobrenaturales. Si se rompe, el resto pasa sin defensa (Core p.100, p.126).
+  if (resultado <= 0 && conEscudo && def.magia?.escudo) {
+    const esc = def.magia.escudo;
+    const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
+    const sobrenatural = atk.cap.danaEnergia || !!o.ki?.danaEnergia || !!o.ki?.sobrenatural || tipoG === 'ENE';
+    if (!esc.conjuro.escudoSoloSobrenatural || sobrenatural) {
+      const golpe = danoBase(atk, def, o.esContra, o.ranura, o.ki) + 10 * (o.ki?.reduccionTA ?? 0);
+      if (golpe < esc.resistencia) {
+        esc.resistencia -= golpe;
+        log(ctx, () => `  ${esc.conjuro.nombre} de ${def.ficha.nombre} aguanta (le quedan ${esc.resistencia}).`);
+      } else {
+        baseTrasEscudo = golpe - esc.resistencia;
+        romperEscudo(def);
+        resultado = habAtk + tA.valor;
+        log(ctx, () => `  ¡El golpe rompe ${esc.conjuro.nombre} de ${def.ficha.nombre}! Pasa con daño ${baseTrasEscudo} → ${resultado}.`);
       }
     }
   }
@@ -1076,7 +1165,7 @@ function resolverDefensa(
   }
   // Absorción de energía: el daño plenamente energético se puede pagar con Ki, 1 cada 5 (Dominus p.20).
   let absorbido = false;
-  if (dano > 0 && tipo === 'ENE') {
+  if (dano > 0 && (tipo === 'ENE' || o.ki?.sobrenatural)) {
     const ki = ia.kiParaAbsorber(def, dano);
     if (ki > 0) {
       def.ki!.reserva -= ki;
@@ -1706,6 +1795,9 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
 
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */
 function limitePorDano(ctx: Contexto, l: Luchador, dano: number) {
+  // Perder PV mientras acumula magia: Resistir el dolor para no perder la concentración (Core p.118).
+  const conc = l.magia?.acumulado ? danoAlAcumular(l, dano, ctx.rng) : null;
+  if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
   const limite = alPerderPv(l, dano);
   if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);
 }

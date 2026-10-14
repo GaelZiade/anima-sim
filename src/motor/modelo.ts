@@ -2,6 +2,7 @@ import type { Rng } from './rng';
 import type { TamanoArma, TipoAtaque } from './reglas';
 import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
 import type { EstadoKi } from './ki';
+import type { EstadoMagia } from './magia';
 import type { Celda, Mapa, MapaListo } from './mapa';
 
 export type Perfil = 'agresivo' | 'equilibrado' | 'cauto' | 'bestia';
@@ -65,6 +66,12 @@ export interface Ficha {
   escudo?: boolean;
   /** Habilidad secundaria Trucos de manos: atrapar proyectiles en el aire (Core p.94). */
   trucosDeManos?: number;
+  /** Habilidad secundaria Resistir el dolor: no perder la magia acumulada al recibir daño (Core p.118). */
+  resistirDolor?: number;
+  /** Resistencia mágica. */
+  rm?: number;
+  /** Magia (Core cap. 11): zeon, ACT, Proyección Mágica y vías. */
+  magia?: MagiaFicha;
 }
 
 /**
@@ -96,6 +103,21 @@ export interface ArmaDistancia {
   /** El disparo de un arma Leo: comparte las balas del Ataque combinado (Dominus p.101). */
   leo?: boolean;
   precisa?: boolean;
+}
+
+/** Lo mágico de la ficha (Core p.117-125). */
+export interface MagiaFicha {
+  /** Reserva de zeon. */
+  zeon: number;
+  /** Acumulación por turno final. */
+  act: number;
+  /** Proyección Mágica final para atacar y para defenderse (con el desequilibrio ofensivo, Core p.118). */
+  proyeccion: number;
+  proyeccionDefensa?: number;
+  /** Nivel en cada vía: "Fuego" 80 conoce los conjuros de Fuego hasta el nivel 80 (Core p.120). */
+  vias: Record<string, number>;
+  /** Conjuros de libre acceso que eligió, por nombre. */
+  libres?: string[];
 }
 
 /** Lo que pasa con un arma a distancia durante el combate. */
@@ -356,6 +378,8 @@ export interface Luchador {
   atrapadas: number;
   /** Dominios del Ki: reserva, Ki concentrado y técnicas activas (null sin técnicas). */
   ki: EstadoKi | null;
+  /** Magia: zeon, lo acumulado y los conjuros mantenidos (null si no tiene conjuros). */
+  magia: EstadoMagia | null;
 
   // --- modalidades y recursos de estilos ---
   modo: Modo;

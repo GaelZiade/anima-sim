@@ -2,9 +2,11 @@
 // No tira dados ni mira hacia adelante; todas las probabilidades salen de las tablas precalculadas.
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
+import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
+import { alcanceMagico } from './magia';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
-  absorcionContra, activo, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
@@ -1773,4 +1775,156 @@ export function tecnicaParaEspera(ctx: Contexto, l: Luchador): Tecnica | null {
   const t = l.ki?.objetivo;
   if (!t || !puedePonerEnEspera(l, t)) return null;
   return t;
+}
+
+// --------------------------------------------------------------------------- magia (Core cap. 11)
+
+/**
+ * Precio de un punto de zeon en PV, como el del Ki: gastar toda la reserva tiene que rendir la mitad
+ * de sus PV, y se encarece al vaciarse.
+ */
+function precioZeon(l: Luchador): number {
+  const inicial = Math.max(1, l.ficha.magia?.zeon ?? 1);
+  const queda = Math.max(1, (l.magia?.reserva ?? 0) - (l.magia?.acumulado ?? 0));
+  return ((0.5 * l.ficha.pv) / inicial) * Math.sqrt(inicial / queda);
+}
+
+/** Acumula si le queda zeon y hay enemigos: es pasivo (Core p.117). */
+export function acumulaMagia(ctx: Contexto, l: Luchador): boolean {
+  const e = l.magia;
+  return !!e && e.reserva > e.acumulado && enemigos(ctx, l).length > 0;
+}
+
+/** Efectos de un conjuro de ataque como un golpe sobrenatural: energía, en su TA y con su daño. */
+export function golpeDeConjuro(c: Conjuro, g: Grado): ModKi {
+  return { ...SIN_KI, sobrenatural: true, danaEnergia: true, elemento: c.ta ?? 'ENE', danoFijo: g.dano ?? 0 };
+}
+
+/** Los conjuros no usan la calidad del arma: se resuelven como sin armas (y con su propio daño). */
+export const RANURA_MAGIA: Ranura = { pen: 0, sinArmas: true };
+
+/** Defensa de `def` contra un conjuro de ataque de `atk`: su escudo mágico, o parar (si para energía) o esquivar. */
+function defensaContraConjuro(def: Luchador, atk: Luchador, ki: ModKi): number {
+  if (def.magia?.escudo) return defensaEscudoMagico(def, atk);
+  return defensaFinal(def, atk, { kiAtk: ki, proyectil: enAlcance(atk, def) ? undefined : 'disparo' });
+}
+
+/** Lo que vale para `atk` un conjuro de ataque contra `def`: el golpe, el tempo y la contra si lo toca. */
+function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: Grado): number {
+  const ki = golpeDeConjuro(c, g);
+  const p = pronostico(atk, def, ataqueMagico(atk, def), defensaContraConjuro(def, atk, ki), { ki, tipo: c.ta, ranura: RANURA_MAGIA });
+  let v = valorGolpe(atk, def, p, 0);
+  if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amenaza(def, atk);
+  if (enAlcance(atk, def) && def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+  return v;
+}
+
+/** Blancos de un conjuro con área: todos los del radio alrededor del objetivo, aliados incluidos (Core p.157). */
+export function blancosConjuro(ctx: Contexto, atk: Luchador, objetivo: Luchador, g: Grado): Luchador[] {
+  if (!g.area) return [objetivo];
+  return [objetivo, ...ctx.luchadores.filter((x) => x !== atk && x !== objetivo && activo(x) && distancia(x, objetivo) <= g.area!)];
+}
+
+export type Lanzamiento = { conjuro: Conjuro; grado: number; objetivo: Luchador | null };
+
+/**
+ * Su turno con magia (Core p.117): los conjuros activos que rinden más que su zeon, de a uno mientras
+ * le alcance lo acumulado; o esperar acumulando si no tiene a nadie cuerpo a cuerpo (hacer otra cosa
+ * le baja el ACT a la mitad); o null para pelear como siempre.
+ */
+export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[] } | { esperar: true } | null {
+  const e = l.magia;
+  if (!e || perfil(l) === 'bestia') return null;
+  nuevaDecision(ctx);
+  const inteligencia = l.ficha.inteligencia ?? 6;
+  const alcance = alcanceMagico(l.ficha.magia!.proyeccion);
+  const res: Lanzamiento[] = [];
+  let disponible = e.acumulado;
+  for (;;) {
+    let mejor: { l: Lanzamiento; valor: number; zeon: number } | null = null;
+    for (const c of e.conjuros) {
+      if (c.accion !== 'activa' || e.mantenidos.some((x) => x.conjuro === c) || res.some((x) => x.conjuro === c && !c.tipos.includes('ataque'))) continue;
+      for (const i of gradosPosibles(c, inteligencia)) {
+        const g = c.grados[i];
+        if (g.zeon > disponible) continue;
+        const coste = precioZeon(l) * g.zeon;
+        if (c.tipos.includes('ataque')) {
+          for (const obj of enemigos(ctx, l)) {
+            if (distancia(l, obj) > alcance || (!enAlcance(l, obj) && visionEntre(ctx.luchadores, l, obj) === 'bloqueada')) continue;
+            let v = 0;
+            for (const b of blancosConjuro(ctx, l, obj, g)) v += (b.equipo === l.equipo ? -lambda(l) : 1) * valorConjuroContra(l, b, c, g);
+            if (v - coste > (mejor?.valor ?? 0)) mejor = { l: { conjuro: c, grado: i, objetivo: obj }, valor: v - coste, zeon: g.zeon };
+          }
+        } else if (g.taEnergia !== undefined && !e.armadura) {
+          const v = valorArmaduraMagica(ctx, l, g);
+          if (v - coste > (mejor?.valor ?? 0)) mejor = { l: { conjuro: c, grado: i, objetivo: null }, valor: v - coste, zeon: g.zeon };
+        }
+      }
+    }
+    if (!mejor) break;
+    res.push(mejor.l);
+    disponible -= mejor.zeon;
+  }
+  if (res.length) return { lanzar: res };
+  // Sin nada que valga la pena lanzar: espera acumulando, salvo que lo tengan trabado.
+  if (!trabadoConAlguien(l) && enemigos(ctx, l).some((x) => distancia(l, x) <= alcance)) return { esperar: true };
+  return null;
+}
+
+/**
+ * Lo que ahorra una armadura mágica en los próximos asaltos (4): el daño que dejarían de hacerle los
+ * que lo pueden atacar, con la armadura puesta y sin ella.
+ */
+function valorArmaduraMagica(ctx: Contexto, l: Luchador, g: Grado): number {
+  const e = l.magia!;
+  let sin = 0;
+  let con = 0;
+  for (const x of enemigos(ctx, l)) {
+    const b = base(x, l);
+    sin += b.golpe;
+    e.armadura = { energia: g.taEnergia!, resto: g.taResto ?? 0 };
+    con += danoEsperado(x, l, b.hab, b.def);
+    e.armadura = null;
+  }
+  return lambda(l) * (sin - con) * Math.max(1, ...enemigos(ctx, l).map((x) => x.ataquesDeclarados || 1)) * 4;
+}
+
+/**
+ * Levantar un escudo mágico (conjuro pasivo) al recibir un ataque, si le alcanza lo acumulado: si lo
+ * que espera recibir defendiéndose con él, éste y los siguientes ataques del asalto, ahorra más que su
+ * zeon. Elige el grado más barato que aguante el golpe.
+ */
+export function escudoMagicoAlDefender(ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number, g: { ki?: ModKi; tipo?: TipoAtaque; ranura: Ranura }): Lanzamiento | null {
+  const e = def.magia;
+  if (!e || e.escudo || perfil(def) === 'bestia') return null;
+  nuevaDecision(ctx);
+  const fisica = danoEsperado(atk, def, habAtk, defensaFinal(def, atk, { kiAtk: g.ki }), { ki: g.ki, tipo: g.tipo, ranura: g.ranura });
+  let otros = 0;
+  for (const x of enemigos(ctx, def)) if (x !== atk && !x.haActuado && puedeActuar(x) && alcanzable(x, def)) otros += 1;
+  const golpe = danoBase(atk, def, false, g.ranura, g.ki);
+  let mejor: Lanzamiento | null = null;
+  let mejorNeto = 0;
+  for (const c of e.conjuros) {
+    if (c.accion !== 'pasiva' || !c.tipos.includes('defensa')) continue;
+    for (const i of gradosPosibles(c, def.ficha.inteligencia ?? 6)) {
+      const gr = c.grados[i];
+      if (gr.zeon > e.acumulado || (gr.resistencia ?? 0) < golpe) continue;
+      e.escudo = { conjuro: c, grado: i, resistencia: gr.resistencia ?? 0 };
+      const conEscudo = danoEsperado(atk, def, habAtk, defensaEscudoMagico(def, atk), { ki: g.ki, tipo: g.tipo, ranura: g.ranura });
+      e.escudo = null;
+      const neto = lambda(def) * (fisica - conEscudo) * (1 + otros) - precioZeon(def) * gr.zeon;
+      if (neto > mejorNeto) {
+        mejor = { conjuro: c, grado: i, objetivo: null };
+        mejorNeto = neto;
+      }
+    }
+  }
+  return mejor;
+}
+
+/** Con un escudo mágico levantado, se defiende con él si su Proyección rinde más que su defensa física. */
+export function defiendeConEscudoMagico(def: Luchador, atk: Luchador, g: { ki?: ModKi; aDistancia?: boolean; ranura: Ranura }): boolean {
+  if (!def.magia?.escudo) return false;
+  const proyectil = g.aDistancia ? g.ranura.proyectil?.clase ?? 'disparo' : undefined;
+  return defensaEscudoMagico(def, atk) >= defensaFinal(def, atk, { kiAtk: g.ki, proyectil });
 }

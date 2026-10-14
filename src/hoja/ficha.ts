@@ -1,6 +1,6 @@
 // De la planilla (JSON de la macro) a la Ficha del simulador.
 
-import { CARACTERISTICAS_KI, type ArmaDistancia, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type KiFicha, type Perfil, type Tecnica } from '../motor/modelo';
+import { CARACTERISTICAS_KI, type ArmaDistancia, type Atributo, type MagiaFicha, type CaracteristicaKi, type EfectoTecnica, type Ficha, type KiFicha, type Perfil, type Tecnica } from '../motor/modelo';
 import type { TamanoArma, TipoAtaque } from '../motor/reglas';
 import { Libro, normalizar } from './libro';
 import { esDesarmado, leerLocalizacion, localizacionArmadura, tamanoPorNombre } from '../motor/rasgos';
@@ -95,6 +95,29 @@ function leerKi(json: HojaJson): KiFicha | undefined {
   // "Caelum: Límite del Peligro" → "caelum".
   const limites = json.Ki.limites.map((x) => normalizar(x.split(':')[0]));
   return { reserva, acumulacion, tecnicas, limites };
+}
+
+/**
+ * Magia de la hoja Místicos (Core cap. 11): zeon, ACT, la Proyección Mágica (con su ataque y su
+ * defensa, que ya traen el desequilibrio ofensivo), el nivel en cada vía y los conjuros libres. Sin
+ * vías ni libres no es un mago: undefined.
+ */
+function leerMagia(json: HojaJson): MagiaFicha | undefined {
+  const m = json.Misticos;
+  const zeon = numero(m.zeon as string, 0);
+  const vias: Record<string, number> = {};
+  for (const [v, n] of Object.entries((m.Vias ?? {}) as Record<string, string>)) if (numero(n, 0) > 0) vias[v] = numero(n, 0);
+  const libres = Object.values((m.Libres ?? {}) as Record<string, string>).filter((x) => x && x !== '-');
+  if (!zeon || (!Object.keys(vias).length && !libres.length)) return undefined;
+  const p = json.Combate.armas.find((a) => a.tipo === 'Mistico');
+  return {
+    zeon,
+    act: numero(m.act as string, 0),
+    proyeccion: numero(p?.ataque, 0),
+    proyeccionDefensa: numero(p?.defensa, numero(p?.ataque, 0)),
+    vias,
+    libres,
+  };
 }
 
 /** Como `CombatData.hasTrait`: contiene, sin acentos ni mayúsculas. */
@@ -248,6 +271,9 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
     // Un escudo (rodela, medio o corporal) entre sus armas: para proyectiles con menos penalizador (Core p.79).
     ...(json.Combate.armas.some((a) => /\b(escudo|rodela)\b/.test(normalizar(a.nombre))) ? { escudo: true } : {}),
     ...(json.Habilidades['T. Manos'] !== undefined ? { trucosDeManos: numero(json.Habilidades['T. Manos'], 0) } : {}),
+    ...(json.Habilidades['Res. Dolor'] !== undefined ? { resistirDolor: numero(json.Habilidades['Res. Dolor'], 0) } : {}),
+    ...(json.Resistencias.RM !== undefined ? { rm: numero(json.Resistencias.RM, 0) } : {}),
+    ...(leerMagia(json) ? { magia: leerMagia(json) } : {}),
     acrobacias: json.Habilidades.Acrobacias !== undefined ? numero(json.Habilidades.Acrobacias, 0) : undefined,
     ki: leerKi(json),
     presencia: numero(json.Resistencias['Pres. Base'], 0),

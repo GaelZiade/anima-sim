@@ -15,6 +15,7 @@ import { localizacionArmadura, type Ranura } from './rasgos';
 import { ajusteTaEnergia, type ModKi } from './ki';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
+import { taMagica } from './magia';
 
 export const ALCANCE = 2;
 /** Atacar con el crítico secundario del arma (Core p.92). */
@@ -444,6 +445,9 @@ export function absorcionContra(
   // (Dominus p.60, Core p.83).
   const extra = kiDef?.ta ?? 0;
   if (extra) ta = Math.max(ta, extra) + Math.floor(Math.min(ta, extra) / 2);
+  // Armadura mágica (Armadura de Luz): otra capa, igual (Core p.83, p.127).
+  const magica = def.magia?.armadura ? taMagica(def, t) : 0;
+  if (magica) ta = Math.max(ta, magica) + Math.floor(Math.min(ta, magica) / 2);
   const abs = absorcion(Math.max(0, ta - reduccion));
   // Un ser con acumulación sorprendido recibe el golpe de lleno: Absorción a la mitad (Core p.99).
   return def.ficha.acumulacion && atk.sorprendeA.has(def) ? Math.floor(abs / 2) : abs;
@@ -712,4 +716,30 @@ export function modProyectil(atk: Luchador, def: Luchador, arma: ArmaDistancia, 
 /** Hasta dónde llega: el doble del alcance efectivo (Core p.95). */
 export function alcanceMaximo(arma: ArmaDistancia): number {
   return 2 * arma.alcance;
+}
+
+// --------------------------------------------------------------------------- magia (Core p.118)
+
+/**
+ * Proyección Mágica para lanzar un conjuro de ataque o anímico contra `def`: no sufre ninguno de los
+ * penalizadores del combate (ataques adicionales, proyectiles, posición) salvo los negativos a toda
+ * acción y la ceguera; +40 si lo toca (Core p.118, p.100).
+ */
+export function ataqueMagico(atk: Luchador, def: Luchador): number {
+  const m = atk.ficha.magia!;
+  return m.proyeccion - penAccion(atk) + conCeguera('frente', 0, cegueraContra(atk, def), 'ataque') +
+    (enAlcance(atk, def) ? 40 : 0);
+}
+
+/**
+ * Defensa con un escudo mágico: su Proyección Mágica, sin penalizadores por defensas adicionales ni
+ * por proyectiles; sólo los negativos a toda acción, la sorpresa, estar amenazado y la ceguera (Core
+ * p.100, p.118).
+ */
+export function defensaEscudoMagico(def: Luchador, atk: Luchador): number {
+  const m = def.ficha.magia!;
+  return (m.proyeccionDefensa ?? m.proyeccion) - penAccion(def) +
+    conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk)), 'parada') +
+    (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
+    (def.amenazadoPor === atk ? AMENAZADO.parada : 0);
 }

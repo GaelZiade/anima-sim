@@ -349,7 +349,56 @@ celda con otro luchador da **cobertura** (−40, Tabla 47).
 2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
 3. **Ki** ← hecho (lo que no se simula, en "Pendiente del Ki")
 4. **Proyectiles y línea de visión** ← hecho (ver "Proyectiles")
-5. Magia (zeon, ACT, escudos) y psíquica ← siguiente
+5. **Magia** ← en curso (ver "Magia"); después psíquica
+
+## Magia (fase 5)
+
+Por partes: **1. núcleo** (hecho), 2. catálogo de combate de las vías de la mesa, 3. reglas avanzadas
+(conjuro preparado, magia innata, choque de descargas, metamagia, subvías), 4. psíquica.
+
+### Datos
+
+`Ficha.magia` (hoja Místicos): zeon, ACT, Proyección Mágica para atacar y defender (ya con el
+desequilibrio ofensivo), nivel en cada vía y conjuros libres. Sólo si tiene vías o libres. También
+se leen la RM y Resistir el dolor. El catálogo (`motor/conjuros.ts`) tiene los números de cada grado
+(zeon, Inteligencia requerida, daño, área, resistencia, TA, mantenimiento), nunca el texto del
+manual; conoce los de sus vías hasta su nivel y los libres que eligió. Hoy: Escudo de Luz, Armadura
+de Luz, Descarga de Luz, Bola de Fuego, Descarga de Calor.
+
+### Reglas (`motor/magia.ts`)
+
+| Regla | Fuente |
+|---|---|
+| Acumular es pasivo: suma el ACT cada asalto, sin pasar la reserva; si hace otra cosa que lanzar, la mitad | Core p.117 |
+| Si deja de acumular, lo acumulado vuelve a la reserva menos 10; si lanzó, lo que sobra al terminar el asalto, igual | Core p.117 |
+| Grados por zeon; la Inteligencia limita el grado | Core p.121 |
+| Mantener: cada asalto de la reserva, sin tocar el ACT | Core p.121 |
+| Daño mientras acumula: Resistir el dolor contra el doble para conservarlo; si ni llega al daño, lo pierde; si no, vuelve a la reserva | Core p.118 |
+| Proyección Mágica: sin penalizadores de combate (ataques o defensas adicionales, proyectiles, posición), sólo los negativos a toda acción y la ceguera; +40 en contacto | Core p.118 |
+| Conjuros de ataque: proyectil disparado (Tabla 49 para el defensor) que sólo para quien para energía; varios por asalto mientras alcance lo acumulado; con pifia fallan | Core p.118, p.122 |
+| Área: alcanza a todos los del radio, aliados incluidos | Core p.157 |
+| Escudo mágico: defiende con la Proyección sin penalizadores por defensas adicionales ni proyectiles (sólo sorpresa, amenazado y ceguera); si para, recibe el daño base; si se rompe, el resto pasa sin defensa. No se combina con parar o esquivar | Core p.100 |
+| Escudo de Luz: sólo lo dañan los ataques sobrenaturales | Core p.126 |
+| Armadura de Luz: una capa más de armadura | Core p.127 |
+
+**IA**: acumula si le queda zeon y hay enemigos. En su turno lanza, de a uno mientras le alcance lo
+acumulado, el conjuro y grado que más rinda contra el blanco que más rinda (en área suma a todos y
+resta a los aliados), descontando el zeon a un precio por punto como el del Ki; si nada rinde, espera
+acumulando (salvo trabado). Levanta el escudo cuando lo atacan si lo que ahorra en ese golpe y los
+siguientes del asalto vale más que su zeon, y se defiende con él si su Proyección rinde más.
+
+**Interpretaciones a confirmar:**
+
+1. El alcance de los conjuros es el del Recuadro X según su Proyección Mágica, sin tirada (140: 250 m).
+2. Los conjuros de ataque no sufren la cobertura (es de la Tabla 47, que no usan).
+3. "Otra acción" que baja el ACT: atacar, defenderse sin el escudo o moverse con acción activa;
+   defenderse con el escudo, no.
+4. Si pierde la concentración pero la tirada llega al daño, el zeon vuelve a la reserva sin perder 10.
+5. El mantenimiento del Escudo de Luz está cortado en la copia del manual: se toma el del Escudo de
+   Oscuridad (5 / 15 / 20 / 25).
+6. El turno es el de la ficha (como con las armas a distancia); el manual dice que la magia usa el
+   turno de las acciones desarmadas (+20).
+7. La Absorción de energía (Ki) también absorbe el daño de los conjuros de ataque.
 
 ## Proyectiles (fase 4)
 
