@@ -1,10 +1,11 @@
 // De la planilla (JSON de la macro) a la Ficha del simulador.
 
-import { CARACTERISTICAS_KI, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type KiFicha, type Perfil, type Tecnica } from '../motor/modelo';
+import { CARACTERISTICAS_KI, type ArmaDistancia, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type KiFicha, type Perfil, type Tecnica } from '../motor/modelo';
 import type { TamanoArma, TipoAtaque } from '../motor/reglas';
 import { Libro, normalizar } from './libro';
 import { esDesarmado, leerLocalizacion, localizacionArmadura, tamanoPorNombre } from '../motor/rasgos';
 import { hojaAJson, type ArmaJson, type HojaJson } from './hojaAJson';
+import { datosProyectil } from '../motor/proyectiles';
 
 export interface OpcionesFicha {
   /** Nombre (o parte) del arma a usar. Por defecto, la mejor de cuerpo a cuerpo. */
@@ -124,6 +125,46 @@ export function armasCuerpoACuerpo(json: HojaJson): ArmaJson[] {
   );
 }
 
+/** "Lanzable (80/60m)": cadencia de fuego y alcance que calcula la planilla. */
+function lanzable(a: ArmaJson): { cadencia: number; alcance: number } | null {
+  const m = /lanzable\s*\((\d+)\s*\/\s*(\d+)\s*m/.exec(normalizar(`${a.caracteristica ?? ''} ${a.especial ?? ''}`));
+  return m ? { cadencia: Number(m[1]), alcance: Number(m[2]) } : null;
+}
+
+/** Alcance de las armas Leo (Dominus p.101). */
+const ALCANCE_LEO: [RegExp, number][] = [[/pistola/, 50], [/rifle/, 80], [/canon/, 250]];
+
+/**
+ * Armas a distancia de la planilla (Core p.94-96): las que usan munición y las arrojadizas
+ * ("Lanzable (CF/alcance)"). Lo que la planilla no trae (recarga, alcance) sale de la Tabla 34.
+ */
+export function armasDistancia(json: HojaJson): ArmaDistancia[] {
+  const res: ArmaDistancia[] = [];
+  for (const a of json.Combate.armas) {
+    if (esProyeccion(a)) continue;
+    const l = lanzable(a);
+    if (!l && !esDistancia(a)) continue;
+    const n = normalizar(a.nombre);
+    const leo = n.startsWith('leo');
+    const tabla = datosProyectil(a.nombre);
+    const alcance = l?.alcance ?? (leo ? ALCANCE_LEO.find(([re]) => re.test(n))?.[1] : undefined) ?? tabla?.alcance ?? 10;
+    res.push({
+      nombre: a.nombre,
+      clase: l ? 'lanzamiento' : 'disparo',
+      ataque: numero(a.ataque, 0),
+      danoBase: numero(a.danio, 0),
+      tipoAtaque: tipoAtaque(a.critPrincipal),
+      alcance,
+      ...(l ? { cadencia: l.cadencia } : {}),
+      // El revólver de un arma Leo no se recarga en combate (Dominus p.101): dispara cada asalto.
+      ...(leo ? { recarga: 1, leo: true, fuego: false } : {}),
+      calidad: numero(a.calidad, 0),
+      precisa: normalizar(a.caracteristica ?? '').includes('precisa'),
+    });
+  }
+  return res;
+}
+
 export function elegirArma(json: HojaJson, nombre?: string): ArmaJson {
   const candidatas = armasCuerpoACuerpo(json);
   if (nombre) {
@@ -203,6 +244,7 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
       calidad: numero(c.calidad, 0),
       entereza: numero(c.Entereza, 10),
     })),
+    ...(armasDistancia(json).length ? { armasDistancia: armasDistancia(json) } : {}),
     acrobacias: json.Habilidades.Acrobacias !== undefined ? numero(json.Habilidades.Acrobacias, 0) : undefined,
     ki: leerKi(json),
     presencia: numero(json.Resistencias['Pres. Base'], 0),

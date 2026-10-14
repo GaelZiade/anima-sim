@@ -1,0 +1,207 @@
+{
+ "fuente": "Tiradores derivados del Soldado imperial (Gaia I p.37) con las armas de proyectiles del Core (Tablas 34 y 35, p.80-81): daño con el bono de Fuerza (o la Fuerza propia del arma) redondeado en grupos de 10, y alcance con la Tabla 46 (p.95).",
+ "fichas": [
+  {
+   "id": "arquero",
+   "nombre": "Arquero imperial",
+   "pv": 110,
+   "turno": 25,
+   "ataque": 65,
+   "defensa": 65,
+   "tipoDefensa": "parada",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 3,
+    "CON": 1,
+    "PEN": 2,
+    "CAL": 2,
+    "ELE": 1,
+    "FRI": 2
+   },
+   "rf": 35,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 7,
+    "PER": 5,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Cuero tachonado",
+     "clase": "dura",
+     "ta": {
+      "FIL": 3,
+      "CON": 1,
+      "PEN": 2,
+      "CAL": 2,
+      "ELE": 1,
+      "FRI": 2
+     },
+     "calidad": 0,
+     "entereza": 14
+    }
+   ],
+   "presencia": 30,
+   "armasDistancia": [
+    {
+     "nombre": "Arco largo",
+     "clase": "disparo",
+     "ataque": 65,
+     "danoBase": 40,
+     "tipoAtaque": "PEN",
+     "alcance": 70,
+     "recarga": 1,
+     "municion": 20
+    }
+   ]
+  },
+  {
+   "id": "ballestero",
+   "nombre": "Ballestero imperial",
+   "pv": 110,
+   "turno": 25,
+   "ataque": 65,
+   "defensa": 65,
+   "tipoDefensa": "parada",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 3,
+    "CON": 1,
+    "PEN": 2,
+    "CAL": 2,
+    "ELE": 1,
+    "FRI": 2
+   },
+   "rf": 35,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 7,
+    "PER": 5,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Cuero tachonado",
+     "clase": "dura",
+     "ta": {
+      "FIL": 3,
+      "CON": 1,
+      "PEN": 2,
+      "CAL": 2,
+      "ELE": 1,
+      "FRI": 2
+     },
+     "calidad": 0,
+     "entereza": 14
+    }
+   ],
+   "presencia": 30,
+   "armasDistancia": [
+    {
+     "nombre": "Ballesta",
+     "clase": "disparo",
+     "ataque": 65,
+     "danoBase": 50,
+     "tipoAtaque": "PEN",
+     "alcance": 80,
+     "recarga": 2,
+     "municion": 20
+    }
+   ]
+  },
+  {
+   "id": "arcabucero",
+   "nombre": "Arcabucero imperial",
+   "pv": 110,
+   "turno": 25,
+   "ataque": 65,
+   "defensa": 65,
+   "tipoDefensa": "parada",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 3,
+    "CON": 1,
+    "PEN": 2,
+    "CAL": 2,
+    "ELE": 1,
+    "FRI": 2
+   },
+   "rf": 35,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 7,
+    "PER": 5,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Cuero tachonado",
+     "clase": "dura",
+     "ta": {
+      "FIL": 3,
+      "CON": 1,
+      "PEN": 2,
+      "CAL": 2,
+      "ELE": 1,
+      "FRI": 2
+     },
+     "calidad": 0,
+     "entereza": 14
+    }
+   ],
+   "presencia": 30,
+   "armasDistancia": [
+    {
+     "nombre": "Arcabuz",
+     "clase": "disparo",
+     "ataque": 65,
+     "danoBase": 80,
+     "tipoAtaque": "PEN",
+     "alcance": 180,
+     "recarga": 4,
+     "municion": 10,
+     "fuego": true
+    }
+   ]
+  }
+ ]
+}

@@ -10,6 +10,7 @@ import type { Celda } from '../src/motor/mapa';
 import type { Evento, Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import abel from '../ejemplos/arquetipos-abel.json';
+import tiradores from '../ejemplos/tiradores.json';
 import duelo from '../ejemplos/duelo.json';
 import ejemploEstilos from '../ejemplos/estilos.json';
 import grupo from '../ejemplos/grupo.json';
@@ -78,6 +79,7 @@ interface EscenarioJson {
 const GENERICOS: Entrada[] = (() => {
   const todas = [
     ...(abel.fichas as unknown as Ficha[]),
+    ...(tiradores.fichas as unknown as Ficha[]),
     ...[duelo, ejemploEstilos, grupo].flatMap((e) => [...e.equipoA, ...e.equipoB] as unknown as Ficha[]),
   ];
   const vistas = new Set<string>();

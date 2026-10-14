@@ -3,12 +3,13 @@
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import {
-  absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  absorcionContra, activo, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
 import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
+import { completarArma, disparosConRecarga, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import {
   asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
@@ -639,15 +640,16 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  * cabeza) y se descuenta lo que vale el Ki que gasta.
  */
 export function elegirManiobra(
-  ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, tecnica?: Tecnica | null,
+  ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, tecnica?: Tecnica | null, ranura?: Ranura,
 ): PlanAtaque {
   nuevaDecision(ctx);
   const sin = ctx.opciones.sinManiobras;
   const soloNormal = perfil(atk) === 'bestia' || sin === true || sin === atk.equipo;
-  // A distancia: con la técnica que eligió al decidir atacar de lejos, o con una a distancia activa.
-  if (!enAlcance(atk, def)) {
-    if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal, true).plan, tecnica };
-    return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal, true).plan;
+  // A distancia (o con un proyectil, aun a bocajarro): con la técnica que eligió al decidir atacar de
+  // lejos, o con una a distancia activa; un arma a distancia no se combina con técnicas.
+  if (!enAlcance(atk, def) || ranura?.proyectil) {
+    if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal, true, ranura).plan, tecnica };
+    return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal, true, ranura).plan;
   }
   const base = mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal);
   if (!atk.ki) return base.plan;
@@ -675,11 +677,16 @@ export function elegirManiobra(
 /** La mejor maniobra con estos efectos de Ki, y lo que vale en PV. */
 function mejorManiobra(
   ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, ki: ModKi | undefined, soloNormal: boolean,
-  aDistancia = false,
+  aDistancia = false, ranura?: Ranura,
 ): { plan: PlanAtaque; valor: number } {
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
-  const habDef = ki?.sobrenatural || aDistancia ? defensaFinal(def, atk, { kiAtk: ki, proyectil: aDistancia }) : defensaFinal(def, atk);
+  // Un proyectil a bocajarro se defiende como un golpe; de lejos, con la Tabla 49 (Core p.96).
+  const lejos = !enAlcance(atk, def);
+  const proyectil = aDistancia && lejos ? ranura?.proyectil?.clase ?? 'disparo' : undefined;
+  const habDef = ki?.sobrenatural || proyectil ? defensaFinal(def, atk, { kiAtk: ki, proyectil }) : defensaFinal(def, atk);
+  // Tope de 280 de los proyectiles (Core p.95): se aproxima topeando la habilidad en 280 − 50.
+  const tope = ranura?.proyectil && !superaTope(atk.ficha) ? TOPE_PROYECTIL - 50 : Infinity;
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
   // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa, sin pasar de los
   // PV que le quedarían después de este golpe y de esos mismos golpes sin la ventaja.
@@ -694,11 +701,11 @@ function mejorManiobra(
   const habNormal = new Map<TipoAtaque | undefined, number>();
   const habDe = (m: Maniobra, tipo: TipoAtaque | undefined, estadoMushin: EstadoMushin | null): number => {
     // Xing Quan también depende de la maniobra (sólo golpes normales o apuntados, Dominus p.38).
-    if (estadoMushin || m === 'area' || (atk.cap.est.xingQuan && m !== 'normal' && !esApuntado(m))) return ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki });
+    if (estadoMushin || m === 'area' || (atk.cap.est.xingQuan && m !== 'normal' && !esApuntado(m))) return Math.min(tope, ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki, ranura }));
     let h = habNormal.get(tipo);
-    if (h === undefined) habNormal.set(tipo, (h = ataqueFinal(atk, def, { bono, maniobra: 'normal', esContra, tipo, ki })));
-    if (m === 'normal' || (m === 'presa' && ki?.apresamiento)) return h;
-    return h - Math.max(0, penManiobra(atk, m, esContra) - (ki?.precision ?? 0));
+    if (h === undefined) habNormal.set(tipo, (h = ataqueFinal(atk, def, { bono, maniobra: 'normal', esContra, tipo, ki, ranura })));
+    if (m === 'normal' || (m === 'presa' && ki?.apresamiento)) return Math.min(tope, h);
+    return Math.min(tope, h - Math.max(0, penManiobra(atk, m, esContra) - (ki?.precision ?? 0)));
   };
   // Tabla, absorción y daño base sólo cambian con la zona (o la maniobra de control), el tipo de
   // crítico y el factor de daño: se preparan una vez por combinación.
@@ -706,7 +713,7 @@ function mejorManiobra(
   const prepDe = (m: Maniobra, tipo: TipoAtaque | undefined, factorDano: number | undefined): Preparacion => {
     const clave = `${esManiobraDeControl(m) ? m : zonaDe(m)}|${tipo}|${factorDano}`;
     let p = preps.get(clave);
-    if (!p) preps.set(clave, (p = preparacionCon(atk, def, { maniobra: m, esContra, tipo, ki, factorDano })));
+    if (!p) preps.set(clave, (p = preparacionCon(atk, def, { maniobra: m, esContra, tipo, ki, factorDano, ranura })));
     return p;
   };
   const criticoAuto = !!ki?.criticoAuto;
@@ -723,7 +730,7 @@ function mejorManiobra(
     let v = danoEste + (sinDano || m === 'inconsciencia' ? 0 : real.pBaja * amen * 2);
     if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
     // Ataque indirecto (Ki) o desde lejos: no se le puede contraatacar (Dominus p.52).
-    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !aDistancia) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !(aDistancia && lejos)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
     if (ki && ki !== SIN_KI) v += valorEfectosKi(atk, def, ki, p, m, golpesSiguientes);
 
     // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
@@ -732,9 +739,9 @@ function mejorManiobra(
     const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
     if (!sinDano && vulnerable) {
       const t = tablaPara(atk, def);
-      const base = Math.max(1, danoBase(atk, def, esContra, undefined, ki));
+      const base = Math.max(1, danoBase(atk, def, esContra, ranura, ki));
       const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
-      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo, undefined, ki), pct);
+      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo, ranura, ki), pct);
       v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste, ki?.critico);
     } else if (!sinDano) {
       v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste, ki?.critico);
@@ -792,7 +799,7 @@ function mejorManiobra(
 
   // Tipo de crítico: el principal o el secundario, el que más rinda (Tabla de Ataque Inusual).
   let tipo: TipoAtaque | undefined = ki?.elemento || undefined;
-  const sec = atk.ficha.arma?.critSecundario;
+  const sec = ranura?.proyectil ? undefined : atk.ficha.arma?.critSecundario;
   // El golpe normal ya queda valorado: no se vuelve a calcular en la recorrida de maniobras.
   let vNormal: number | undefined;
   if (!tipo && sec && sec !== atk.ficha.tipoAtaque) {
@@ -1239,6 +1246,141 @@ function costoDesventajas(l: Luchador, rival: Luchador | null, t: Tecnica): numb
   return c;
 }
 
+/** Lo que hace con un arma a distancia en su turno (Core p.94-96). */
+export type AccionDistancia =
+  | { tipo: 'disparar'; arma: number; objetivo: Luchador; disparos: number; pen: number; recargaFalta: number }
+  | { tipo: 'recargar'; arma: number }
+  | { tipo: 'apuntar'; arma: number; objetivo: Luchador };
+
+/** Un arma a distancia que todavía puede usar: ni encasquillada ni rota, y con proyectiles. */
+function armaUsable(l: Luchador, i: number): boolean {
+  const a = l.ficha.armasDistancia![i];
+  const st = l.proyectiles[i];
+  return !st.inutil && (a.leo ? l.balas > 0 : st.municion > 0);
+}
+
+/**
+ * Formas de usar el arma este asalto: con recarga, bajándola de a una por cada 100 de habilidad
+ * (−30 cada vez); arrojadiza, lanzando de una a tantas como permita la cadencia (−10 por cada una
+ * de más), sin pasar de las que tiene (Core p.96).
+ */
+function formasDeDisparar(l: Luchador, i: number): { disparos: number; pen: number; recargaFalta: number }[] {
+  const a = completarArma(l.ficha.armasDistancia![i]);
+  if (a.clase === 'disparo') {
+    const res = [];
+    for (let k = 0; k <= reduccionesPosibles(a.ataque); k++) res.push(disparosConRecarga(a.recarga, k));
+    const quedan = a.leo ? l.balas : l.proyectiles[i].municion;
+    return res.filter((x) => x.disparos <= quedan || x.disparos === 1);
+  }
+  const res = [];
+  const tope = Math.min(lanzamientosPosibles(a.ataque, a.cadencia), l.proyectiles[i].municion);
+  for (let n = 1; n <= tope; n++) res.push({ disparos: n, pen: 10 * (n - 1), recargaFalta: 0 });
+  return res;
+}
+
+/** El valor de un disparo de `l` a `e` con esa arma y ese penalizador, y la Tabla 47. */
+function valorDisparo(ctx: Contexto, l: Luchador, e: Luchador, i: number, pen: number): number | null {
+  const a = l.ficha.armasDistancia![i];
+  if (distancia(l, e) > alcanceMaximo(a) + 1e-6) return null;
+  const vision = enAlcance(l, e) ? 'libre' : visionEntre(ctx.luchadores, l, e);
+  if (vision === 'bloqueada') return null;
+  const { bono, lejos } = modProyectil(l, e, a, vision);
+  return mejorManiobra(ctx, l, e, false, bono, modDeAccion(l, 'ataque', false), false, true, { pen, sinArmas: false, proyectil: a, lejos }).valor;
+}
+
+/**
+ * Su turno con un arma a distancia, o null para pelear (o acercarse) como siempre: dispara si eso
+ * rinde por asalto más que su mejor ataque cuerpo a cuerpo (con la recarga repartida entre los
+ * asaltos que lleva); recarga si no le conviene otra cosa; y si nadie está todavía al alcance pero
+ * alguien llegará, le apunta (+10 por asalto, hasta +30).
+ */
+export function accionADistancia(ctx: Contexto, l: Luchador): AccionDistancia | null {
+  const armas = l.ficha.armasDistancia;
+  if (!armas?.length || perfil(l) === 'bestia' || l.apresadoPor || l.apresando) return null;
+  nuevaDecision(ctx);
+  let cuerpo = 0;
+  for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) cuerpo = Math.max(cuerpo, valorAtaque(l, e, {}));
+  cuerpo *= Math.max(1, l.ataquesDeclarados);
+  let mejor: { accion: AccionDistancia; valor: number } | null = null;
+  let recargar: number | null = null;
+  let cargada: number | null = null;
+  for (let i = 0; i < armas.length; i++) {
+    if (!armaUsable(l, i)) continue;
+    if (l.proyectiles[i].recargaFalta > 0) {
+      recargar ??= i;
+      continue;
+    }
+    cargada ??= i;
+    for (const forma of formasDeDisparar(l, i))
+      for (const e of enemigos(ctx, l)) {
+        const v = valorDisparo(ctx, l, e, i, forma.pen);
+        if (v === null) continue;
+        const valor = (forma.disparos * v) / (1 + forma.recargaFalta);
+        if (!mejor || valor > mejor.valor) mejor = { accion: { tipo: 'disparar', arma: i, objetivo: e, ...forma }, valor };
+      }
+  }
+  if (mejor && mejor.valor > 0 && mejor.valor >= cuerpo) return mejor.accion;
+  if (trabadoConAlguien(l)) return null;
+  // Recargar vale el disparo que podrá hacer, repartido entre los asaltos que le faltan (contra los
+  // enemigos tal como están ahora).
+  if (recargar !== null) {
+    let disparo = 0;
+    for (const e of enemigos(ctx, l)) disparo = Math.max(disparo, valorDisparo(ctx, l, e, recargar, 0) ?? 0);
+    if (disparo / l.proyectiles[recargar].recargaFalta >= cuerpo) return { tipo: 'recargar', arma: recargar };
+  }
+  if (cuerpo > 0) return null;
+  // Nadie al alcance: apunta al que llegará antes, si lo ve.
+  if (cargada !== null && !mejor) {
+    const a = armas[cargada];
+    let blanco: Luchador | null = null;
+    for (const e of enemigos(ctx, l)) {
+      const d = distancia(l, e);
+      if (d > alcanceMaximo(a) + metrosTotales(e) || visionEntre(ctx.luchadores, l, e) === 'bloqueada') continue;
+      if (!blanco || d < distancia(l, blanco)) blanco = e;
+    }
+    if (blanco) return { tipo: 'apuntar', arma: cargada, objetivo: blanco };
+  }
+  return null;
+}
+
+/** Puede disparar ya con esa arma: usable y sin recarga pendiente. */
+export function armaListaParaDisparar(l: Luchador, i: number): boolean {
+  return armaUsable(l, i);
+}
+
+/** Si cae el blanco a mitad de los disparos: el enemigo al que más rinde seguir disparando. */
+export function siguienteBlanco(ctx: Contexto, l: Luchador, i: number, pen: number): Luchador | null {
+  nuevaDecision(ctx);
+  let mejor: Luchador | null = null;
+  let mejorValor = 0;
+  for (const e of enemigos(ctx, l)) {
+    const v = valorDisparo(ctx, l, e, i, pen);
+    if (v !== null && v > mejorValor) {
+      mejor = e;
+      mejorValor = v;
+    }
+  }
+  return mejor;
+}
+
+/** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */
+export function contraADistancia(ctx: Contexto, l: Luchador, atk: Luchador): number | null {
+  const armas = l.ficha.armasDistancia;
+  if (!armas?.length || perfil(l) === 'bestia') return null;
+  nuevaDecision(ctx);
+  let mejor: number | null = null;
+  let mejorValor = 0;
+  for (let i = 0; i < armas.length; i++) {
+    if (!armaUsable(l, i) || l.proyectiles[i].recargaFalta > 0) continue;
+    const v = valorDisparo(ctx, l, atk, i, 0);
+    if (v !== null && v > mejorValor) {
+      mejor = i;
+      mejorValor = v;
+    }
+  }
+  return mejor;
+}
+
 /**
  * Ataque a distancia con Ki (Dominus p.57): al enemigo fuera del cuerpo a cuerpo que más rinda con
  * una técnica que lo alcance (o con una a distancia ya activa), si rinde más que acercarse a pegarle.
@@ -1259,10 +1401,14 @@ export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchad
   for (const e of enemigos(ctx, l)) {
     if (enAlcance(l, e)) continue;
     const d = distancia(l, e);
+    // Hace falta verlo; la cobertura resta 40.
+    const vision = visionEntre(ctx.luchadores, l, e);
+    if (vision === 'bloqueada') continue;
+    const bono = vision === 'cobertura' ? -PEN_COBERTURA : 0;
     const cuerpo = alcanzable(l, e) ? valorAtaque(l, e, {}) : 0;
     for (const [t, k] of opciones) {
       if (k.distancia + 1e-6 < d) continue;
-      const v = mejorManiobra(ctx, l, e, false, 0, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, e, t) : 0);
+      const v = mejorManiobra(ctx, l, e, false, bono, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, e, t) : 0);
       if (v > cuerpo && (!mejor || v > mejor.valor)) mejor = { objetivo: e, tecnica: t, valor: v };
     }
   }

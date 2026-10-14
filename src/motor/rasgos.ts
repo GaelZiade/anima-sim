@@ -3,7 +3,7 @@
 // `armour_reduction_rules.dart`, `damage_barrier_rules.dart`, `combat_traits.dart`,
 // `penalty_rules.dart`), que citan Core Exxet y Dominus Exxet.
 
-import type { Ficha } from './modelo';
+import type { ArmaDistancia, Ficha } from './modelo';
 import { MAX_CANSANCIO_ASALTO, umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
 
@@ -131,6 +131,10 @@ export interface Ranura {
   sinArmas: boolean;
   /** Disparo del arma de fuego de un arma Leo (Ataque combinado, Dominus p.101). */
   bala?: boolean;
+  /** Un disparo o lanzamiento con esta arma a distancia (Core p.94). */
+  proyectil?: ArmaDistancia;
+  /** Más allá del alcance efectivo: la mitad de daño (Core p.95). */
+  lejos?: boolean;
 }
 
 /**

@@ -59,6 +59,47 @@ export interface Ficha {
   tipoVuelo?: number;
   /** Tamaño (Core p.14). Si falta, Fuerza + Constitución; sin esas características no se compara. */
   tamano?: number;
+  /** Armas de proyectiles y arrojadizas (Core p.94-96, Tabla 34). */
+  armasDistancia?: ArmaDistancia[];
+}
+
+/**
+ * Un arma a distancia con los valores finales de la planilla (Core p.94-96). Lo que falte se toma de
+ * la Tabla 34 por el nombre (`datosProyectil`).
+ */
+export interface ArmaDistancia {
+  nombre: string;
+  /** Disparada (arco, ballesta, arma de fuego) o lanzada a mano (daga, hacha, jabalina). */
+  clase: 'disparo' | 'lanzamiento';
+  /** Habilidad de ataque final con ella. */
+  ataque: number;
+  /** Daño final (con el bono de Fuerza del usuario, o el del arma si tiene Fuerza propia). */
+  danoBase: number;
+  tipoAtaque: TipoAtaque;
+  /** Alcance efectivo en metros, ya con la Tabla 46; llega hasta el doble. */
+  alcance: number;
+  /** Índice de recarga de un arma de disparo (Tabla 34). */
+  recarga?: number;
+  /** Cadencia de fuego de una arrojadiza (Tabla 34). */
+  cadencia?: number;
+  /** Proyectiles que lleva (flechas, balas, unidades a lanzar). Sin dato: sin límite al disparar, 1 al lanzar. */
+  municion?: number;
+  /** Arma de fuego: con una pifia se encasquilla (menos de 80) o estalla (Core p.80-81). */
+  fuego?: boolean;
+  calidad?: number;
+  /** El disparo de un arma Leo: comparte las balas del Ataque combinado (Dominus p.101). */
+  leo?: boolean;
+  precisa?: boolean;
+}
+
+/** Lo que pasa con un arma a distancia durante el combate. */
+export interface EstadoArmaDistancia {
+  /** Proyectiles que le quedan (Infinity sin límite). */
+  municion: number;
+  /** Asaltos de recarga que le faltan antes de poder volver a disparar. */
+  recargaFalta: number;
+  /** Encasquillada o rota (estalló): no se puede usar más en el combate. */
+  inutil: '' | 'encasquillada' | 'rota';
 }
 
 /** Estados que duran todo el combate (Core cap. 14) y situaciones de la Tabla 43. */
@@ -295,6 +336,14 @@ export interface Luchador {
 
   /** Balas del arma de fuego de un arma Leo (6, la recámara más corta, Dominus p.101; no recarga). */
   balas: number;
+  /** Estado de cada arma a distancia de la ficha, en el mismo orden. */
+  proyectiles: EstadoArmaDistancia[];
+  /** Apuntando (Tabla 47): a quién, con qué arma y desde hace cuántos asaltos. */
+  apuntando: { blanco: Luchador; arma: number; asaltos: number } | null;
+  /** A quién le disparó por última vez este asalto (cambiar de blanco, Tabla 47). */
+  ultimoBlanco: Luchador | null;
+  /** Usó un arma a distancia este asalto: no se acerca después. */
+  disparo: boolean;
   /** Dominios del Ki: reserva, Ki concentrado y técnicas activas (null sin técnicas). */
   ki: EstadoKi | null;
 

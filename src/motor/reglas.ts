@@ -62,10 +62,12 @@ export function dificultadDisparo(metros: number): number {
 }
 
 /**
- * Tabla 49 (Core p.96): penalizador a la defensa contra un proyectil disparado. Parada −80 (con
- * maestría −20), esquiva −30 (con maestría, nada).
+ * Tabla 49 (Core p.96): penalizador a la defensa contra un proyectil. Disparado: parada −80 (con
+ * maestría −20), esquiva −30 (con maestría, nada). Lanzado: parada −50 (con maestría, nada), esquiva
+ * nada.
  */
-export function penDefensaProyectil(campo: 'parada' | 'esquiva', maestro: boolean): number {
+export function penDefensaProyectil(campo: 'parada' | 'esquiva', maestro: boolean, clase: 'disparo' | 'lanzamiento' = 'disparo'): number {
+  if (clase === 'lanzamiento') return campo === 'parada' && !maestro ? 50 : 0;
   return campo === 'parada' ? (maestro ? 20 : 80) : maestro ? 0 : 30;
 }
 

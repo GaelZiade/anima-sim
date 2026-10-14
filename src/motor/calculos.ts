@@ -1,6 +1,6 @@
 // Habilidades finales con todos los modificadores. Lo usan el combate y la IA, así nunca difieren.
 
-import type { CapaArmadura, Ficha, Luchador } from './modelo';
+import type { ArmaDistancia, CapaArmadura, Ficha, Luchador } from './modelo';
 import {
   absorcion, BONO_CANSANCIO, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
@@ -13,7 +13,8 @@ import {
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
 import { ajusteTaEnergia, type ModKi } from './ki';
-import { adyacentes, campoHacia, indice } from './mapa';
+import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
+import { modVelocidadBlanco } from './proyectiles';
 
 export const ALCANCE = 2;
 /** Atacar con el crítico secundario del arma (Core p.92). */
@@ -276,8 +277,9 @@ export function puedeManiobraEspecial(atk: Luchador, def: Luchador): boolean {
 export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}): number {
   const e = atk.cap.est;
   const ki = o.ki ?? atk.ki?.activo;
-  const declarados = Math.max(1, o.declarados ?? atk.ataquesDeclarados);
   const ranura = o.ranura ?? proximaRanura(atk);
+  // Los disparos llevan su propio penalizador (recarga o cadencia, en la ranura), no el de los ataques declarados.
+  const declarados = ranura.proyectil ? 1 : Math.max(1, o.declarados ?? atk.ataquesDeclarados);
   const perfil = perfilDe(atk, ranura);
   // Selene arcano contraataca "con Habilidad de Ataque plena": esas contras no cuentan como ataques,
   // así que no arrastran el penalizador de los ataques adicionales (Dominus p.39).
@@ -325,8 +327,8 @@ export interface OpcionesDefensa {
   defensasPrevias?: number;
   /** Efectos de Ki del ataque (un Ataque sobrenatural no se puede parar). */
   kiAtk?: ModKi;
-  /** Es un proyectil disparado (una técnica a distancia, Dominus p.57): Tabla 49. */
-  proyectil?: boolean;
+  /** Se defiende de un proyectil (Tabla 49): disparado (también una técnica a distancia, Dominus p.57) o lanzado. */
+  proyectil?: boolean | 'disparo' | 'lanzamiento';
   /** Suponer que lo atacan desde esta posición (la IA, para quien todavía no se trabó). */
   posicion?: Posicion;
   cansancio?: number;
@@ -411,7 +413,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
-  if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa));
+  if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa), o.proyectil === 'lanzamiento' ? 'lanzamiento' : 'disparo');
   if (paradaAnulada(def, atk, o.kiAtk)) h = Math.min(h, 0);
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
@@ -431,7 +433,9 @@ export function absorcionContra(
   const r = ranura ?? proximaRanura(atk);
   const t = tipo ?? perfilDe(atk, r).tipoAtaque;
   const zona = zonaDe(maniobra);
-  const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) +
+  // Un proyectil resta la TA por su propia calidad, no por la del arma cuerpo a cuerpo.
+  const reduccion = atk.cap.reduccionTA - (r.sinArmas || r.proyectil ? atk.cap.reduccionTAArma : 0) +
+    (r.proyectil ? Math.floor((r.proyectil.calidad ?? 0) / 5) : 0) +
     reduccionHakyoukuken(def, atk, t, zona) + (ki?.reduccionTA ?? 0);
   let ta = taZona(def.ficha, zona, t);
   // Armadura de energía mayor apagada (TA 2) o arcana subida a TA 6 (Dominus p.19).
@@ -554,6 +558,9 @@ export function proximaRanura(l: Luchador): Ranura {
 export function perfilDe(l: Luchador, ranura: Ranura): { ataque: number; danoBase: number; tipoAtaque: TipoAtaque } {
   const leo = l.cap.est.leo;
   if (ranura.bala && leo) return { ataque: l.ficha.ataque, danoBase: leo.dano, tipoAtaque: leo.tipo };
+  const p = ranura.proyectil;
+  // Más allá del alcance efectivo el proyectil hace la mitad de daño (Core p.95).
+  if (p) return { ataque: p.ataque, danoBase: ranura.lejos ? Math.floor(p.danoBase / 2) : p.danoBase, tipoAtaque: p.tipoAtaque };
   const s = l.ficha.sinArmas;
   return ranura.sinArmas && s ? s : l.ficha;
 }
@@ -656,4 +663,50 @@ export function danoEsperado(
 ): number {
   const { t, s, absDano, base, nulo } = preparar(atk, def, habAtaque, habDefensa, o);
   return nulo ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100;
+}
+
+// --------------------------------------------------------------------------- a distancia (Core p.94-96)
+
+/**
+ * Línea de visión de `a` a `b` en el mapa: las paredes la cortan; un cuerpo en medio (o la esquina de
+ * una pared) da cobertura. Sin mapa siempre se ve.
+ */
+export function visionEntre(luchadores: readonly Luchador[], a: Luchador, b: Luchador): Vision {
+  const m = a.mapa;
+  if (!m) return 'libre';
+  let cuerpos: Set<number> | null = null;
+  for (const x of luchadores)
+    if (x !== a && x !== b && activo(x)) (cuerpos ??= new Set()).add(indice(m, x.pos));
+  return lineaDeVision(m, a.pos, b.pos, cuerpos ? (i) => cuerpos!.has(i) : undefined);
+}
+
+/** Cobertura del blanco (Tabla 47): −40. */
+export const PEN_COBERTURA = 40;
+
+/**
+ * Tabla 47 (Core p.94-96) para un disparo o lanzamiento de `atk` a `def` con `arma`: moverse,
+ * cobertura, cambiar de blanco, la velocidad del blanco, haberse defendido, pasar el alcance
+ * efectivo, apuntar y disparar a bocajarro. `lejos`: más allá del alcance efectivo (mitad de daño).
+ */
+export function modProyectil(atk: Luchador, def: Luchador, arma: ArmaDistancia, vision: Vision): { bono: number; lejos: boolean } {
+  const metros = distancia(atk, def);
+  const bocajarro = enAlcance(atk, def);
+  const lejos = !bocajarro && metros > arma.alcance;
+  let bono = 0;
+  const total = metrosTotales(atk);
+  if (atk.metrosMovidos >= total && total > 0) bono -= 50;
+  else if (atk.metrosMovidos > total / 4) bono -= 10;
+  if (vision === 'cobertura' && !bocajarro) bono -= PEN_COBERTURA;
+  if ((atk.ultimoBlanco && atk.ultimoBlanco !== def) || (atk.apuntando && atk.apuntando.blanco !== def)) bono -= 10;
+  if (def.metrosMovidos > 0) bono += modVelocidadBlanco(def.ficha.tipoMovimiento);
+  if (atk.defensasHechas > 0) bono -= 40;
+  if (lejos) bono -= 30;
+  if (atk.apuntando?.blanco === def) bono += 10 * Math.min(3, atk.apuntando.asaltos);
+  if (bocajarro) bono += 30;
+  return { bono, lejos };
+}
+
+/** Hasta dónde llega: el doble del alcance efectivo (Core p.95). */
+export function alcanceMaximo(arma: ArmaDistancia): number {
+  return 2 * arma.alcance;
 }
