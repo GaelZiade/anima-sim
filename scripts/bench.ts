@@ -23,6 +23,9 @@ const escenarios: [string, Ficha[], Ficha[], number][] = [
   ['duelo simple', duelo.equipoA, duelo.equipoB, 3000],
   ['Kaito vs Teseo', [kaito], [teseo], 1500],
   ['Kiran vs 8 soldados', [kiran], copias(abel.soldado, 8), 300],
+  // Kael es el único con técnicas de Ki: mide lo que cuesta decidir con ellas (sin Ki va el doble de rápido).
+  ['Kael vs Teseo', [kael], [teseo], 1000],
+  ['Kael sin Ki vs Teseo', [{ ...kael, ki: undefined }], [teseo], 1000],
   ['grupo vs 22', [kaito, teseo, kiran, kael, isana], [...copias(abel.oficial, 2), ...copias(abel.elite, 6), ...copias(abel.soldado, 14)], 60],
 ];
 

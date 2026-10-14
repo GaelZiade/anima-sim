@@ -4,7 +4,7 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
-  danoBase, danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  danoBase, danoCon, danoEsperado, modControl, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
 import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
@@ -16,8 +16,8 @@ import {
 } from './ki';
 import type { Localizacion } from './reglas';
 import {
-  atributo, caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
-  pGanaControl, type EstadoMushin, type Maniobra,
+  atributo, caracteristicasControl, dificultadPuntosPresion, esApuntado, esManiobraDeControl, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
+  penManiobra, pGanaControl, type EstadoMushin, type Maniobra,
 } from './maniobras';
 
 /** Peso del daño recibido frente al causado. */
@@ -62,6 +62,8 @@ interface Base {
   golpe: number;
   /** Amenaza de `e` sobre `l` en el asalto (ver `amenaza`), calculada al pedirla. */
   amen?: number;
+  /** Tabla, absorción y daño base de `e` contra `l`: el daño esperado con otras habilidades sin recalcularlos. */
+  prep: Preparacion;
 }
 const memo = new Map<Luchador, Map<Luchador, Base>>();
 /** Enemigos que pueden atacar a cada luchador este asalto (para la amenaza), por decisión. */
@@ -90,7 +92,8 @@ function base(e: Luchador, l: Luchador): Base {
   if (!b) {
     const hab = ataqueFinal(e, l);
     const def = defensaFinal(l, e);
-    b = { hab, def, golpe: danoEsperado(e, l, hab, def) };
+    const prep = preparacion(e, l);
+    b = { hab, def, golpe: danoCon(prep, hab - def), prep };
     m.set(l, b);
   }
   return b;
@@ -133,10 +136,10 @@ function calcularAmenaza(e: Luchador, l: Luchador, b: Base): number {
 function valorNegativo(atk: Luchador, def: Luchador, pen: number, golpes: number, danoPrevio: number): number {
   if (pen <= 0) return 0;
   const rival = base(def, atk);
-  const perdida = rival.golpe - danoEsperado(def, atk, rival.hab - pen, rival.def);
+  const perdida = rival.golpe - danoCon(rival.prep, rival.hab - pen - rival.def);
   const mio = base(atk, def);
   const quedan = Math.max(0, def.pv - danoPrevio - golpes * mio.golpe);
-  const ganancia = Math.min(golpes * (danoEsperado(atk, def, mio.hab, mio.def - pen) - mio.golpe), quedan);
+  const ganancia = Math.min(golpes * (danoCon(mio.prep, mio.hab - (mio.def - pen)) - mio.golpe), quedan);
   const ataques = Math.max(1, def.ataquesDeclarados || 1);
   const asaltos = (def.haActuado ? 0 : 1) + (quedan > 0 ? 1 : 0);
   return perdida * ataques * asaltos + ganancia;
@@ -663,7 +666,9 @@ export function elegirManiobra(
       elegida = tec;
     }
   }
-  if (!elegida || convieneGuardar(ctx, atk, def, elegida, mejorNeto - base.valor)) return base.plan;
+  // Si es un ataque común, el valor sin técnica es el mismo que el que `convieneGuardar` necesita.
+  const sinTecnica = !esContra && bono === 0 && !soloNormal ? base.valor : undefined;
+  if (!elegida || convieneGuardar(ctx, atk, def, elegida, mejorNeto - base.valor, sinTecnica)) return base.plan;
   return { ...mejor.plan, tecnica: elegida };
 }
 
@@ -684,13 +689,34 @@ function mejorManiobra(
     return Math.min(golpes * (danoEsperado(atk, def, hNormal, habDef - pen) - golpeNormal), quedan);
   };
 
+  // El ataque final sólo cambia de una maniobra a otra en su penalizador (y en el estado de Mushin):
+  // se calcula una vez por tipo de crítico y se le resta el de cada maniobra.
+  const habNormal = new Map<TipoAtaque | undefined, number>();
+  const habDe = (m: Maniobra, tipo: TipoAtaque | undefined, estadoMushin: EstadoMushin | null): number => {
+    // Xing Quan también depende de la maniobra (sólo golpes normales o apuntados, Dominus p.38).
+    if (estadoMushin || m === 'area' || (atk.cap.est.xingQuan && m !== 'normal' && !esApuntado(m))) return ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki });
+    let h = habNormal.get(tipo);
+    if (h === undefined) habNormal.set(tipo, (h = ataqueFinal(atk, def, { bono, maniobra: 'normal', esContra, tipo, ki })));
+    if (m === 'normal' || (m === 'presa' && ki?.apresamiento)) return h;
+    return h - Math.max(0, penManiobra(atk, m, esContra) - (ki?.precision ?? 0));
+  };
+  // Tabla, absorción y daño base sólo cambian con la zona (o la maniobra de control), el tipo de
+  // crítico y el factor de daño: se preparan una vez por combinación.
+  const preps = new Map<string, Preparacion>();
+  const prepDe = (m: Maniobra, tipo: TipoAtaque | undefined, factorDano: number | undefined): Preparacion => {
+    const clave = `${esManiobraDeControl(m) ? m : zonaDe(m)}|${tipo}|${factorDano}`;
+    let p = preps.get(clave);
+    if (!p) preps.set(clave, (p = preparacionCon(atk, def, { maniobra: m, esContra, tipo, ki, factorDano })));
+    return p;
+  };
+  const criticoAuto = !!ki?.criticoAuto;
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
-    const hab = ki?.ataqueFijo || ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki });
+    const hab = ki?.ataqueFijo || habDe(m, tipo, estadoMushin);
     // Daño reducido (desventaja): ese golpe hace la mitad o nada, pero sus efectos funcionan.
     const reducido = ki?.danoReducido ? 1 - ki.danoReducido : undefined;
-    const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, ki, factorDano: reducido });
+    const p = pronosticoDesde(prepDe(m, tipo, reducido), def, hab - habDef, criticoAuto);
     // Inutilizar e Inconsciencia: la mitad de daño (y de chance de tumbarlo por PV); el crítico, pleno.
-    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5 * (reducido ?? 1), ki }) : p;
+    const real = esNoLetal(m) ? pronosticoDesde(prepDe(m, tipo, 0.5 * (reducido ?? 1)), def, hab - habDef, criticoAuto) : p;
     // Los ataques que no dañan (engatillar, puntos de presión) se valoran sólo por su efecto.
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
     const danoEste = sinDano ? 0 : real.dano;
@@ -767,7 +793,14 @@ function mejorManiobra(
   // Tipo de crítico: el principal o el secundario, el que más rinda (Tabla de Ataque Inusual).
   let tipo: TipoAtaque | undefined = ki?.elemento || undefined;
   const sec = atk.ficha.arma?.critSecundario;
-  if (!tipo && sec && sec !== atk.ficha.tipoAtaque && valor('normal', sec) > valor('normal')) tipo = sec;
+  // El golpe normal ya queda valorado: no se vuelve a calcular en la recorrida de maniobras.
+  let vNormal: number | undefined;
+  if (!tipo && sec && sec !== atk.ficha.tipoAtaque) {
+    const vSec = valor('normal', sec);
+    const vPrincipal = valor('normal');
+    if (vSec > vPrincipal) tipo = sec;
+    vNormal = vSec > vPrincipal ? vSec : vPrincipal;
+  }
 
   const opciones: Maniobra[] = ['normal'];
   // A distancia sólo se puede apuntar (Core p.91); el resto de maniobras pide contacto.
@@ -842,7 +875,7 @@ function mejorManiobra(
         }
       }
       continue;
-    } else v = valor(m, tipo) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, m, tipo) : 0);
+    } else v = (m === 'normal' && vNormal !== undefined ? vNormal : valor(m, tipo)) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, m, tipo) : 0);
     if (v > mejorValor) {
       mejorValor = v;
       mejor = { maniobra: m, tipo, especial: false };
@@ -1072,12 +1105,16 @@ function convieneRecuperar(l: Luchador): boolean {
  * sobrante a la reserva y empieza de cero. Conviene esperar si lo que gana con la otra, descontado
  * por los asaltos que faltan, supera lo que gana ahora en todos esos asaltos.
  */
-function convieneGuardar(ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number): boolean {
-  const sinTecnica = mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
+function convieneGuardar(
+  ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number, conocido?: number,
+): boolean {
+  // El ataque sin técnica sólo hace falta si alguna está a 1-3 asaltos.
+  let sinTecnica = conocido;
   for (const t of repertorio(l.ficha)) {
     if (t === elegida || efectosDe(t).clase !== 'ataque' || enUso(l.ki!, t)) continue;
     const faltan = asaltosQueFaltan(l, t);
     if (faltan < 1 || faltan > 3) continue;
+    sinTecnica ??= mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
     const otra = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica - precioKi(l) * costeKi(t);
     if (otra * Math.pow(0.8, faltan) > ganancia * (1 + faltan)) return true;
   }

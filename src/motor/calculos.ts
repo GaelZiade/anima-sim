@@ -613,7 +613,12 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
 export function pronostico(
   atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico = {},
 ): Pronostico {
-  const { t, s, abs, absDano, base, nulo } = preparar(atk, def, habAtaque, habDefensa, o);
+  return pronosticoDesde(preparar(atk, def, habAtaque, habDefensa, o), def, habAtaque - habDefensa, !!o.ki?.criticoAuto);
+}
+
+/** `pronostico` a partir de una preparación ya hecha (`preparacionCon`) y la ventaja `s`. */
+export function pronosticoDesde(p: Preparacion, def: Luchador, s: number, criticoAuto: boolean): Pronostico {
+  const { t, abs, absDano, base, nulo } = p;
   const pContra = def.ficha.acumulacion ? 0 : t.pContra(s);
   return {
     dano: nulo ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100,
@@ -622,9 +627,27 @@ export function pronostico(
     bonoContra: pContra > 0 ? t.bonoContraEsperado(s) / pContra : 0,
     pBaja: nulo ? 0 : def.pv > 0 ? t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv, base)) : 1,
     // Crítico automático (Ki): critica en cuanto daña (Dominus p.71).
-    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, o.ki?.criticoAuto ? 10 : porcentajePara(def.pv / 2, base)),
+    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, criticoAuto ? 10 : porcentajePara(def.pv / 2, base)),
     pManiobra: t.pPorcentajeAlMenos(s, abs, 10),
   };
+}
+
+/** Lo de `preparar` que no depende de las habilidades: se puede reusar mientras nada cambie. */
+export type Preparacion = Omit<ReturnType<typeof preparar>, 's'>;
+
+/** `preparar` con las opciones por defecto, para reusar con distintas habilidades (`danoCon`). */
+export function preparacion(atk: Luchador, def: Luchador): Preparacion {
+  return preparar(atk, def, 0, 0, {});
+}
+
+/** `preparar` con estas opciones, para pronosticar con distintas habilidades (`pronosticoDesde`). */
+export function preparacionCon(atk: Luchador, def: Luchador, o: OpcionesPronostico): Preparacion {
+  return preparar(atk, def, 0, 0, o);
+}
+
+/** El daño esperado de `danoEsperado` con opciones por defecto, a partir de su preparación. */
+export function danoCon(p: Preparacion, s: number): number {
+  return p.nulo ? 0 : (p.t.porcentajeEsperado(s, p.absDano) * p.base) / 100;
 }
 
 /** Sólo el daño esperado de `pronostico`, sin calcular (ni crear) el resto. */
