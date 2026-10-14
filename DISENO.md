@@ -455,10 +455,10 @@ recibe sus golpes (el daño esperado es 0).
 
 **Interpretaciones nuevas, a confirmar:**
 
-1. Dos nombres están cortados en la copia: el de nivel 26 de Fuego se llama acá **Arma Ígnea**, y el de
-   52, **Cuerpo a Fuego** (por su espejo, Cuerpo a Luz).
-2. A Destrucción Desencadenada le falta el mantenimiento: se toma el de Protección Final, que cuesta
-   lo mismo (5 / 15 / 20 / 20).
+1. ~~Nombres cortados~~ **Resuelto con el grimorio de la planilla**: Arma Ígnea (26) y Cuerpo a
+   Fuego (52).
+2. ~~Mantenimiento de Destrucción Desencadenada~~ **Resuelto con el grimorio**: 5 / 15 / 20 / 20 (y el
+   del Escudo de Luz, 5 / 15 / 20 / 25, coincide).
 3. Los beneficios de Guerra "a los aliados del radio" incluyen al lanzador; alcanzan a los que están
    en el radio al lanzarlo y lo conservan aunque se alejen.
 4. El mismo conjuro de dos lanzadores no se acumula (vale el mayor); conjuros distintos, sí. Cada
@@ -482,6 +482,12 @@ recibe sus golpes (el daño esperado es 0).
     Guerra no se suman a los conjuros.
 15. Conjuro Especialista: el +10 al ACT "al declarar que se prepara para lanzarlo" queda para la parte
     3 (la IA todavía no planifica qué va a lanzar).
+
+**Grimorio de la planilla contra el manual:** el catálogo coincide con los grimorios de la planilla
+(hojas "Grimorio de Vía" y "Grimorio Magia") en zeon, Inteligencia y mantenimiento de cada grado,
+salvo tres Inteligencias de grado avanzado: Cuerpo a Fuego (manual 13, planilla 12), Incinerar (14
+contra 12) y Consumir Esencia (12 contra 14). Manda el manual. Incinerar trae mantenimiento en los dos
+(10 / 15 / 15 / 20), pero ninguno dice qué mantiene: sigue sin mantenerse en la simulación.
 
 **Pendiente de la parte 2:** Barrera de Fuego (un muro en el mapa), Lazos de Luz (Presa con los
 lazos), Invisibilidad (hace falta leer Advertir y Buscar de la planilla), Éxtasis, Moral (Frialdad),

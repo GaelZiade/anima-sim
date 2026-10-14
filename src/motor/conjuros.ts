@@ -110,8 +110,8 @@ export const CATALOGO: readonly Conjuro[] = [
   {
     nombre: 'Escudo de Luz', via: 'luz', nivel: 10, accion: 'pasiva', tipos: ['defensa'],
     escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126',
-    // El mantenimiento está cortado en la copia del manual: se toma el del Escudo de Oscuridad, su
-    // espejo en la vía opuesta (5 / 15 / 20 / 25).
+    // El mantenimiento está cortado en la copia del manual: el del grimorio de la planilla (5 / 15 /
+    // 20 / 25), igual al del Escudo de Oscuridad.
     grados: [
       { zeon: 50, int: 6, resistencia: 300, mantenimiento: 5 },
       { zeon: 120, int: 8, resistencia: 1000, mantenimiento: 15 },
@@ -156,7 +156,7 @@ export const CATALOGO: readonly Conjuro[] = [
     ],
   },
   {
-    // El nombre está cortado en la copia del manual (interpretación).
+    // El nombre está cortado en la copia del manual: el del grimorio de la planilla.
     nombre: 'Arma Ígnea', via: 'fuego', nivel: 26, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.157',
     grados: [
       { zeon: 50, int: 6, mantenimiento: 5, bono: { tipoArma: 'CAL', danoArma: 10 } },
@@ -184,7 +184,7 @@ export const CATALOGO: readonly Conjuro[] = [
     ],
   },
   {
-    // El nombre está cortado en la copia del manual: se toma el de su espejo, Cuerpo a Luz (interpretación).
+    // El nombre está cortado en la copia del manual: el del grimorio de la planilla.
     nombre: 'Cuerpo a Fuego', via: 'fuego', nivel: 52, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.158',
     grados: [
       { zeon: 100, int: 8, mantenimiento: 10, bono: { cuerpoFuego: true } },
@@ -250,8 +250,7 @@ export const CATALOGO: readonly Conjuro[] = [
   },
   {
     nombre: 'Destrucción Desencadenada', via: 'fuego', subvia: 'guerra', nivel: 34, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliados', fuente: 'Arcana p.35',
-    // El mantenimiento falta en la copia del manual: se toma el de Protección Final, que cuesta lo
-    // mismo (interpretación).
+    // El mantenimiento falta en la copia del manual: el del grimorio de la planilla.
     grados: [
       { zeon: 80, int: 7, radio: 10, mantenimiento: 5, bono: { dano: 20 } },
       { zeon: 120, int: 9, radio: 50, mantenimiento: 15, bono: { dano: 20 } },
