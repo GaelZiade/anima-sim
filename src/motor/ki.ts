@@ -75,6 +75,10 @@ export interface ModKi {
   danoReducido: number;
   /** Ataque especializado (desventaja, Dominus p.72): sólo funciona contra esa defensa. */
   soloContra: '' | 'parada' | 'esquiva';
+  /** Es un conjuro: no suma los bonos al daño de las armas ni los de la vía de Guerra. */
+  conjuro?: boolean;
+  /** Invisible para quien no ve la magia: se defiende cegado (conjuros anímicos, Core p.122). */
+  invisible?: boolean;
 }
 
 /** Estados de la ventaja Estado añadido (Dominus p.67). */

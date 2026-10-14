@@ -2,7 +2,8 @@ import type { Rng } from './rng';
 import type { TamanoArma, TipoAtaque } from './reglas';
 import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
 import type { EstadoKi } from './ki';
-import type { EstadoMagia } from './magia';
+import type { Bendicion, EstadoMagia } from './magia';
+import type { BonoMagico } from './conjuros';
 import type { Celda, Mapa, MapaListo } from './mapa';
 
 export type Perfil = 'agresivo' | 'equilibrado' | 'cauto' | 'bestia';
@@ -120,6 +121,14 @@ export interface MagiaFicha {
   vias: Record<string, number>;
   /** Conjuros de libre acceso que eligió, por nombre. */
   libres?: string[];
+  /** Sub-vía elegida para cada vía: "Fuego" → "Guerra" (Arcana p.32). */
+  subvias?: Record<string, string>;
+  /** Control del Espacio: elige a quién alcanzan sus conjuros de área, por 10 de zeon más (Arcana p.27). */
+  controlDelEspacio?: boolean;
+  /** Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño (Arcana p.28). */
+  romperResistencias?: number;
+  /** Conjuros con Conjuro Especialista: +1 a la Inteligencia para su grado (Arcana p.30). */
+  especialista?: string[];
 }
 
 /** Lo que pasa con un arma a distancia durante el combate. */
@@ -382,6 +391,15 @@ export interface Luchador {
   ki: EstadoKi | null;
   /** Magia: zeon, lo acumulado y los conjuros mantenidos (null si no tiene conjuros). */
   magia: EstadoMagia | null;
+  /** Conjuros de efecto que lo benefician (de quién vienen) y su suma (null sin ninguno). */
+  bendiciones: Bendicion[];
+  bono: BonoMagico | null;
+  /** Asaltos que le quedan cegado por un efecto pasajero (Flash Cegador). */
+  cegado: number;
+  /** Tabla 76: En llamas (Core p.236). 0 si no arde; si no, el nivel en la tabla. */
+  llamas: number;
+  /** Este asalto intentó apagarse: las llamas no crecen. */
+  apagando: boolean;
 
   // --- modalidades y recursos de estilos ---
   modo: Modo;

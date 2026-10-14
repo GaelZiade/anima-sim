@@ -3,6 +3,24 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 14/10/2026 (noche): magia, parte 2 (los conjuros de Stéphan)
+
+- **Catálogo** de combate de Stéphan: Flash Cegador, Arma Ígnea, Aumentar el Crítico, Secar, Cuerpo a
+  Fuego, Incinerar, Consumir Esencia, Crítico Directo, Tormenta de Fuego; sub-vía de Guerra (Ira
+  Ancestral, Velocidad en la Batalla, Destrucción Desencadenada, Protección Final, Campeón); Curar
+  Heridas. Cada uno se resuelve a su manera.
+- **Reglas nuevas**: conjuros anímicos (Proyección contra la TA de energía y RM) y automáticos (sin
+  defensa); beneficios sobre aliados; ceguera por asaltos; **Tabla 76, En llamas** para todo ataque
+  de calor; estado de Ira; RM derivada si la ficha no la trae.
+- **Planilla**: se leen las sub-vías y la metamagia (Control del Espacio, Romper Resistencias,
+  Conjuro Especialista).
+- **IA**: valora cada conjuro a su manera contra su zeon y su mantenimiento; los demás saben que un
+  Cuerpo a Fuego no recibe golpes que no sean de energía.
+- **Medición** (500 combates, misma semilla, % de victorias de Stéphan): contra Teseo 7,4 → 91,8
+  (Cuerpo a Fuego: Teseo no daña energía); Kaito 2,6 → 1,8; Kiran 0 → 0; cuatro soldados 100 → 100.
+  Stéphan, Kael y Kaito contra Teseo, Kiran y cuatro soldados (100 combates): 51 → 58.
+- Huella del bench sin cambios.
+
 ## 14/10/2026 (noche): magia, parte 1 (núcleo)
 
 - **Magia** (Core cap. 11): zeon, ACT, acumular (la mitad si hace otra cosa), soltar con −10,

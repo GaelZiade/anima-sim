@@ -127,7 +127,7 @@ export function turnoFinal(l: Luchador): number {
   // Quien pelea con magia usa el turno de las acciones desarmadas (Core p.117).
   const base = l.magia ? l.ficha.magia?.turno ?? l.ficha.sinArmas?.turno ?? l.ficha.turno : l.ficha.turno;
   return base - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
-    (l.ki?.activo.turno ?? 0) +
+    (l.ki?.activo.turno ?? 0) + (l.bono?.turno ?? 0) +
     (l.amenazadoPor ? AMENAZADO.turno : 0);
 }
 
@@ -190,7 +190,7 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
  * penalizadores de flanco y espalda (Dominus p.11). Se supone que la tirada de detección sale.
  */
 export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
-  const propia = l.ficha.estados?.ceguera;
+  const propia = l.cegado > 0 ? 'absoluta' : l.ficha.estados?.ceguera;
   const casos: Ceguera[] = [
     propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,
     cegueraPorOscuridad(l),
@@ -313,7 +313,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (o.esContra ? e.bonoContraataque : 0) +
     (atk.modo.seraphite === 3 ? 30 : atk.modo.seraphite === 1 ? 20 : 0) +
     (atk.modo.berserker ? 10 : 0) + (atk.modo.ataqueFinal ? 20 : 0) +
-    bonoVariable(atk, 'ataque') + bonoOrochi(atk) +
+    bonoVariable(atk, 'ataque') + bonoOrochi(atk) + (atk.bono ? (atk.bono.ataque ?? 0) + (atk.bono.toda ?? 0) : 0) +
     (aplicaXingQuan(atk, def, o) ? e.xingQuan : 0) +
     (atk.godhandListo && e.godhand ? e.godhand.ataque : 0) +
     (o.especial && puedeManiobraEspecial(atk, def) ? 20 : 0) + Math.min(150, o.samiel ?? 0) -
@@ -353,8 +353,8 @@ function paradaAnulada(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
 }
 
 /** Los ataques de Velez arcano son invisibles para quien no detecta la energía (ceguera absoluta). */
-function noVeElAtaque(def: Luchador, atk: Luchador): boolean {
-  return atk.cap.est.intangible && !def.cap.est.veEnergia;
+function noVeElAtaque(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
+  return (atk.cap.est.intangible || !!kiAtk?.invisible) && !def.cap.est.veEnergia;
 }
 
 
@@ -363,10 +363,10 @@ function noVeElAtaque(def: Luchador, atk: Luchador): boolean {
  * absoluta −100 y espalda + ceguera absoluta −120 en vez de sumarse; con parálisis completa quedan en
  * su −200 (ni posición ni ceguera suman más).
  */
-function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number, campo: 'parada' | 'esquiva'): number {
+function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number, campo: 'parada' | 'esquiva', kiAtk?: ModKi): number {
   if (def.paralisis === 3) return 0;
   const posicion = MOD_POSICION[pos].defensa * factorPos;
-  return conCeguera(pos, posicion, cegueraContra(def, atk, noVeElAtaque(def, atk)), campo);
+  return conCeguera(pos, posicion, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), campo);
 }
 
 /**
@@ -403,7 +403,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   let h =
     base - penDefensaAdicional(previas) - penAccion(def) - penEspacio(def, campo) -
     (sinArma ? 0 : penDesenfundar(def, campo)) +
-    situacionDefensa(def, atk, pos, factorPos, campo) + desequilibrio(def, atk) -
+    situacionDefensa(def, atk, pos, factorPos, campo, o.kiAtk) + desequilibrio(def, atk) -
     // Parar a un enemigo diminuto: −10 (Tabla 43).
     (campo === 'parada' && rivalChico(def, atk) === 2 ? 10 : 0) +
     ((def.ficha.tipoDefensa ?? 'parada') === 'parada' ? est.parada : est.esquiva) +
@@ -412,7 +412,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) -
     (def.modo.seraphite === 3 ? 50 : def.modo.seraphite === 1 ? 30 : 0) -
     (def.modo.berserker ? 20 : 0) + bonoVariable(def, 'defensa') + bonoOrochi(def) +
-    Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) +
+    Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) + (def.bono?.toda ?? 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
@@ -450,6 +450,8 @@ export function absorcionContra(
   // Armadura mágica (Armadura de Luz): otra capa, igual (Core p.83, p.127).
   const magica = def.magia?.armadura ? taMagica(def, t) : 0;
   if (magica) ta = Math.max(ta, magica) + Math.floor(Math.min(ta, magica) / 2);
+  // Protección Final, Campeón: +TA contra todo (Arcana p.35).
+  ta += def.bono?.ta ?? 0;
   const abs = absorcion(Math.max(0, ta - reduccion));
   // Un ser con acumulación sorprendido recibe el golpe de lleno: Absorción a la mitad (Core p.99).
   return def.ficha.acumulacion && atk.sorprendeA.has(def) ? Math.floor(abs / 2) : abs;
@@ -541,11 +543,22 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     arma = arma * ki.multDano + ki.dano;
   }
   let d = arma + bonoVariable(atk, 'dano');
+  // Conjuros de Guerra (Destrucción Desencadenada, Campeón): al daño de sus ataques, no de los conjuros.
+  if (atk.bono?.dano && !ki?.conjuro) d += atk.bono.dano;
   if (atk.godhandListo && e.godhand) d += e.godhand.dano;
   // Aikido: en un contraataque suma 2× (supremo 4×) el bono de FUE del rival, mínimo +5 (Dominus p.31).
   if (esContra && e.aikidoMultiplicadorFue)
     d += Math.max(5, e.aikidoMultiplicadorFue * bonoCaracteristica(atributo(def, 'FUE')));
   return d;
+}
+
+/**
+ * Cuerpo a Fuego (Core p.158): el golpe no lo daña si no es de energía, frío o agua, ni de quien daña
+ * energía (los conjuros no cuentan como tales: sólo los de energía, Core p.122).
+ */
+export function inmuneAlGolpe(def: Luchador, atk: Luchador, tipo: TipoAtaque, ki?: ModKi): boolean {
+  if (!def.bono?.cuerpoFuego || tipo === 'ENE' || tipo === 'FRI') return false;
+  return ki?.conjuro || !(atk.cap.danaEnergia || ki?.danaEnergia);
 }
 
 /** La barrera de daño del defensor frena el ataque: daño base menor y no daña energía. */
@@ -568,7 +581,11 @@ export function perfilDe(l: Luchador, ranura: Ranura): { ataque: number; danoBas
   // Más allá del alcance efectivo el proyectil hace la mitad de daño (Core p.95).
   if (p) return { ataque: p.ataque, danoBase: ranura.lejos ? Math.floor(p.danoBase / 2) : p.danoBase, tipoAtaque: p.tipoAtaque };
   const s = l.ficha.sinArmas;
-  return ranura.sinArmas && s ? s : l.ficha;
+  if (ranura.sinArmas && s) return s;
+  // Arma Ígnea: el arma ataca en calor como crítico primario, con más daño (Core p.157).
+  const b = l.bono;
+  if (b?.tipoArma) return { ataque: l.ficha.ataque, danoBase: l.ficha.danoBase + (b.danoArma ?? 0), tipoAtaque: b.tipoArma };
+  return l.ficha;
 }
 
 export function tablaPara(atk: Luchador, def: Luchador) {
@@ -618,7 +635,8 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
   else if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
   const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura, o.ki, kiDef) : abs;
-  const nulo = base === 0 || barreraFrena(def, atk, base, o.ki);
+  const nulo = base === 0 || barreraFrena(def, atk, base, o.ki) ||
+    (!!def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque, o.ki ?? atk.ki?.activo));
   return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
 }
 
@@ -729,7 +747,7 @@ export function alcanceMaximo(arma: ArmaDistancia): number {
  */
 export function ataqueMagico(atk: Luchador, def: Luchador): number {
   const m = atk.ficha.magia!;
-  return m.proyeccion - penAccion(atk) + conCeguera('frente', 0, cegueraContra(atk, def), 'ataque') +
+  return m.proyeccion - penAccion(atk) + (atk.bono?.toda ?? 0) + conCeguera('frente', 0, cegueraContra(atk, def), 'ataque') +
     (enAlcance(atk, def) ? 40 : 0);
 }
 
@@ -738,10 +756,10 @@ export function ataqueMagico(atk: Luchador, def: Luchador): number {
  * por proyectiles; sólo los negativos a toda acción, la sorpresa, estar amenazado y la ceguera (Core
  * p.100, p.118).
  */
-export function defensaEscudoMagico(def: Luchador, atk: Luchador): number {
+export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi): number {
   const m = def.ficha.magia!;
-  return (m.proyeccionDefensa ?? m.proyeccion) - penAccion(def) +
-    conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk)), 'parada') +
+  return (m.proyeccionDefensa ?? m.proyeccion) - penAccion(def) + (def.bono?.toda ?? 0) +
+    conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
     (def.amenazadoPor === atk ? AMENAZADO.parada : 0);
 }

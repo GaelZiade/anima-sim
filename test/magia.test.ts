@@ -26,13 +26,20 @@ describe('la planilla y los conjuros que conoce', () => {
   it('Stéphan: zeon, ACT, Proyección y las vías; conoce los de Fuego y Luz del catálogo', () => {
     const dir = new URL('../fichas/', import.meta.url);
     const f = hojaAFicha(readFileSync(new URL(readdirSync(dir).find((x) => x.startsWith('St'))!, dir)));
-    expect(f.magia).toMatchObject({ zeon: 1235, act: 110, proyeccion: 140, vias: { Fuego: 80, Luz: 40 } });
-    expect(conjurosDe(f.magia!).map((c) => c.nombre)).toEqual(['Escudo de Luz', 'Armadura de Luz', 'Descarga de Luz', 'Bola de Fuego', 'Descarga de Calor']);
+    expect(f.magia).toMatchObject({
+      zeon: 1235, act: 110, proyeccion: 140, vias: { Fuego: 80, Luz: 40 }, subvias: { Fuego: 'Guerra', Luz: 'Conocimiento' },
+      controlDelEspacio: true, romperResistencias: 1, especialista: ['Incinerar', 'Critico directo'],
+    });
+    expect(conjurosDe(f.magia!).map((c) => c.nombre)).toEqual([
+      'Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Descarga de Luz', 'Bola de Fuego', 'Descarga de Calor', 'Arma Ígnea',
+      'Aumentar el Crítico', 'Secar', 'Cuerpo a Fuego', 'Incinerar', 'Consumir Esencia', 'Crítico Directo', 'Tormenta de Fuego',
+      'Ira Ancestral', 'Velocidad en la Batalla', 'Destrucción Desencadenada', 'Protección Final', 'Campeón', 'Curar Heridas',
+    ]);
     expect([f.rm, f.resistirDolor]).toEqual([90, 100]);
   });
 
   it('la vía tiene que llegar al nivel del conjuro, y la Inteligencia limita el grado (Core p.120-121)', () => {
-    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(['Escudo de Luz', 'Armadura de Luz']);
+    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(['Flash Cegador', 'Escudo de Luz', 'Armadura de Luz']);
     expect(gradosPosibles(conjuro('Descarga de Luz'), 9)).toEqual([0, 1]);
     expect(gradosPosibles(conjuro('Escudo de Luz'), 10)).toEqual([0, 1, 2]);
   });

@@ -349,12 +349,14 @@ celda con otro luchador da **cobertura** (−40, Tabla 47).
 2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
 3. **Ki** ← hecho (lo que no se simula, en "Pendiente del Ki")
 4. **Proyectiles y línea de visión** ← hecho (ver "Proyectiles")
-5. **Magia** ← en curso (ver "Magia"); después psíquica
+5. **Magia** ← en curso (ver "Magia": partes 1 y 2 hechas); después psíquica
 
 ## Magia (fase 5)
 
-Por partes: **1. núcleo** (hecho), 2. catálogo de combate de las vías de la mesa, 3. reglas avanzadas
-(conjuro preparado, magia innata, choque de descargas, metamagia, subvías), 4. psíquica.
+Por partes: **1. núcleo** (hecho), **2. catálogo de combate de las vías de Stéphan** (hecho, a
+confirmar las interpretaciones), 3. reglas avanzadas (conjuro preparado, magia innata, choque de
+descargas, el resto de la metamagia), 4. psíquica. Los conjuros no tienen una forma genérica: cada
+uno se cataloga y se resuelve caso por caso (`Conjuro.efecto`).
 
 ### Datos
 
@@ -362,8 +364,9 @@ Por partes: **1. núcleo** (hecho), 2. catálogo de combate de las vías de la m
 desequilibrio ofensivo), nivel en cada vía y conjuros libres. Sólo si tiene vías o libres. También
 se leen la RM y Resistir el dolor. El catálogo (`motor/conjuros.ts`) tiene los números de cada grado
 (zeon, Inteligencia requerida, daño, área, resistencia, TA, mantenimiento), nunca el texto del
-manual; conoce los de sus vías hasta su nivel y los libres que eligió. Hoy: Escudo de Luz, Armadura
-de Luz, Descarga de Luz, Bola de Fuego, Descarga de Calor.
+manual; conoce los de sus vías hasta su nivel, los de la sub-vía elegida para cada vía y los libres
+que eligió. También se leen las sub-vías y la metamagia que usa el motor (Control del Espacio, Romper
+Resistencias, Conjuro Especialista).
 
 ### Reglas (`motor/magia.ts`)
 
@@ -399,6 +402,91 @@ siguientes del asalto vale más que su zeon, y se defiende con él si su Proyecc
 5. El mantenimiento del Escudo de Luz es el de su espejo, el Escudo de Oscuridad (5 / 15 / 20 / 25).
 6. Quien pelea con magia usa el turno de las acciones desarmadas (el de la Proyección en la planilla).
 7. La Absorción de energía (Ki) también absorbe el daño de los conjuros de ataque.
+
+### Parte 2: los conjuros de Stéphan
+
+Stéphan: Fuego 80 con la sub-vía de Guerra, Luz 40 con la de Conocimiento (ninguno de combate), y
+libres. Catalogados los de combate:
+
+| Conjuro | Tipo | Cómo se resuelve | Fuente |
+|---|---|---|---|
+| Flash Cegador | automático | RF de todos los del radio salvo el lanzador; ciego tantos asaltos como decenas de fracaso | Core p.126 |
+| Escudo de Luz, Armadura de Luz, Descarga de Luz | | parte 1 | Core p.126-127 |
+| Bola de Fuego, Descarga de Calor | ataque | parte 1 (ahora además prenden: Tabla 76) | Core p.157 |
+| Arma Ígnea | efecto | el arma ataca en calor como crítico primario, +daño | Core p.157 |
+| Aumentar el Crítico | pasivo | +20 a +80 a la tirada del crítico; se lanza antes de tirarla | Core p.157 |
+| Secar | anímico | área; RM o RF; pierde la mitad del fracaso | Core p.158 |
+| Cuerpo a Fuego | efecto | inmune a lo que no sea energía, frío o agua; quien lo toca, RF contra el doble de su Presencia o pierde la mitad del fracaso | Core p.158 |
+| Incinerar | automático | RM; si falla, 1d100 + bono en la Tabla 76 | Core p.158 |
+| Consumir Esencia | anímico | radio alrededor del mago; RM; pierde PV y zeon igual al fracaso | Core p.158 |
+| Crítico Directo | anímico | RM; si falla, un crítico de ese nivel contra su RF | Core p.159 |
+| Tormenta de Fuego | automático | zona estática; desde el asalto siguiente, ataque automático de habilidad fija (180, 240…) y daño 100 en calor a los de adentro | Core p.159 |
+| Ira Ancestral | efecto (Guerra) | +10 al ataque y estado de Ira a los aliados del radio | Arcana p.35 |
+| Velocidad en la Batalla | efecto (Guerra) | +10 / +20 al turno | Arcana p.35 |
+| Destrucción Desencadenada | efecto (Guerra) | +20 a +40 al daño | Arcana p.35 |
+| Protección Final | efecto (Guerra) | + Resistencias y + TA | Arcana p.35 |
+| Campeón | efecto (Guerra) | a uno: + toda acción, + daño, + turno, + TA | Arcana p.35 |
+| Curar Heridas | efecto (libre) | recupera 40 / 80 / 160 / 320 PV | Core p.187 |
+
+Reglas generales que se agregaron:
+
+| Regla | Fuente |
+|---|---|
+| Anímicos: ataque de energía con la Proyección; invisibles (el defensor, cegado si no ve la magia); alcanza si logra un resultado de daño contra la TA de energía; después, RM | Core p.122 |
+| Automáticos: no hay defensa; la Proyección sólo decide si se manifiesta (pifia) | Core p.122 |
+| Todo conjuro pide un control de Proyección: con pifia falla aunque gaste el zeon | Core p.118 |
+| Tabla 76, En llamas: todo ataque de calor que daña tira 1d100 + el daño; prendido (100), ardiendo (180, 10 PV/asalto), en llamas (240, 25), calcinado (300, 50, sin armadura); la TA contra calor resta 2 por punto; crece 10 por asalto si no se apaga; apagarse: 1d100 + Destreza o Agilidad restado; acumulación: el resultado /5 y el daño ×5 | Core p.236-237 |
+| Ira: se lanza al ataque (no hace defensa total ni huye) | Core p.232 |
+| Control del Espacio: elige los blancos de sus conjuros de área, por 10 de zeon más | Arcana p.27 |
+| Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño | Arcana p.28 |
+| Conjuro Especialista: +1 a la Inteligencia para el grado de ese conjuro | Arcana p.30 |
+| Sub-vías: se conocen si son las elegidas para esa vía y la vía llega a su nivel | Arcana p.32 |
+| RM sin planilla: Presencia + bono de POD (Presencia sin planilla: RF − bono de CON) | Core p.12 |
+| Muerto, deja de mantener sus conjuros (inconsciente los sigue sosteniendo) | Core p.122 |
+
+**IA**: cada conjuro se valora a su manera, en PV, contra el zeon (y tres asaltos de mantenimiento):
+ataques y anímicos por blanco (sumando enemigos, restando aliados por λ); Flash por los asaltos de
+ceguera; Incinerar por lo que quemaría; Tormenta por tres asaltos de ataques automáticos; beneficios
+por el daño de más que hace y el que deja de recibir el beneficiado en cuatro asaltos (quien pelea con
+conjuros no cuenta sus ataques físicos); Curar Heridas por los PV que recupera. Usa Control del
+Espacio sólo si hay un aliado en el área. Aumentar el Crítico, si sube el valor del crítico más que su
+zeon. En llamas, se apaga si ya lo quema o está por hacerlo. Los demás saben que un Cuerpo a Fuego no
+recibe sus golpes (el daño esperado es 0).
+
+**Interpretaciones nuevas, a confirmar:**
+
+1. Dos nombres están cortados en la copia: el de nivel 26 de Fuego se llama acá **Arma Ígnea**, y el de
+   52, **Cuerpo a Fuego** (por su espejo, Cuerpo a Luz).
+2. A Destrucción Desencadenada le falta el mantenimiento: se toma el de Protección Final, que cuesta
+   lo mismo (5 / 15 / 20 / 20).
+3. Los beneficios de Guerra "a los aliados del radio" incluyen al lanzador; alcanzan a los que están
+   en el radio al lanzarlo y lo conservan aunque se alejen.
+4. El mismo conjuro de dos lanzadores no se acumula (vale el mayor); conjuros distintos, sí. Cada
+   lanzador mantiene una sola copia de cada conjuro a la vez.
+5. Un anímico que alcanza no deja al blanco a la defensiva (no lo golpea).
+6. Secar es en un área elegida (como la Bola de Fuego); el blanco resiste con la mejor de RM y RF.
+   Consumir Esencia pide Proyección y defensa a cada uno del radio (es anímico de área).
+7. Crítico Directo: el nivel es fijo (no se tira el dado del crítico); la RF se tira como siempre.
+8. Flash Cegador: todos lo miran (nadie se cubre: sin el +40); el asalto en que lo lanza cuenta como
+   el primero de ceguera.
+9. Incinerar no se mantiene en la simulación: el texto no dice qué hace su mantenimiento.
+10. Tormenta de Fuego: el ataque automático va al empezar cada asalto y se defiende como de un conjuro
+    de ataque; la zona queda donde estaba el objetivo al lanzarla.
+11. Tabla 76: el daño de las llamas va al final del asalto; apagarse ocupa el turno; en llamas y
+    calcinado también se apagan así (no hay agua ni arena en la simulación); cuenta la TA contra
+    calor de la armadura.
+12. Cuerpo a Fuego: "tocarlo" es un golpe sin armas que alcanza, dado o recibido. Los conjuros de calor
+    no lo dañan (sólo los de energía, Core p.122); un luchador que daña energía (Ki), sí.
+13. Arma Ígnea vale para el arma principal, no para el perfil sin armas ni los proyectiles.
+14. Campeón: el "+ a toda acción" no suma al turno (trae su propio bono de turno). Los bonos al daño de
+    Guerra no se suman a los conjuros.
+15. Conjuro Especialista: el +10 al ACT "al declarar que se prepara para lanzarlo" queda para la parte
+    3 (la IA todavía no planifica qué va a lanzar).
+
+**Pendiente de la parte 2:** Barrera de Fuego (un muro en el mapa), Lazos de Luz (Presa con los
+lazos), Invisibilidad (hace falta leer Advertir y Buscar de la planilla), Éxtasis, Moral (Frialdad),
+la mina de fuego de nivel 40, Sacrificio Vital y de Poder, Magia por Capacidades, Consumir Vida por
+Magia. La IA no se aparta de una Tormenta de Fuego.
 
 **Tabla 57 (choque de descargas)**, dada por el usuario (la copia del manual está cortada): diferencia
 1-50, se anulan; 51-100, la ganadora pasa con la mitad del daño base; 101 o más, pasa con el daño

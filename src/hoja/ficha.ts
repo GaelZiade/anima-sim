@@ -110,6 +110,14 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
   const libres = Object.values((m.Libres ?? {}) as Record<string, string>).filter((x) => x && x !== '-');
   if (!zeon || (!Object.keys(vias).length && !libres.length)) return undefined;
   const p = json.Combate.armas.find((a) => a.tipo === 'Mistico');
+  const subvias: Record<string, string> = {};
+  for (const [v, sv] of Object.entries((m.SubVias ?? {}) as Record<string, string>)) if (vias[v] && sv && sv !== '-') subvias[v] = sv;
+  // Metamagia (Arcana cap. 3): "Control del espacio", "Romper resistencias (1)", "Conjuro especializado
+  // Nv 60" con el conjuro al final de la descripción.
+  const metamagia = Object.entries((m.Metamagia ?? {}) as Record<string, string>).map(([k, d]) => [normalizar(k), d ?? ''] as const);
+  const romper = metamagia.find(([k]) => k.startsWith('romper resistencias'))?.[0].match(/\((\d)\)/)?.[1];
+  const especialista = metamagia.filter(([k]) => k.startsWith('conjuro especializado') || k.startsWith('conjuro especialista'))
+    .map(([, d]) => d.split(':').pop()!.trim()).filter(Boolean);
   return {
     zeon,
     act: numero(m.act as string, 0),
@@ -118,6 +126,10 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
     proyeccionDefensa: numero(p?.defensa, numero(p?.ataque, 0)),
     vias,
     libres,
+    ...(Object.keys(subvias).length ? { subvias } : {}),
+    ...(metamagia.some(([k]) => k.startsWith('control del espacio')) ? { controlDelEspacio: true } : {}),
+    ...(romper ? { romperResistencias: Number(romper) } : {}),
+    ...(especialista.length ? { especialista } : {}),
   };
 }
 
