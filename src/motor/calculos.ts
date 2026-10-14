@@ -13,6 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
 import type { ModKi } from './ki';
+import { adyacentes, campoHacia, indice } from './mapa';
 
 export const ALCANCE = 2;
 /** Atacar con el crítico secundario del arma (Core p.92). */
@@ -28,8 +29,17 @@ export function distancia(a: Luchador, b: Luchador): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** Trabados cuerpo a cuerpo: en el mapa, en celdas vecinas (también en diagonal). */
 export function enAlcance(a: Luchador, b: Luchador): boolean {
+  if (a.mapa) return adyacentes(a.mapa, a.pos, b.pos);
   return distancia(a, b) <= ALCANCE + 1e-6;
+}
+
+/** Metros que le faltan caminar a `l` para quedar trabado con `e` (por el camino, esquivando muros). */
+export function faltaParaLlegar(l: Luchador, e: Luchador): number {
+  if (enAlcance(l, e)) return 0;
+  if (l.mapa) return campoHacia(l.mapa, e.pos)[indice(l.mapa, l.pos)];
+  return Math.max(0, distancia(l, e) - ALCANCE);
 }
 
 export function activo(l: Luchador): boolean {

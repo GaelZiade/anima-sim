@@ -3,7 +3,7 @@
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import {
-  absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
+  absorcionContra, activo, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
@@ -38,11 +38,6 @@ function enemigos(ctx: Contexto, l: Luchador): Luchador[] {
 
 function trabadoConAlguien(l: Luchador): boolean {
   return l.trabados.some((e) => activo(e) && enAlcance(l, e));
-}
-
-/** Metros que le faltan para llegar al alcance cuerpo a cuerpo. */
-function faltaParaLlegar(l: Luchador, e: Luchador): number {
-  return Math.max(0, distancia(l, e) - ALCANCE);
 }
 
 /** ¿Puede atacar a `e` este asalto? Si está trabado no se retira. */
@@ -449,7 +444,7 @@ export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
   nuevaDecision(ctx);
   const todos = enemigos(ctx, l);
   if (todos.length === 0) return null;
-  const cercano = todos.reduce((a, b) => (distancia(l, b) < distancia(l, a) ? b : a));
+  const cercano = todos.reduce((a, b) => (faltaParaLlegar(l, b) < faltaParaLlegar(l, a) ? b : a));
 
   if (perfil(l) === 'bestia') {
     const alAlcance = todos.filter((e) => enAlcance(l, e));

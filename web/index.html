@@ -12,86 +12,121 @@
     <p>Simulador de combate para Anima: Beyond Fantasy. Todo corre en tu navegador: las planillas no salen de tu computadora.</p>
   </header>
 
-  <main>
-    <section class="panel" aria-labelledby="t-fichas">
-      <h2 id="t-fichas">Fichas</h2>
+  <main class="disposicion">
+    <aside class="panel compendio" aria-labelledby="t-compendio">
+      <h2 id="t-compendio">Compendio</h2>
+      <div class="pestanas" role="tablist">
+        <button type="button" role="tab" id="pestana-propios">Mis personajes</button>
+        <button type="button" role="tab" id="pestana-genericos">Genéricos</button>
+      </div>
       <label class="zona" id="zona">
         <input type="file" id="archivos" multiple accept=".xlsx,.xlsm,.json" hidden>
         <strong>Arrastrá planillas acá</strong>
-        <span>o hacé clic para elegirlas · .xlsx, .xlsm, un escenario .json o una lista de fichas .json</span>
+        <span>o hacé clic · .xlsx, .xlsm, un escenario .json o una lista de fichas .json</span>
       </label>
       <p class="aviso" id="aviso" hidden></p>
       <ul class="biblioteca" id="biblioteca"></ul>
-    </section>
+    </aside>
 
-    <section class="panel" aria-labelledby="t-combate">
-      <h2 id="t-combate">Combate</h2>
-      <div class="equipos">
-        <div class="equipo" data-equipo="A">
-          <h3><span class="marca a"></span>Equipo A</h3>
-          <ul id="equipoA"></ul>
+    <div class="centro">
+      <section class="panel" id="panelMapa" aria-labelledby="t-mapa">
+        <h2 id="t-mapa">Mapa</h2>
+        <div class="barra" id="editor">
+          <label>Ancho (m) <input type="number" id="mapaAncho" min="4" max="80"></label>
+          <label>Alto (m) <input type="number" id="mapaAlto" min="4" max="80"></label>
+          <button type="button" id="reubicar" class="chico">Reubicar fichas</button>
+          <button type="button" id="limpiarParedes" class="chico">Sacar paredes</button>
+          <span class="nota">Arrastrá las fichas para ubicarlas. Clic o arrastre en una celda vacía pinta o borra paredes. Cada celda es 1 m.</span>
         </div>
-        <div class="equipo" data-equipo="B">
-          <h3><span class="marca b"></span>Equipo B</h3>
-          <ul id="equipoB"></ul>
-        </div>
-      </div>
-
-      <details class="opciones" open>
-        <summary>Opciones</summary>
-        <div class="rejilla">
-          <label>Combates <input type="number" id="combates" min="1" step="1000" value="10000"></label>
-          <label>Hilos <input type="number" id="hilos" min="1" max="64" value="4"></label>
-          <label>Distancia inicial (m) <input type="number" id="distancia" min="0" value="10"></label>
-          <label>Semilla <input type="number" id="semilla" min="1" value="1"></label>
-          <label>Luz
-            <select id="oscuridad">
-              <option value="">Buena luz</option>
-              <option value="penumbra">Penumbra (ceguera parcial)</option>
-              <option value="total">Oscuridad total (ceguera absoluta)</option>
-              <option value="magica">Oscuridad mágica</option>
+        <div class="barra" id="controles" hidden>
+          <button type="button" id="reiniciar" class="chico" title="Desde el principio">⏮</button>
+          <button type="button" id="anterior" class="chico" title="Línea anterior (←)">◀</button>
+          <button type="button" id="play" class="chico principal">▶</button>
+          <button type="button" id="siguiente" class="chico" title="Línea siguiente (→)">▶|</button>
+          <label class="en-linea">Velocidad
+            <select id="velocidad">
+              <option value="0.5">×0,5</option>
+              <option value="1" selected>×1</option>
+              <option value="2">×2</option>
+              <option value="4">×4</option>
             </select>
           </label>
-          <label>Fase lunar
-            <select id="faseLunar">
-              <option value="">De día</option>
-              <option value="llena">Llena</option>
-              <option value="creciente">Creciente</option>
-              <option value="menguante">Menguante</option>
-              <option value="nueva">Nueva</option>
-              <option value="eclipse">Eclipse</option>
-            </select>
-            <small id="notaLuna" class="nota">Sólo con el Legado de la Luna</small>
-          </label>
+          <span class="nota" id="posicion"></span>
+          <button type="button" id="editarMapa" class="chico">Volver a editar</button>
         </div>
-        <div class="casillas">
-          <label><input type="checkbox" id="rotura"> Rotura de armas y armaduras</label>
-          <label><input type="checkbox" id="huida"> Se puede huir</label>
-          <label><input type="checkbox" id="espacioReducido"> Espacio reducido</label>
-          <label><input type="checkbox" id="armasEnfundadas"> Armas enfundadas</label>
-          <label><input type="checkbox" id="desequilibrio"> Desequilibrio de atributos (Dominus)</label>
+        <div class="lienzo"><canvas id="mapa"></canvas></div>
+        <p class="cartel" id="cartel" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="t-combate">
+        <h2 id="t-combate">Combate</h2>
+        <div class="equipos">
+          <div class="equipo" data-equipo="A">
+            <h3><span class="marca a"></span>Equipo A</h3>
+            <ul id="equipoA"></ul>
+          </div>
+          <div class="equipo" data-equipo="B">
+            <h3><span class="marca b"></span>Equipo B</h3>
+            <ul id="equipoB"></ul>
+          </div>
         </div>
-      </details>
 
-      <div class="acciones">
-        <button type="button" id="simular" class="principal">Simular</button>
-        <button type="button" id="cancelar" hidden>Cancelar</button>
-        <button type="button" id="narrar">Narrar un combate</button>
-      </div>
-      <div class="progreso" id="progreso" hidden><div id="barraProgreso"></div></div>
-    </section>
+        <details class="opciones">
+          <summary>Opciones</summary>
+          <div class="rejilla">
+            <label>Combates <input type="number" id="combates" min="1" step="1000" value="10000"></label>
+            <label>Hilos <input type="number" id="hilos" min="1" max="64" value="4"></label>
+            <label>Semilla <input type="number" id="semilla" min="1" value="1"></label>
+            <label>Luz
+              <select id="oscuridad">
+                <option value="">Buena luz</option>
+                <option value="penumbra">Penumbra (ceguera parcial)</option>
+                <option value="total">Oscuridad total (ceguera absoluta)</option>
+                <option value="magica">Oscuridad mágica</option>
+              </select>
+            </label>
+            <label>Fase lunar
+              <select id="faseLunar">
+                <option value="">De día</option>
+                <option value="llena">Llena</option>
+                <option value="creciente">Creciente</option>
+                <option value="menguante">Menguante</option>
+                <option value="nueva">Nueva</option>
+                <option value="eclipse">Eclipse</option>
+              </select>
+              <small id="notaLuna" class="nota">Sólo con el Legado de la Luna</small>
+            </label>
+          </div>
+          <div class="casillas">
+            <label><input type="checkbox" id="rotura"> Rotura de armas y armaduras</label>
+            <label><input type="checkbox" id="huida"> Se puede huir</label>
+            <label><input type="checkbox" id="espacioReducido"> Espacio reducido</label>
+            <label><input type="checkbox" id="armasEnfundadas"> Armas enfundadas</label>
+            <label><input type="checkbox" id="desequilibrio"> Desequilibrio de atributos (Dominus)</label>
+          </div>
+        </details>
 
-    <section class="panel" id="resultados" aria-labelledby="t-resultados" hidden>
-      <h2 id="t-resultados">Resultados</h2>
-      <div class="victorias" id="victorias"></div>
-      <p class="resumen" id="resumen"></p>
-      <div class="tabla"><table id="tabla"></table></div>
-    </section>
+        <div class="acciones">
+          <button type="button" id="enVivo" class="principal">Ver un combate en vivo</button>
+          <button type="button" id="simular">Simular muchos</button>
+          <button type="button" id="cancelar" hidden>Cancelar</button>
+        </div>
+        <div class="progreso" id="progreso" hidden><div id="barraProgreso"></div></div>
+      </section>
 
-    <section class="panel" id="narracion" aria-labelledby="t-narracion" hidden>
-      <h2 id="t-narracion">Narración</h2>
-      <div id="registro" class="registro"></div>
-    </section>
+      <section class="panel" id="narracion" aria-labelledby="t-narracion" hidden>
+        <h2 id="t-narracion">Narración</h2>
+        <p class="nota">Clic en una línea para ir a ese momento. Espacio pausa; las flechas avanzan o retroceden.</p>
+        <div id="registro" class="registro"></div>
+      </section>
+
+      <section class="panel" id="resultados" aria-labelledby="t-resultados" hidden>
+        <h2 id="t-resultados">Resultados</h2>
+        <div class="victorias" id="victorias"></div>
+        <p class="resumen" id="resumen"></p>
+        <div class="tabla"><table id="tabla"></table></div>
+      </section>
+    </div>
   </main>
 
   <script type="module" src="./main.ts"></script>

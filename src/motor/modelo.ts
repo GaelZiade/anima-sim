@@ -2,6 +2,7 @@ import type { Rng } from './rng';
 import type { TamanoArma, TipoAtaque } from './reglas';
 import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
 import type { EstadoKi } from './ki';
+import type { Celda, Mapa, MapaListo } from './mapa';
 
 export type Perfil = 'agresivo' | 'equilibrado' | 'cauto' | 'bestia';
 
@@ -206,7 +207,10 @@ export interface Luchador {
   /** Derivado de la ficha una sola vez. */
   cap: Capacidades;
   equipo: Equipo;
+  /** Celda que ocupa (con mapa) o punto en metros. */
   pos: Punto;
+  /** Mapa del combate: alcance por celdas vecinas y caminos que esquivan muros. Sin mapa, distancia en línea recta. */
+  mapa: MapaListo | null;
   pv: number;
   cansancio: number;
   /** Negativo por dolor: baja 5 por asalto. */
@@ -303,6 +307,16 @@ export interface Luchador {
 export interface Evento {
   asalto: number;
   texto: string;
+  /** Cómo quedó cada luchador (en el orden de `luchadores`) al narrarse esta línea: para verlo en vivo. */
+  foto?: FotoLuchador[];
+}
+
+export interface FotoLuchador {
+  x: number;
+  y: number;
+  pv: number;
+  estado: Estado;
+  aLaDefensiva: boolean;
 }
 
 /** Reglas opcionales y condiciones del escenario. */
@@ -311,6 +325,10 @@ export interface OpcionesEscenario {
   rotura?: boolean;
   /** Pelean en un espacio reducido (Tabla 43). */
   espacioReducido?: boolean;
+  /** Mapa en celdas de 1 m. Sin mapa se arma uno abierto con la distancia inicial entre los bandos. */
+  mapa?: Mapa;
+  /** Celda inicial de cada luchador, por equipo y en orden. Lo que falte (u ocupado) se ubica solo. */
+  posiciones?: { A?: (Celda | null)[]; B?: (Celda | null)[] };
   /**
    * Oscuridad (Tabla 43): penumbra da ceguera parcial; total (carencia absoluta de luz) y mágica,
    * ceguera absoluta. Visión nocturna la reduce o la anula (Core p.20, p.318).

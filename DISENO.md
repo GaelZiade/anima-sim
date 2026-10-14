@@ -27,6 +27,7 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 | Impactado (aunque sea sin daño) → a la defensiva: pierde acciones activas del asalto | Core p.89 |
 | Contraataque: resultado < 0. Bono = mitad redondeada a 5, máx +150. Consume un ataque declarado | Core p.89 |
 | Ataques adicionales: 1 extra por cada 100 de ataque; −20/−30/−40 (arma P/M/G) a todos | Core p.90 |
+| Mapa en celdas de 1 m: cada luchador ocupa una; está trabado con los de las 8 vecinas (no en diagonal si un muro tapa la esquina). Se mueve en 8 direcciones (diagonal √2 m) esquivando muros y cuerpos; la IA mide la distancia por el camino. Sin mapa, uno abierto con la distancia inicial entre bandos | Diseño (como BattleCast); metros del Tipo de movimiento, Core p.87 |
 | Defensas adicionales: −30, −50, −70, −90 | Core Tabla 44 |
 | Flanco/espalda por cantidad de enemigos trabados: 1-3 frente, 4-5 flanco, 6+ espalda | Core p.90, Tabla 43 |
 | Movimiento: hasta ¼ del tipo de movimiento es pasivo; más es acción activa (−25 a lo siguiente) | Core p.86, Tabla 25 |
@@ -242,12 +243,24 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
 Versión base de la interfaz, al estilo BattleCast. Todo corre en el navegador del usuario: las
 planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningún lado.
 
-- **Fichas:** se arrastran planillas `.xlsx`/`.xlsm` o un escenario `.json` (el formato del CLI). Las
-  planillas de un escenario se buscan por nombre de archivo entre las ya cargadas. Lo cargado se
-  recuerda en `localStorage`.
-- **Combate:** dos equipos, con arma y perfil por luchador; una ficha repetida se numera. Opciones
-  del escenario (rotura, huida, espacio reducido, armas enfundadas, fase lunar), cantidad de
-  combates, hilos y semilla. La fase lunar sólo se habilita si alguien tiene el Legado de la Luna.
+- **Compendio:** dos pestañas. *Mis personajes*: las planillas `.xlsx`/`.xlsm` que se arrastran, o un
+  escenario `.json` (el formato del CLI; sus planillas se buscan por nombre de archivo entre las ya
+  cargadas). *Genéricos*: los arquetipos de Abel y las fichas de `ejemplos/`, siempre disponibles.
+  Cada uno se suma con "+ A" o "+ B" las veces que haga falta. Lo cargado se recuerda en
+  `localStorage`.
+- **Mapa** (`tablero.ts`): grilla de celdas de 1 m de tamaño configurable, con paredes que se pintan
+  o borran con clic o arrastre. Las fichas se ubican solas al sumarlas (el A desde la izquierda, el
+  B desde la derecha) y se arrastran a otra celda. Mapa y posiciones viajan en
+  `OpcionesEscenario` (`mapa`, `posiciones`), así el Monte Carlo usa el mismo mapa.
+- **Combate:** dos equipos, con arma, perfil y estado inicial por luchador; una ficha repetida se
+  numera. Opciones del escenario (luz, rotura, huida, espacio reducido, armas enfundadas, fase
+  lunar), cantidad de combates, hilos y semilla. La fase lunar sólo se habilita si alguien tiene el
+  Legado de la Luna.
+- **En vivo:** corre un combate con la semilla elegida y lo reproduce sobre el mapa, una línea del
+  registro por vez: las fichas se mueven animadas, llevan su barra de PV, se marcan a la defensiva
+  (borde punteado) o caídas (cruz), y se resaltan quién actúa y a quién. Cada línea del registro
+  guarda la foto de todos (`Evento.foto`). Controles: reproducir/pausa (espacio), línea anterior o
+  siguiente (flechas), desde el principio y velocidad; clic en una línea de la narración salta ahí.
 - **Publicación:** `.github/workflows/pages.yml` la construye y la publica en GitHub Pages en cada
   push a `main`.
 - **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en

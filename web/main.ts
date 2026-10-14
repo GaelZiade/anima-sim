@@ -1,13 +1,20 @@
-// Página base: cargar planillas, armar dos equipos, correr el Monte Carlo en workers y narrar un
-// combate. Todo en el navegador; lo cargado se recuerda en localStorage.
+// Página: compendio de personajes (planillas propias y genéricos), dos equipos ubicados en un mapa
+// de celdas de 1 m, Monte Carlo en workers y un combate para ver en vivo sobre el mapa. Todo en el
+// navegador; lo cargado se recuerda en localStorage.
 
 import { armasCuerpoACuerpo, jsonAFicha, leerHoja } from '../src/hoja/ficha';
 import type { HojaJson } from '../src/hoja/hojaAJson';
-import { simularCombate } from '../src/motor/combate';
+import { simularCombate, type ResultadoCombate } from '../src/motor/combate';
 import { estilos } from '../src/motor/estilos';
+import type { Celda } from '../src/motor/mapa';
 import type { Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
+import abel from '../ejemplos/arquetipos-abel.json';
+import duelo from '../ejemplos/duelo.json';
+import ejemploEstilos from '../ejemplos/estilos.json';
+import grupo from '../ejemplos/grupo.json';
 import { correrEnParalelo, type Corrida } from './paralelo';
+import { Tablero, type FichaTablero } from './tablero';
 
 type Entrada =
   | { clave: string; nombre: string; tipo: 'hoja'; json: HojaJson }
@@ -21,12 +28,22 @@ interface Integrante {
   perfil: Perfil | '';
   /** Estado con el que empieza (ver ESTADOS); vacío: normal. Falta en lo guardado antes. */
   estado?: string;
+  /** Celda en el mapa. */
+  pos?: Celda;
+}
+
+interface MapaGuardado {
+  ancho: number;
+  alto: number;
+  bloqueadas: Celda[];
 }
 
 interface Estado {
   biblioteca: Entrada[];
   equipoA: Integrante[];
   equipoB: Integrante[];
+  mapa?: MapaGuardado;
+  pestana?: 'propios' | 'genericos';
 }
 
 /** Lo que trae un escenario .json (el mismo formato que usa el CLI). */
@@ -36,6 +53,29 @@ interface EscenarioJson {
   equipoA: (Ficha | { hoja: string; arma?: string; perfil?: Perfil; nombre?: string; estado?: string })[];
   equipoB: EscenarioJson['equipoA'];
 }
+
+/**
+ * Genéricos: los arquetipos de Abel y las fichas de los ejemplos. Las copias de una misma ficha en
+ * los ejemplos ("Guardia 1", "Guardia 2"…) quedan una sola, sin el número.
+ */
+const GENERICOS: Entrada[] = (() => {
+  const todas = [
+    ...(abel.fichas as unknown as Ficha[]),
+    ...[duelo, ejemploEstilos, grupo].flatMap((e) => [...e.equipoA, ...e.equipoB] as unknown as Ficha[]),
+  ];
+  const vistas = new Set<string>();
+  const res: Entrada[] = [];
+  for (const f of todas) {
+    const { id: _id, nombre: _nombre, ...datos } = f;
+    const huella = JSON.stringify(datos);
+    if (vistas.has(huella)) continue;
+    vistas.add(huella);
+    const repetida = todas.filter((x) => JSON.stringify({ ...x, id: 0, nombre: 0 }) === JSON.stringify({ ...f, id: 0, nombre: 0 })).length > 1;
+    const nombre = repetida ? f.nombre.replace(/\s+\d+$/, '') : f.nombre;
+    res.push({ clave: `gen:${f.id}`, nombre, tipo: 'ficha', ficha: { ...f, nombre } });
+  }
+  return res;
+})();
 
 /** Estados de la Tabla 43 y del capítulo 14 del Core con que puede empezar un luchador. */
 const ESTADOS: [string, string, (f: Ficha) => Ficha][] = [
@@ -58,6 +98,7 @@ const PERFILES: [Perfil | '', string][] = [
   ['', 'Perfil de la ficha'], ['agresivo', 'Agresivo'], ['equilibrado', 'Equilibrado'], ['cauto', 'Cauto'], ['bestia', 'Bestia'],
 ];
 const GUARDADO = 'anima-sim:estado';
+const MAPA_INICIAL: MapaGuardado = { ancho: 20, alto: 12, bloqueadas: [] };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const numeroDe = (id: string) => Number(($(id) as HTMLInputElement).value);
@@ -81,6 +122,7 @@ function cargarEstado(): Estado {
 }
 
 const estado = cargarEstado();
+estado.mapa ??= { ...MAPA_INICIAL };
 
 function guardar() {
   try {
@@ -89,7 +131,7 @@ function guardar() {
 }
 
 function buscar(clave: string) {
-  return estado.biblioteca.find((e) => e.clave === clave);
+  return estado.biblioteca.find((e) => e.clave === clave) ?? GENERICOS.find((e) => e.clave === clave);
 }
 
 function fichaBase(e: Entrada, arma = '', perfil: Perfil | '' = ''): Ficha {
@@ -97,16 +139,23 @@ function fichaBase(e: Entrada, arma = '', perfil: Perfil | '' = ''): Ficha {
   return perfil ? { ...f, perfil } : f;
 }
 
-/** Fichas de un equipo. Si una ficha se repite, las copias se numeran para distinguirlas. */
-function fichasDe(equipo: Integrante[], vistos: Map<string, number>): Ficha[] {
-  return equipo.flatMap((i) => {
+/**
+ * Fichas y celdas de un equipo, en el mismo orden. Si una ficha se repite, las copias se numeran
+ * para distinguirlas.
+ */
+function equipoDe(equipo: Integrante[], vistos: Map<string, number>): { fichas: Ficha[]; celdas: (Celda | null)[] } {
+  const fichas: Ficha[] = [];
+  const celdas: (Celda | null)[] = [];
+  for (const i of equipo) {
     const e = buscar(i.clave);
-    if (!e) return [];
+    if (!e) continue;
     const f = conEstado(fichaBase(e, i.arma, i.perfil), i.estado);
     const n = (vistos.get(f.id) ?? 0) + 1;
     vistos.set(f.id, n);
-    return [n === 1 ? f : { ...f, id: `${f.id}-${n}`, nombre: `${f.nombre} (${n})` }];
-  });
+    fichas.push(n === 1 ? f : { ...f, id: `${f.id}-${n}`, nombre: `${f.nombre} (${n})` });
+    celdas.push(i.pos ?? null);
+  }
+  return { fichas, celdas };
 }
 
 function escenarioActual() {
@@ -114,6 +163,8 @@ function escenarioActual() {
   const selectorLuna = $<HTMLSelectElement>('faseLunar');
   const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
   const oscuridad = $<HTMLSelectElement>('oscuridad').value as OpcionesEscenario['oscuridad'] | '';
+  const a = equipoDe(estado.equipoA, vistos);
+  const b = equipoDe(estado.equipoB, vistos);
   const opciones: OpcionesEscenario = {
     rotura: marcado('rotura'),
     huida: marcado('huida'),
@@ -122,13 +173,114 @@ function escenarioActual() {
     desequilibrio: marcado('desequilibrio'),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
+    mapa: estado.mapa,
+    posiciones: { A: a.celdas, B: b.celdas },
   };
-  return {
-    equipoA: fichasDe(estado.equipoA, vistos),
-    equipoB: fichasDe(estado.equipoB, vistos),
-    distanciaInicial: numeroDe('distancia'),
-    escenario: opciones,
-  };
+  return { equipoA: a.fichas, equipoB: b.fichas, escenario: opciones };
+}
+
+// ---------- Mapa ----------
+
+const tablero = new Tablero($<HTMLCanvasElement>('mapa'));
+const claveCelda = (c: Celda) => `${c.x},${c.y}`;
+
+function paredes(): Set<string> {
+  return new Set(estado.mapa!.bloqueadas.map(claveCelda));
+}
+
+/** Celdas ocupadas por paredes o por otros luchadores. */
+function ocupadas(salvo?: Integrante): Set<string> {
+  const s = paredes();
+  for (const i of [...estado.equipoA, ...estado.equipoB]) if (i !== salvo && i.pos) s.add(claveCelda(i.pos));
+  return s;
+}
+
+/**
+ * Celda libre para alguien que se suma: el equipo A desde la izquierda y el B desde la derecha,
+ * por columnas, empezando por el centro de cada una.
+ */
+function celdaParaNuevo(equipo: 'A' | 'B'): Celda | undefined {
+  const { ancho, alto } = estado.mapa!;
+  const usadas = ocupadas();
+  const filas = Array.from({ length: alto }, (_, k) => Math.floor(alto / 2) + (k % 2 ? -1 : 1) * Math.ceil(k / 2))
+    .filter((y) => y >= 0 && y < alto);
+  for (let n = 1; n < ancho; n++) {
+    const x = equipo === 'A' ? n : ancho - 1 - n;
+    // De a una fila por medio, para que no queden pegados.
+    for (const y of [...filas.filter((y) => (y - Math.floor(alto / 2)) % 2 === 0), ...filas]) {
+      if (!usadas.has(`${x},${y}`)) return { x, y };
+    }
+  }
+  return undefined;
+}
+
+/** Ubica a quien no tenga celda, o tenga una que ya no vale (fuera del mapa, pared, repetida). */
+function completarPosiciones() {
+  const { ancho, alto } = estado.mapa!;
+  const vistas = paredes();
+  for (const [equipo, lista] of [['A', estado.equipoA], ['B', estado.equipoB]] as const)
+    for (const i of lista) {
+      if (i.pos && i.pos.x < ancho && i.pos.y < alto && !vistas.has(claveCelda(i.pos))) {
+        vistas.add(claveCelda(i.pos));
+        continue;
+      }
+      i.pos = undefined;
+      i.pos = celdaParaNuevo(equipo);
+      if (i.pos) vistas.add(claveCelda(i.pos));
+    }
+}
+
+function fichasDelTablero(): FichaTablero[] {
+  const vistos = new Map<string, number>();
+  const res: FichaTablero[] = [];
+  for (const [equipo, lista] of [['A', estado.equipoA], ['B', estado.equipoB]] as const)
+    lista.forEach((i, n) => {
+      const e = buscar(i.clave);
+      if (!e || !i.pos) return;
+      const veces = (vistos.get(e.clave) ?? 0) + 1;
+      vistos.set(e.clave, veces);
+      res.push({ id: `${equipo}${n}`, nombre: veces > 1 ? `${e.nombre} (${veces})` : e.nombre, equipo, x: i.pos.x, y: i.pos.y });
+    });
+  return res;
+}
+
+function dibujarMapa() {
+  const m = estado.mapa!;
+  ($('mapaAncho') as HTMLInputElement).value = String(m.ancho);
+  ($('mapaAlto') as HTMLInputElement).value = String(m.alto);
+  tablero.mapa = { ancho: m.ancho, alto: m.alto, paredes: paredes() };
+  if (tablero.modo === 'editar') {
+    tablero.fichas = fichasDelTablero();
+    tablero.actor = tablero.objetivo = null;
+  }
+  tablero.dibujar();
+}
+
+tablero.alCambiarPared = (c, pared) => {
+  const m = estado.mapa!;
+  m.bloqueadas = m.bloqueadas.filter((x) => x.x !== c.x || x.y !== c.y);
+  if (pared) m.bloqueadas.push(c);
+  guardar();
+  dibujarMapa();
+};
+
+tablero.alMoverFicha = (id, c) => {
+  const lista = id[0] === 'A' ? estado.equipoA : estado.equipoB;
+  const i = lista[Number(id.slice(1))];
+  if (!i) return;
+  i.pos = c;
+  guardar();
+  dibujarMapa();
+};
+
+function cambiarTamano() {
+  const m = estado.mapa!;
+  m.ancho = Math.max(4, Math.min(80, Math.round(numeroDe('mapaAncho')) || m.ancho));
+  m.alto = Math.max(4, Math.min(80, Math.round(numeroDe('mapaAlto')) || m.alto));
+  m.bloqueadas = m.bloqueadas.filter((c) => c.x < m.ancho && c.y < m.alto);
+  completarPosiciones();
+  guardar();
+  dibujarMapa();
 }
 
 // ---------- Carga de archivos ----------
@@ -169,6 +321,7 @@ async function cargarArchivos(archivos: File[]) {
   // Los escenarios van al final: sus planillas se buscan por nombre de archivo entre las cargadas.
   for (const esc of escenarios) errores.push(...aplicarEscenario(esc));
   avisar(errores.join(' · '));
+  estado.pestana = 'propios';
   guardar();
   dibujar();
 }
@@ -184,37 +337,70 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
       }
       return [{ clave, arma: x.arma ?? '', perfil: x.perfil ?? '', estado: x.estado ?? '' }];
     }
-    const clave = `ficha:${x.id}`;
-    agregarALaBiblioteca({ clave, nombre: x.nombre, tipo: 'ficha', ficha: x });
+    const generico = GENERICOS.find((g) => g.tipo === 'ficha' && g.ficha.id === x.id);
+    const clave = generico?.clave ?? `ficha:${x.id}`;
+    if (!generico) agregarALaBiblioteca({ clave, nombre: x.nombre, tipo: 'ficha', ficha: x });
     return [{ clave, arma: '', perfil: '' }];
   });
   estado.equipoA = integrantes(esc.equipoA ?? []);
   estado.equipoB = integrantes(esc.equipoB ?? []);
-  if (esc.distanciaInicial !== undefined) ($('distancia') as HTMLInputElement).value = String(esc.distanciaInicial);
   const o = esc.opciones ?? {};
+  if (o.mapa) {
+    estado.mapa = { ancho: o.mapa.ancho, alto: o.mapa.alto, bloqueadas: [...(o.mapa.bloqueadas ?? [])] };
+    estado.equipoA.forEach((i, n) => (i.pos = o.posiciones?.A?.[n] ?? undefined));
+    estado.equipoB.forEach((i, n) => (i.pos = o.posiciones?.B?.[n] ?? undefined));
+  } else {
+    // Sin mapa: uno abierto con los bandos a la distancia inicial, como hace el motor.
+    const d = Math.max(1, Math.round(esc.distanciaInicial ?? 10));
+    const n = Math.max(estado.equipoA.length, estado.equipoB.length);
+    estado.mapa = { ancho: Math.max(MAPA_INICIAL.ancho, d + 5), alto: Math.max(MAPA_INICIAL.alto, 2 * n + 3), bloqueadas: [] };
+    const centro = Math.floor(estado.mapa.alto / 2);
+    const columna = (lista: Integrante[], x: number) => lista.forEach((i, k) => (i.pos = { x, y: centro - (lista.length - 1) + 2 * k }));
+    columna(estado.equipoA, 2);
+    columna(estado.equipoB, 2 + d);
+  }
+  completarPosiciones();
   for (const id of ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const) ($(id) as HTMLInputElement).checked = !!o[id];
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
   ($('oscuridad') as HTMLSelectElement).value = o.oscuridad ?? '';
   return errores;
 }
 
-// ---------- Dibujo ----------
+// ---------- Compendio y equipos ----------
 
-function dibujarBiblioteca() {
+function datosDe(e: Entrada): string {
+  try {
+    const f = fichaBase(e);
+    return `PV ${f.pv} · Turno ${f.turno} · HA ${f.ataque} · HD ${f.defensa} · Daño ${f.danoBase}`;
+  } catch (error) {
+    return `No se pudo leer: ${error instanceof Error ? error.message : error}`;
+  }
+}
+
+function sumar(e: Entrada, equipo: 'equipoA' | 'equipoB') {
+  const i: Integrante = { clave: e.clave, arma: '', perfil: '' };
+  estado[equipo].push(i);
+  i.pos = celdaParaNuevo(equipo === 'equipoA' ? 'A' : 'B');
+  if (!i.pos) avisar('No queda lugar libre en el mapa: agrandalo o sacá paredes.');
+  guardar();
+  dibujarEquipos();
+}
+
+function dibujarCompendio() {
+  const pestana = estado.pestana ?? (estado.biblioteca.length ? 'propios' : 'genericos');
+  for (const p of ['propios', 'genericos'] as const) {
+    const b = $(`pestana-${p}`);
+    b.classList.toggle('activa', p === pestana);
+    b.setAttribute('aria-selected', String(p === pestana));
+  }
+  $('zona').hidden = pestana !== 'propios';
+  const entradas = pestana === 'propios' ? estado.biblioteca : GENERICOS;
   const lista = $('biblioteca');
-  lista.replaceChildren(...estado.biblioteca.map((e) => {
-    let datos: string;
-    try {
-      const f = fichaBase(e);
-      datos = `PV ${f.pv} · Turno ${f.turno} · HA ${f.ataque} · HD ${f.defensa} · Daño ${f.danoBase}`;
-    } catch (error) {
-      datos = `No se pudo leer: ${error instanceof Error ? error.message : error}`;
-    }
-    const sumar = (equipo: 'equipoA' | 'equipoB') => () => {
-      estado[equipo].push({ clave: e.clave, arma: '', perfil: '' });
-      guardar();
-      dibujarEquipos();
-    };
+  if (!entradas.length) {
+    lista.replaceChildren(crear('li', { className: 'vacio' }, 'Todavía no cargaste planillas: arrastralas arriba.'));
+    return;
+  }
+  lista.replaceChildren(...entradas.map((e) => {
     const quitar = () => {
       estado.biblioteca = estado.biblioteca.filter((x) => x !== e);
       estado.equipoA = estado.equipoA.filter((i) => i.clave !== e.clave);
@@ -224,11 +410,13 @@ function dibujarBiblioteca() {
     };
     return crear('li', {},
       crear('span', { className: 'nombre', title: e.clave }, e.nombre),
-      crear('span', { className: 'datos' }, datos),
+      crear('span', { className: 'datos' }, datosDe(e)),
       crear('div', { className: 'botones' },
-        crear('button', { type: 'button', className: 'chico', onclick: sumar('equipoA') }, '+ Equipo A'),
-        crear('button', { type: 'button', className: 'chico', onclick: sumar('equipoB') }, '+ Equipo B'),
-        crear('button', { type: 'button', className: 'chico', onclick: quitar, title: 'Quitar de la lista' }, 'Quitar')));
+        crear('button', { type: 'button', className: 'chico a', onclick: () => sumar(e, 'equipoA') }, '+ A'),
+        crear('button', { type: 'button', className: 'chico b', onclick: () => sumar(e, 'equipoB') }, '+ B'),
+        ...(pestana === 'propios'
+          ? [crear('button', { type: 'button', className: 'chico', onclick: quitar, title: 'Quitar de la lista' }, 'Quitar')]
+          : [])));
   }));
 }
 
@@ -242,11 +430,12 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
   const lista = $(clave);
   const integrantes = estado[clave];
   if (!integrantes.length) {
-    lista.replaceChildren(crear('li', { className: 'vacio' }, 'Agregá fichas desde la lista de arriba.'));
+    lista.replaceChildren(crear('li', { className: 'vacio' }, 'Sumá personajes desde el compendio.'));
     return;
   }
   lista.replaceChildren(...integrantes.map((i, n) => {
-    const e = buscar(i.clave)!;
+    const e = buscar(i.clave);
+    if (!e) return crear('li', { className: 'vacio' }, `Falta "${i.clave}"`);
     const cambiar = (campo: 'arma' | 'perfil' | 'estado') => (v: string) => {
       (i as unknown as Record<string, string>)[campo] = v;
       guardar();
@@ -288,12 +477,15 @@ function dibujarEquipos() {
   dibujarEquipo('equipoA');
   dibujarEquipo('equipoB');
   habilitarFaseLunar();
+  dibujarMapa();
 }
 
 function dibujar() {
-  dibujarBiblioteca();
+  dibujarCompendio();
   dibujarEquipos();
 }
+
+// ---------- Resultados ----------
 
 const pct = (x: number, total: number) => `${((100 * x) / total).toFixed(1)}%`;
 
@@ -381,27 +573,148 @@ function resaltarTiradas(texto: string): (Node | string)[] {
   });
 }
 
-function narrar() {
+// ---------- En vivo ----------
+
+/** Un combate para ver sobre el mapa, línea por línea. */
+interface Funcion {
+  r: ResultadoCombate;
+  semilla: number;
+  /** Nombre e id de ficha del tablero de cada luchador, más largos primero (para buscarlos en el texto). */
+  nombres: { nombre: string; id: string }[];
+  /** Id de ficha del tablero de cada luchador, en el orden de `r.luchadores`. */
+  ids: string[];
+  lineas: HTMLElement[];
+  indice: number;
+  reproduciendo: boolean;
+  temporizador: number;
+}
+
+let funcion: Funcion | null = null;
+
+function verEnVivo() {
   const esc = validar();
   if (!esc) return;
   const semilla = Math.max(1, Math.round(numeroDe('semilla')));
-  const r = simularCombate(esc.equipoA, esc.equipoB, {
-    semilla, registrar: true, distanciaInicial: esc.distanciaInicial, escenario: esc.escenario,
-  });
+  const r = simularCombate(esc.equipoA, esc.equipoB, { semilla, registrar: true, escenario: esc.escenario });
+  pararFuncion();
+  const ids = r.luchadores.map((_, k) => (k < esc.equipoA.length ? `A${k}` : `B${k - esc.equipoA.length}`));
+  const nombres = r.luchadores.map((l, k) => ({ nombre: l.ficha.nombre, id: ids[k] })).sort((a, b) => b.nombre.length - a.nombre.length);
+
+  // El registro completo, con un encabezado por asalto; cada línea lleva a ese momento.
   const nodos: HTMLElement[] = [];
+  const lineas: HTMLElement[] = [];
   let asalto = -1;
-  for (const e of r.registro ?? []) {
+  (r.registro ?? []).forEach((e, k) => {
     if (e.asalto !== asalto) {
       asalto = e.asalto;
-      nodos.push(crear('h3', {}, `Asalto ${asalto}`));
+      nodos.push(crear('h3', {}, asalto === 0 ? 'Inicio' : `Asalto ${asalto}`));
     }
-    nodos.push(crear('p', {}, ...resaltarTiradas(e.texto)));
-  }
+    const p = crear('p', { className: e.texto.startsWith('  ') ? 'detalle' : '', onclick: () => irA(k) }, ...resaltarTiradas(e.texto.trim()));
+    lineas.push(p);
+    nodos.push(p);
+  });
   const ganador = r.ganador === 'empate' ? 'Empate' : `Gana el equipo ${r.ganador}`;
   nodos.push(crear('h3', {}, `${ganador} en ${r.asaltos} asaltos (semilla ${semilla})`));
   $('registro').replaceChildren(...nodos);
+
+  funcion = { r, semilla, nombres, ids, lineas, indice: -1, reproduciendo: false, temporizador: 0 };
+  tablero.modo = 'ver';
+  tablero.mapa = { ancho: r.mapa.ancho, alto: r.mapa.alto, paredes: paredesDe(r) };
+  $('editor').hidden = true;
+  $('controles').hidden = false;
   $('narracion').hidden = false;
-  $('narracion').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  irA(0);
+  reproducir(true);
+  $('panelMapa').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function paredesDe(r: ResultadoCombate): Set<string> {
+  const s = new Set<string>();
+  r.mapa.muro.forEach((v, i) => v && s.add(`${i % r.mapa.ancho},${Math.floor(i / r.mapa.ancho)}`));
+  return s;
+}
+
+/** Cuánto dura cada línea, según lo que pasa en ella. */
+function duracion(texto: string): number {
+  const vel = Number(($('velocidad') as HTMLSelectElement).value) || 1;
+  const base = texto.startsWith('Iniciativa') ? 1500 : texto.startsWith('  ') ? 800 : / avanza /.test(texto) ? 700 : 1200;
+  return base / vel;
+}
+
+function irA(k: number) {
+  const f = funcion;
+  if (!f || !f.r.registro) return;
+  const registro = f.r.registro;
+  k = Math.max(0, Math.min(registro.length - 1, k));
+  const anterior = f.indice;
+  f.indice = k;
+  const e = registro[k];
+  const foto = e.foto ?? [];
+  const fichas: FichaTablero[] = f.r.luchadores.map((l, j) => {
+    const s = foto[j] ?? { x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: false };
+    return {
+      id: f.ids[j], nombre: l.ficha.nombre, equipo: l.equipo, x: s.x, y: s.y, pv: s.pv, pvMax: l.ficha.pv,
+      caido: s.estado !== 'activo', aLaDefensiva: s.aLaDefensiva,
+    };
+  });
+  // Quién actúa y a quién: los dos primeros nombres que aparecen en la línea.
+  const texto = e.texto.trim();
+  // Los nombres más largos primero: "Soldado (2)" tapa al "Soldado" que lleva adentro.
+  const tapado = new Array<boolean>(texto.length).fill(false);
+  const apariciones: { id: string; pos: number }[] = [];
+  for (const n of f.nombres) {
+    for (let pos = texto.indexOf(n.nombre); pos >= 0; pos = texto.indexOf(n.nombre, pos + 1)) {
+      if (tapado[pos] || tapado[pos + n.nombre.length - 1]) continue;
+      tapado.fill(true, pos, pos + n.nombre.length);
+      if (!apariciones.some((a) => a.id === n.id)) apariciones.push({ id: n.id, pos });
+    }
+  }
+  apariciones.sort((a, b) => a.pos - b.pos);
+  tablero.actor = apariciones[0]?.id ?? null;
+  tablero.objetivo = apariciones[1]?.id ?? null;
+  tablero.animar(fichas, k === anterior + 1 ? Math.min(600, duracion(e.texto) * 0.6) : 0);
+
+  f.lineas[anterior]?.classList.remove('actual');
+  const linea = f.lineas[k];
+  linea.classList.add('actual');
+  const contenedor = $('registro');
+  contenedor.scrollTop = linea.offsetTop - contenedor.offsetTop - contenedor.clientHeight / 2;
+  $('cartel').replaceChildren(crear('strong', {}, e.asalto === 0 ? 'Inicio' : `Asalto ${e.asalto}`), ' ', ...resaltarTiradas(texto));
+  $('posicion').textContent = `${k + 1} / ${registro.length}`;
+}
+
+function reproducir(si: boolean) {
+  const f = funcion;
+  if (!f) return;
+  f.reproduciendo = si;
+  clearTimeout(f.temporizador);
+  $('play').textContent = si ? '⏸' : '▶';
+  $('play').title = si ? 'Pausa (espacio)' : 'Reproducir (espacio)';
+  if (!si) return;
+  const seguir = () => {
+    if (!f.reproduciendo || funcion !== f) return;
+    if (f.indice >= f.r.registro!.length - 1) {
+      reproducir(false);
+      return;
+    }
+    irA(f.indice + 1);
+    f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice].texto));
+  };
+  f.temporizador = window.setTimeout(seguir, duracion(f.r.registro![f.indice].texto));
+}
+
+function pararFuncion() {
+  if (funcion) clearTimeout(funcion.temporizador);
+  funcion = null;
+}
+
+function volverAEditar() {
+  pararFuncion();
+  tablero.modo = 'editar';
+  $('editor').hidden = false;
+  $('controles').hidden = true;
+  $('cartel').replaceChildren();
+  dibujarMapa();
 }
 
 // ---------- Eventos ----------
@@ -424,9 +737,56 @@ zona.addEventListener('drop', (e) => {
   zona.classList.remove('encima');
   if (e.dataTransfer?.files.length) void cargarArchivos([...e.dataTransfer.files]);
 });
+for (const p of ['propios', 'genericos'] as const)
+  $(`pestana-${p}`).addEventListener('click', () => {
+    estado.pestana = p;
+    guardar();
+    dibujarCompendio();
+  });
+$('mapaAncho').addEventListener('change', cambiarTamano);
+$('mapaAlto').addEventListener('change', cambiarTamano);
+$('limpiarParedes').addEventListener('click', () => {
+  estado.mapa!.bloqueadas = [];
+  guardar();
+  dibujarMapa();
+});
+$('reubicar').addEventListener('click', () => {
+  for (const i of [...estado.equipoA, ...estado.equipoB]) i.pos = undefined;
+  completarPosiciones();
+  guardar();
+  dibujarMapa();
+});
 $('simular').addEventListener('click', () => void simular());
 $('cancelar').addEventListener('click', () => corrida?.cancelar());
-$('narrar').addEventListener('click', narrar);
+$('enVivo').addEventListener('click', verEnVivo);
+$('play').addEventListener('click', () => reproducir(!funcion?.reproduciendo));
+$('anterior').addEventListener('click', () => {
+  reproducir(false);
+  irA((funcion?.indice ?? 0) - 1);
+});
+$('siguiente').addEventListener('click', () => {
+  reproducir(false);
+  irA((funcion?.indice ?? 0) + 1);
+});
+$('reiniciar').addEventListener('click', () => {
+  irA(0);
+  reproducir(true);
+});
+$('editarMapa').addEventListener('click', volverAEditar);
+document.addEventListener('keydown', (e) => {
+  if (!funcion || (e.target instanceof HTMLElement && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName))) return;
+  if (e.key === ' ') {
+    e.preventDefault();
+    reproducir(!funcion.reproduciendo);
+  } else if (e.key === 'ArrowRight') {
+    reproducir(false);
+    irA(funcion.indice + 1);
+  } else if (e.key === 'ArrowLeft') {
+    reproducir(false);
+    irA(funcion.indice - 1);
+  }
+});
 ($('hilos') as HTMLInputElement).value = String(navigator.hardwareConcurrency || 4);
 
+completarPosiciones();
 dibujar();

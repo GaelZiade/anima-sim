@@ -19,6 +19,10 @@ import {
 } from './maniobras';
 import * as ia from './ia';
 import {
+  buscarCamino, campoHacia, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
+  type Celda, type MapaListo,
+} from './mapa';
+import {
   alMatar, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
   textoKi, type ModKi,
 } from './ki';
@@ -39,11 +43,12 @@ export interface ResultadoCombate {
   asaltos: number;
   luchadores: Luchador[];
   registro: Contexto['registro'];
+  mapa: MapaListo;
 }
 
 export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number): Luchador {
   const l: Luchador = {
-    ficha, equipo, pos: { x, y }, cap: capacidades(ficha), entorno: {},
+    ficha, equipo, pos: { x, y }, mapa: null, cap: capacidades(ficha), entorno: {},
     pv: ficha.pv,
     cansancio: ficha.cansancio ?? ficha.constitucion,
     penDolor: 0, penFisico: 0,
@@ -74,7 +79,9 @@ function tirar(ctx: Contexto, umbral: number): TiradaD100 {
 }
 
 function log(ctx: Contexto, texto: string | (() => string)) {
-  if (ctx.registro) ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto() });
+  if (!ctx.registro) return;
+  const foto = ctx.luchadores.map((l) => ({ x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: l.aLaDefensiva }));
+  ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto(), foto });
 }
 
 function equipoVivo(ctx: Contexto, equipo: Equipo): boolean {
@@ -89,14 +96,20 @@ export function simularCombate(equipoA: Ficha[], equipoB: Ficha[], o: OpcionesCo
   const rng = o.rng ?? crearRng(o.semilla ?? Date.now());
   const dist = o.distanciaInicial ?? 10;
   const entorno = o.escenario ?? {};
+  const { mapa, celdas } = colocar(equipoA.length, equipoB.length, dist, entorno);
   const luchadores = [
-    ...equipoA.map((f, i) => crearLuchador(f, 'A', 0, (i - (equipoA.length - 1) / 2) * 2)),
-    ...equipoB.map((f, i) => crearLuchador(f, 'B', dist, (i - (equipoB.length - 1) / 2) * 2)),
+    ...equipoA.map((f, i) => crearLuchador(f, 'A', celdas[i].x, celdas[i].y)),
+    ...equipoB.map((f, i) => crearLuchador(f, 'B', celdas[equipoA.length + i].x, celdas[equipoA.length + i].y)),
   ];
   for (const l of luchadores) {
     l.entorno = entorno;
+    l.mapa = mapa;
     l.enfundada = !!entorno.armasEnfundadas && !l.cap.desarmado;
   }
+  // Quien empieza al lado de un enemigo ya está trabado con él.
+  for (const a of luchadores)
+    for (const b of luchadores)
+      if (a.equipo !== b.equipo && enAlcance(a, b) && !a.trabados.includes(b)) a.trabados.push(b);
   const ctx: Contexto = {
     opciones: entorno, rng, luchadores, asalto: 0, registro: o.registrar ? [] : null,
     ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
@@ -118,7 +131,33 @@ export function simularCombate(equipoA: Ficha[], equipoB: Ficha[], o: OpcionesCo
   const ganador = !equipoVivo(ctx, 'B') && equipoVivo(ctx, 'A') ? 'A'
     : !equipoVivo(ctx, 'A') && equipoVivo(ctx, 'B') ? 'B' : 'empate';
   log(ctx, `Fin: ${ganador === 'empate' ? 'empate' : `gana el equipo ${ganador}`}.`);
-  return { ganador, asaltos: ctx.asalto, luchadores, registro: ctx.registro };
+  return { ganador, asaltos: ctx.asalto, luchadores, registro: ctx.registro, mapa };
+}
+
+/**
+ * Mapa y celdas iniciales (equipo A y después B). Sin mapa, uno abierto: el A en una columna y el B
+ * a `distancia` metros, de a uno cada 2 m, con 4 m de margen para rodear. Con mapa, cada uno va a
+ * la celda pedida o, si falta o está ocupada, a la libre más cercana a la que le tocaría.
+ */
+function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario): { mapa: MapaListo; celdas: Celda[] } {
+  const d = Math.max(1, Math.round(distancia));
+  const n = Math.max(nA, nB);
+  const mapa = e.mapa ? prepararMapa(e.mapa) : mapaAbierto(d + 9, Math.max(9, 2 * n + 7));
+  const xA = e.mapa ? Math.min(1, mapa.ancho - 1) : 4;
+  const xB = e.mapa ? Math.max(0, Math.min(mapa.ancho - 2, xA + d)) : 4 + d;
+  const columna = (cant: number, x: number, i: number): Celda => ({ x, y: Math.floor(mapa.alto / 2) - (cant - 1) + 2 * i });
+  const ocupadas = new Set<number>();
+  const celdas: Celda[] = [];
+  const ubicar = (pedida: Celda | null | undefined, porDefecto: Celda) => {
+    const quiere = pedida && transitable(mapa, pedida) && !ocupadas.has(indice(mapa, pedida)) ? pedida : porDefecto;
+    const c = celdaLibreCerca(mapa, { x: Math.max(0, Math.min(mapa.ancho - 1, quiere.x)), y: Math.max(0, Math.min(mapa.alto - 1, quiere.y)) }, ocupadas);
+    if (!c) throw new Error('No entran todos los luchadores en el mapa.');
+    ocupadas.add(indice(mapa, c));
+    celdas.push(c);
+  };
+  for (let i = 0; i < nA; i++) ubicar(e.posiciones?.A?.[i], columna(nA, xA, i));
+  for (let i = 0; i < nB; i++) ubicar(e.posiciones?.B?.[i], columna(nB, xB, i));
+  return { mapa, celdas };
 }
 
 function jugarAsalto(ctx: Contexto) {
@@ -334,19 +373,9 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
   if (l.trabados.some((e) => activo(e) && enAlcance(l, e))) return; // trabado: no se retira
   const total = metrosTotales(l);
   const disponible = total - l.metrosMovidos;
-  const d = distancia(l, obj);
-  const falta = d - ALCANCE * 0.75;
-  const paso = Math.min(Math.max(0, falta), disponible);
+  if (disponible <= 0) return;
+  const paso = l.mapa ? moverEnMapa(ctx, l, obj, l.mapa, disponible) : moverEnLinea(l, obj, disponible);
   if (paso <= 0) return;
-  if (paso >= falta) {
-    // Llega: se ubica alrededor del objetivo, repartiendo el ángulo entre los que ya están.
-    const base = Math.atan2(l.pos.y - obj.pos.y, l.pos.x - obj.pos.x);
-    const k = obj.trabados.length;
-    const ang = base + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 4);
-    l.pos = { x: obj.pos.x + Math.cos(ang) * ALCANCE * 0.75, y: obj.pos.y + Math.sin(ang) * ALCANCE * 0.75 };
-  } else {
-    l.pos = { x: l.pos.x + ((obj.pos.x - l.pos.x) / d) * paso, y: l.pos.y + ((obj.pos.y - l.pos.y) / d) * paso };
-  }
   l.metrosMovidos += paso;
   ctx.movimientosEnAsalto++;
   const yaActivo = l.movioActivo;
@@ -362,6 +391,49 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
     if (!e.trabados.includes(l)) e.trabados.push(l);
     if (!l.trabados.includes(e)) l.trabados.push(e);
   }
+}
+
+/**
+ * En el mapa: entre las celdas a las que llega con lo que le queda de movimiento, sin pisar muros
+ * ni a otros, va a la que lo deja más cerca de trabarse con `obj` (y, a igual distancia, a la que
+ * le cuesta menos). Devuelve los metros caminados.
+ */
+function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, disponible: number): number {
+  const ocupadas = m.ocupadas.fill(0);
+  for (const x of ctx.luchadores) if (x !== l && activo(x)) ocupadas[indice(m, x.pos)] = 1;
+  const falta = campoHacia(m, obj.pos);
+  // La primera celda trabada con el objetivo que sale de la búsqueda es la más barata: ahí termina.
+  let mejor = buscarCamino(m, l.pos, ocupadas, disponible + 1e-6, (i) => falta[i] === 0);
+  const costo = m.costos;
+  if (mejor < 0) {
+    // No llega este asalto: la celda alcanzable que más lo acerca (y, a igual distancia, la más barata).
+    mejor = indice(m, l.pos);
+    for (let i = 0; i < costo.length; i++) {
+      if (costo[i] === Infinity) continue;
+      if (falta[i] < falta[mejor] - 1e-6 || (Math.abs(falta[i] - falta[mejor]) < 1e-6 && costo[i] < costo[mejor])) mejor = i;
+    }
+  }
+  if (mejor === indice(m, l.pos)) return 0;
+  l.pos = celdaDe(m, mejor);
+  return costo[mejor];
+}
+
+/** Sin mapa: en línea recta hacia el objetivo, ubicándose alrededor de él al llegar. */
+function moverEnLinea(l: Luchador, obj: Luchador, disponible: number): number {
+  const d = distancia(l, obj);
+  const falta = d - ALCANCE * 0.75;
+  const paso = Math.min(Math.max(0, falta), disponible);
+  if (paso <= 0) return 0;
+  if (paso >= falta) {
+    // Llega: se ubica alrededor del objetivo, repartiendo el ángulo entre los que ya están.
+    const base = Math.atan2(l.pos.y - obj.pos.y, l.pos.x - obj.pos.x);
+    const k = obj.trabados.length;
+    const ang = base + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 4);
+    l.pos = { x: obj.pos.x + Math.cos(ang) * ALCANCE * 0.75, y: obj.pos.y + Math.sin(ang) * ALCANCE * 0.75 };
+  } else {
+    l.pos = { x: l.pos.x + ((obj.pos.x - l.pos.x) / d) * paso, y: l.pos.y + ((obj.pos.y - l.pos.y) / d) * paso };
+  }
+  return paso;
 }
 
 function gastarCansancio(l: Luchador, puntos: number) {
@@ -605,7 +677,7 @@ function resolverDefensa(
     if (yaEstaba || !activo(def) || def.ficha.acumulacion) return;
     if (def.aLaDefensiva) {
       const porCritico = resiste || def.modo.seraphite === 3 ? ' por el crítico' : '';
-      log(ctx, () => `  ${def.ficha.nombre} queda a la defensiva${porCritico}: no puede actuar ni contraatacar el resto del asalto.`);
+      log(ctx, () => `  ${def.ficha.nombre} queda a la defensiva${porCritico}.`);
     } else if (resiste) log(ctx, () => `  ${def.ficha.nombre} resistió el golpe: sigue pudiendo actuar.`);
   };
   liberarAmenazados(ctx, def);
