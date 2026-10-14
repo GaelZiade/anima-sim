@@ -161,7 +161,7 @@ export interface Luchador {
    * Penalizador propio de cada ataque del asalto, en el orden en que se usan: primero los
    * declarados (0), después los extra (segunda arma, patada).
    */
-  planAtaques: Ranura[];
+  planAtaques: readonly Ranura[];
   ataquesRestantes: number;
   defensasHechas: number;
   cansancioAsalto: number;

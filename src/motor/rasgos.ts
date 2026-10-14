@@ -4,7 +4,7 @@
 // `penalty_rules.dart`), que citan Core Exxet y Dominus Exxet.
 
 import type { Ficha } from './modelo';
-import type { TamanoArma } from './reglas';
+import { umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
 
 /** Minúsculas, sin acentos ni espacios repetidos (`CombatData.normalizeTrait`). */
@@ -112,7 +112,19 @@ export interface Ranura {
  * Ataques del asalto en el orden en que se usan: los n declarados (comparten el penalizador) y
  * después los extra. Con Estilo Defensivo la segunda arma defiende en vez de atacar (Dominus p.28).
  */
-export function planDeAtaques(cap: Capacidades, n: number, estiloDefensivo = false): Ranura[] {
+// Los planes no se modifican: se guardan por capacidades (que tampoco cambian, ver `capacidades`).
+const planes = new WeakMap<Capacidades, Map<number, readonly Ranura[]>>();
+
+export function planDeAtaques(cap: Capacidades, n: number, estiloDefensivo = false): readonly Ranura[] {
+  let porCap = planes.get(cap);
+  if (!porCap) planes.set(cap, (porCap = new Map()));
+  const clave = n * 2 + Number(estiloDefensivo);
+  let plan = porCap.get(clave);
+  if (!plan) porCap.set(clave, (plan = armarPlan(cap, n, estiloDefensivo)));
+  return plan;
+}
+
+function armarPlan(cap: Capacidades, n: number, estiloDefensivo: boolean): Ranura[] {
   const extras = cap.extras
     .filter((e) => !(estiloDefensivo && e.nombre.startsWith('Segunda arma')))
     .sort((a, b) => a.pen - b.pen)
@@ -152,9 +164,23 @@ export interface Capacidades {
   sinDolorNiCansancio: boolean;
   /** Ventaja Buena suerte: pifia con un número menos (Core p.10). */
   buenaSuerte: boolean;
+  /** Umbral de pifia al atacar y al defenderse (maestría y Buena suerte, ver `umbralPifia`). */
+  umbralAtaque: number;
+  umbralDefensa: number;
 }
 
+// Las capacidades dependen sólo de la ficha y nunca se modifican: si algo cambia en combate (un arma
+// mellada, un desarme) el motor arma una ficha nueva. Se calculan una vez por ficha.
+const calculadas = new WeakMap<Ficha, Capacidades>();
+
 export function capacidades(f: Ficha): Capacidades {
+  let c = calculadas.get(f);
+  if (!c) calculadas.set(f, (c = calcularCapacidades(f)));
+  return c;
+}
+
+function calcularCapacidades(f: Ficha): Capacidades {
+  const buenaSuerte = tiene(f.rasgos?.ventajas, 'buena suerte') || tiene(f.rasgos?.ventajas, 'afortunad');
   const r = f.rasgos ?? {};
   const arma = f.arma ?? {};
   const nombreArma = arma.nombre ?? '';
@@ -235,6 +261,8 @@ export function capacidades(f: Ficha): Capacidades {
     // sólo la reduce con Eliminación de penalizadores.
     mitadDolorCritico: inmunidad || eliminacion,
     sinDolorNiCansancio: tiene(r.habilidadesKi, 'esencia de vacio'),
-    buenaSuerte: tiene(r.ventajas, 'buena suerte') || tiene(r.ventajas, 'afortunad'),
+    buenaSuerte,
+    umbralAtaque: umbralPifia(f.ataque, buenaSuerte),
+    umbralDefensa: umbralPifia(f.defensa, buenaSuerte),
   };
 }

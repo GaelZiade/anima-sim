@@ -2,7 +2,7 @@
 
 import type { Luchador } from './modelo';
 import {
-  absorcion, BONO_CANSANCIO, umbralPifia, MOD_POSICION, MOD_SORPRESA_DEFENSA,
+  absorcion, BONO_CANSANCIO, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
   penDefensaAdicional, posicionPorOrden, type Posicion, type TipoAtaque,
 } from './reglas';
@@ -24,7 +24,9 @@ export const PEN_PREVER_SORPRESA = 40;
 const BONO_POSICION_SUPERIOR = 20;
 
 export function distancia(a: Luchador, b: Luchador): number {
-  return Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y);
+  const dx = a.pos.x - b.pos.x;
+  const dy = a.pos.y - b.pos.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function enAlcance(a: Luchador, b: Luchador): boolean {
@@ -282,7 +284,7 @@ export function perfilDe(l: Luchador, ranura: Ranura): { ataque: number; danoBas
 }
 
 export function tablaPara(atk: Luchador, def: Luchador) {
-  return tabla(umbralPifia(atk.ficha.ataque, atk.cap.buenaSuerte), umbralPifia(def.ficha.defensa, def.cap.buenaSuerte), !!def.ficha.acumulacion);
+  return tabla(atk.cap.umbralAtaque, def.cap.umbralDefensa, !!def.ficha.acumulacion);
 }
 
 export interface Pronostico {
@@ -314,12 +316,8 @@ export interface OpcionesPronostico {
   factorDano?: number;
 }
 
-/** Pronóstico de un ataque a partir de las habilidades finales (sin dados). */
-export function pronostico(
-  atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico = {},
-): Pronostico {
-  const t = tablaPara(atk, def);
-  const s = habAtaque - habDefensa;
+/** Lo que comparten `pronostico` y `danoEsperado`: tabla, ventaja, absorciones y daño base. */
+function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico) {
   const m = o.maniobra ?? 'normal';
   const abs = absorcionContra(def, atk, m, o.tipo, o.ranura);
   let base = danoBase(atk, def, o.esContra, o.ranura);
@@ -328,15 +326,31 @@ export function pronostico(
   else if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
   const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura) : abs;
+  const nulo = base === 0 || barreraFrena(def, atk, base);
+  return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
+}
+
+/** Pronóstico de un ataque a partir de las habilidades finales (sin dados). */
+export function pronostico(
+  atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico = {},
+): Pronostico {
+  const { t, s, abs, absDano, base, nulo } = preparar(atk, def, habAtaque, habDefensa, o);
   const pContra = def.ficha.acumulacion ? 0 : t.pContra(s);
-  const frena = barreraFrena(def, atk, base);
   return {
-    dano: frena || base === 0 ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100,
+    dano: nulo ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100,
     pImpacto: t.pImpacto(s),
     pContra,
     bonoContra: pContra > 0 ? t.bonoContraEsperado(s) / pContra : 0,
-    pBaja: frena || base === 0 ? 0 : def.pv > 0 ? t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv, base)) : 1,
-    pCritico: frena || base === 0 || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv / 2, base)),
+    pBaja: nulo ? 0 : def.pv > 0 ? t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv, base)) : 1,
+    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv / 2, base)),
     pManiobra: t.pPorcentajeAlMenos(s, abs, 10),
   };
+}
+
+/** Sólo el daño esperado de `pronostico`, sin calcular (ni crear) el resto. */
+export function danoEsperado(
+  atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico = {},
+): number {
+  const { t, s, absDano, base, nulo } = preparar(atk, def, habAtaque, habDefensa, o);
+  return nulo ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100;
 }

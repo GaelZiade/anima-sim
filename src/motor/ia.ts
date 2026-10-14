@@ -4,7 +4,7 @@
 import type { Contexto, Luchador, Perfil } from './modelo';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
-  pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  danoEsperado, pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { tabla } from './probabilidades';
 import { MAX_CANSANCIO_ASALTO, negativoCansancio, umbralPifia, type TipoAtaque } from './reglas';
@@ -53,9 +53,37 @@ function necesitaMovimientoActivo(l: Luchador, e: Luchador): boolean {
   return l.metrosMovidos + faltaParaLlegar(l, e) > metrosTotales(l) / 4;
 }
 
+// Memoria de una decisión: habilidades y golpe normal de cada par, que no cambian mientras la IA
+// compara opciones. Se vacía al empezar cada decisión (las funciones exportadas) y al probar otro
+// modo en `elegirModos`, así nunca sobrevive a un cambio de estado.
+interface Base {
+  /** Ataque final de `e` contra `l`, defensa final de `l` contra `e` y el daño esperado. */
+  hab: number;
+  def: number;
+  golpe: number;
+}
+const memo = new Map<Luchador, Map<Luchador, Base>>();
+
+function nuevaDecision() {
+  memo.clear();
+}
+
+function base(e: Luchador, l: Luchador): Base {
+  let m = memo.get(e);
+  if (!m) memo.set(e, (m = new Map()));
+  let b = m.get(l);
+  if (!b) {
+    const hab = ataqueFinal(e, l);
+    const def = defensaFinal(l, e);
+    b = { hab, def, golpe: danoEsperado(e, l, hab, def) };
+    m.set(l, b);
+  }
+  return b;
+}
+
 /** Daño que `e` le haría a `l` en un ataque normal. */
 function golpeDe(e: Luchador, l: Luchador): number {
-  return pronostico(e, l, ataqueFinal(e, l), defensaFinal(l, e)).dano;
+  return base(e, l).golpe;
 }
 
 /** Daño esperado de `e` en todo el asalto contra `l` (amenaza). */
@@ -71,14 +99,11 @@ function amenaza(e: Luchador, l: Luchador): number {
  */
 function valorNegativo(atk: Luchador, def: Luchador, pen: number, golpes: number, danoPrevio: number): number {
   if (pen <= 0) return 0;
-  const hDef = ataqueFinal(def, atk);
-  const dAtk = defensaFinal(atk, def);
-  const perdida = pronostico(def, atk, hDef, dAtk).dano - pronostico(def, atk, hDef - pen, dAtk).dano;
-  const h = ataqueFinal(atk, def, { bono: 0 });
-  const dDef = defensaFinal(def, atk);
-  const normal = pronostico(atk, def, h, dDef).dano;
-  const quedan = Math.max(0, def.pv - danoPrevio - golpes * normal);
-  const ganancia = Math.min(golpes * (pronostico(atk, def, h, dDef - pen).dano - normal), quedan);
+  const rival = base(def, atk);
+  const perdida = rival.golpe - danoEsperado(def, atk, rival.hab - pen, rival.def);
+  const mio = base(atk, def);
+  const quedan = Math.max(0, def.pv - danoPrevio - golpes * mio.golpe);
+  const ganancia = Math.min(golpes * (danoEsperado(atk, def, mio.hab, mio.def - pen) - mio.golpe), quedan);
   const ataques = Math.max(1, def.ataquesDeclarados || 1);
   const asaltos = (def.haActuado ? 0 : 1) + (quedan > 0 ? 1 : 0);
   return perdida * ataques * asaltos + ganancia;
@@ -138,7 +163,7 @@ function valorAtaque(
     v += p.pImpacto * amen;
   // Riesgo de contra: sólo si le quedan ataques para devolverla.
   if (e.ataquesRestantes > 0 && puedeActuar(e)) {
-    const golpeContra = pronostico(e, l, ataqueFinal(e, l, { bono: p.bonoContra }), defensaFinal(l, e)).dano;
+    const golpeContra = danoEsperado(e, l, ataqueFinal(e, l, { bono: p.bonoContra }), defensaFinal(l, e));
     v -= lambda(l) * p.pContra * golpeContra;
   }
   return v;
@@ -155,6 +180,7 @@ function tasaDano(ctx: Contexto, l: Luchador): number {
 
 /** Intercambio de daño relativo a los PV de cada bando. */
 export function ventajaEquipos(ctx: Contexto): Record<'A' | 'B', number> {
+  nuevaDecision();
   const tasa = { A: 0, B: 0 };
   const pv = { A: 0, B: 0 };
   for (const l of ctx.luchadores) {
@@ -196,6 +222,7 @@ const SIN_MODOS = {
 };
 
 export function declarar(ctx: Contexto, l: Luchador): Declaracion {
+  nuevaDecision();
   const max = l.cap.maxAtaques;
   const objetivos = enemigos(ctx, l).filter((e) => alcanzable(l, e));
   // Quién puede atacarlo a él, repartido entre los blancos que tiene cada uno.
@@ -210,34 +237,45 @@ export function declarar(ctx: Contexto, l: Luchador): Declaracion {
 
   if (objetivos.length === 0 && entrantes.length === 0) return { defensaTotal: false, ataques: 1, ...SIN_MODOS };
 
+  // Lo que no depende de cuántos ataques declare: se calcula una vez.
+  const aliadosAntes = objetivos.map((e) => Math.floor(aliadosSobre(ctx, l, e) / 2));
+  const contras = entrantes.map(({ e, peso }) => ({ e, peso, p: pronostico(e, l, ataqueFinal(e, l), defensaFinal(l, e)) }));
   let mejorN = 1;
   let mejorValor = -Infinity;
   for (let n = 1; n <= max; n++) {
     const usos: number[] = [];
     // Ataques en su turno: reparto greedy, cada golpe extra al mismo blanco enfrenta más defensas.
     // En promedio la mitad de los aliados que llegan al blanco lo atacarán antes que él.
-    const golpesA = new Map<Luchador, number>();
+    const golpes = new Array<number>(objetivos.length).fill(0);
+    // Valor de cada blanco para la ranura anterior: si la ranura es igual (los n declarados lo son),
+    // sólo cambia el del blanco elegido, y el resto no se recalcula.
+    const valores = new Array<number>(objetivos.length).fill(0);
+    let ranuraAnterior: Ranura | null = null;
+    let elegidoAnterior = -1;
     // Los n declarados y después los extra (segunda arma, patada), cada uno con su penalizador.
     const plan = planDeAtaques(l.cap, n);
     for (const ranura of plan) {
-      let mejor: Oportunidad | null = null;
-      for (const e of objetivos) {
-        const previos = golpesA.get(e) ?? 0;
-        const valor = valorAtaque(l, e, {
-          declarados: n, ranura, primeraVez: previos === 0,
-          defensasPrevias: e.defensasHechas + previos + Math.floor(aliadosSobre(ctx, l, e) / 2),
-        });
-        if (!mejor || valor > mejor.valor) mejor = { objetivo: e, valor };
+      const igual = ranuraAnterior !== null && ranura.pen === ranuraAnterior.pen && ranura.sinArmas === ranuraAnterior.sinArmas;
+      let mejor = -1;
+      for (let i = 0; i < objetivos.length; i++) {
+        if (!igual || i === elegidoAnterior) {
+          const e = objetivos[i];
+          valores[i] = valorAtaque(l, e, {
+            declarados: n, ranura, primeraVez: golpes[i] === 0, defensasPrevias: e.defensasHechas + golpes[i] + aliadosAntes[i],
+          });
+        }
+        if (mejor < 0 || valores[i] > valores[mejor]) mejor = i;
       }
-      if (!mejor || mejor.valor <= 0) break;
-      usos.push(mejor.valor);
-      golpesA.set(mejor.objetivo, (golpesA.get(mejor.objetivo) ?? 0) + 1);
+      if (mejor < 0 || valores[mejor] <= 0) break;
+      usos.push(valores[mejor]);
+      golpes[mejor]++;
+      ranuraAnterior = ranura;
+      elegidoAnterior = mejor;
     }
     // Contras: cada ataque que reciba puede dar una Acción Respuesta si le quedan ataques.
-    for (const { e, peso } of entrantes) {
-      const p = pronostico(e, l, ataqueFinal(e, l), defensaFinal(l, e));
+    for (const { e, peso, p } of contras) {
       if (p.pContra <= 0) continue;
-      const golpe = pronostico(l, e, ataqueFinal(l, e, { declarados: n, ranura: plan[0], bono: p.bonoContra }), defensaFinal(e, l)).dano;
+      const golpe = danoEsperado(l, e, ataqueFinal(l, e, { declarados: n, ranura: plan[0], bono: p.bonoContra }), defensaFinal(e, l));
       usos.push(peso * p.pContra * golpe);
     }
     usos.sort((a, b) => b - a);
@@ -259,8 +297,8 @@ export function declarar(ctx: Contexto, l: Luchador): Declaracion {
     let evitado = 0;
     for (const { e, peso } of entrantes) {
       const atk = ataqueFinal(e, l);
-      evitado += peso * (pronostico(e, l, atk, defensaFinal(l, e, { defensaTotal: false })).dano -
-        pronostico(e, l, atk, defensaFinal(l, e, { defensaTotal: true })).dano);
+      evitado += peso * (danoEsperado(e, l, atk, defensaFinal(l, e, { defensaTotal: false })) -
+        danoEsperado(e, l, atk, defensaFinal(l, e, { defensaTotal: true })));
     }
     if (lambda(l) * evitado > Math.max(0, mejorValor)) {
       const bonoVariableEn = l.cap.est.bonoVariable ? ('defensa' as const) : null;
@@ -285,7 +323,7 @@ function preverSorpresa(l: Luchador, entrantes: { e: Luchador; peso: number }[])
     const pSorpresa = t.pImpacto(turnoFinal(e) - turnoFinal(l) - e.cap.est.diferenciaSorpresa + 1);
     const atk = ataqueFinal(e, l);
     const def = defensaFinal(l, e);
-    const dano = (pen: number) => pronostico(e, l, atk, def - pen).dano;
+    const dano = (pen: number) => danoEsperado(e, l, atk, def - pen);
     if (pSorpresa * (dano(90) - dano(0)) > dano(PEN_PREVER_SORPRESA) - dano(0)) elegidos.push(e);
   }
   return elegidos;
@@ -309,9 +347,11 @@ function elegirModos(
   const probar = (modo: Luchador['modo'], bonoVariableEn: Luchador['bonoVariableEn']) => {
     l.modo = modo;
     l.bonoVariableEn = bonoVariableEn;
+    nuevaDecision();
     const v = valorDelAsalto(l, n, objetivos, entrantes);
     l.modo = original.modo;
     l.bonoVariableEn = original.bonoVariableEn;
+    nuevaDecision();
     return v;
   };
   // Ataque Final: una vez, por debajo de la mitad de los PV (Dominus p.86). Se usa en cuanto se puede.
@@ -320,7 +360,9 @@ function elegirModos(
   let mejor = { modo: base, bonoVariableEn: null as Luchador['bonoVariableEn'], valor: -Infinity };
   const seraphites: (0 | 1 | 3)[] = e.seraphite === 3 ? [0, 1, 3] : e.seraphite === 1 ? [0, 1] : [0];
   const bonos: Luchador['bonoVariableEn'][] = e.bonoVariable ? ['ataque', 'defensa', 'dano'] : [null];
-  for (const seraphite of seraphites)
+  // Con una sola combinación posible no hace falta valorarla.
+  if (seraphites.length === 1 && !e.berserker && !e.bonoVariable) mejor = { modo: { ...base, seraphite: 0, berserker: false }, bonoVariableEn: null, valor: 0 };
+  else for (const seraphite of seraphites)
     for (const berserker of e.berserker ? [false, true] : [false])
       for (const bonoVariableEn of bonos) {
         const modo = { ...base, seraphite, berserker };
@@ -336,8 +378,8 @@ function elegirModos(
     const mejorEntrante = entrantes.reduce((a, b) => (amenaza(b.e, l) > amenaza(a.e, l) ? b : a)).e;
     const atk = ataqueFinal(mejorEntrante, l);
     const evitado =
-      pronostico(mejorEntrante, l, atk, defensaFinal(l, mejorEntrante, { defensasPrevias: 1 })).dano -
-      pronostico(mejorEntrante, l, atk, defensaFinal(l, mejorEntrante, { defensasPrevias: 0 })).dano;
+      danoEsperado(mejorEntrante, l, atk, defensaFinal(l, mejorEntrante, { defensasPrevias: 1 })) -
+      danoEsperado(mejorEntrante, l, atk, defensaFinal(l, mejorEntrante, { defensasPrevias: 0 }));
     const segunda = l.cap.extras.find((x) => x.nombre.startsWith('Segunda arma'));
     let ataqueExtra = 0;
     const ranura = { pen: segunda?.pen ?? 40, sinArmas: false };
@@ -360,6 +402,7 @@ function elegirModos(
  * Si nadie está al alcance devuelve el enemigo hacia el que conviene moverse.
  */
 export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
+  nuevaDecision();
   const todos = enemigos(ctx, l);
   if (todos.length === 0) return null;
   const cercano = todos.reduce((a, b) => (distancia(l, b) < distancia(l, a) ? b : a));
@@ -393,6 +436,7 @@ export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
 
 /** ¿Usa ya la Acción Respuesta contra `atk` o guarda el ataque? */
 export function usarContra(ctx: Contexto, l: Luchador, atk: Luchador, bono: number): boolean {
+  nuevaDecision();
   if (perfil(l) === 'bestia') return true;
   const ahora = valorAtaque(l, atk, { bono });
   if (ahora <= 0) return false;
@@ -410,6 +454,7 @@ export function usarContra(ctx: Contexto, l: Luchador, atk: Luchador, bono: numb
  * se mantiene hasta que actúe.
  */
 export function resistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
+  nuevaDecision();
   if (l.ficha.acumulacion || l.haActuado || !puedeActuar(l) || perfil(l) === 'bestia') return false;
   l.planResistir ??= convieneResistir(ctx, l, atk);
   return l.planResistir;
@@ -473,6 +518,7 @@ function decidirCansancio(l: Luchador, ganancia: (k: number) => number, referenc
 }
 
 export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bono: number, plan: PlanAtaque = NORMAL): number {
+  nuevaDecision();
   const defensa = defensaFinal(def, atk);
   const valor = (k: number) => {
     const o = { bono, cansancio: k, maniobra: plan.maniobra, tipo: plan.tipo, especial: plan.especial };
@@ -484,6 +530,7 @@ export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bon
 }
 
 export function cansancioDefensa(ctx: Contexto, def: Luchador, atk: Luchador, habAtaque: number, resistiendo: boolean): number {
+  nuevaDecision();
   if (def.ficha.acumulacion) return 0;
   const pron = (k: number) =>
     pronostico(atk, def, habAtaque, defensaFinal(def, atk, { cansancio: k, resistir: resistiendo }));
@@ -533,6 +580,7 @@ function pDiferenciaD100(kReal: number): number {
 
 /** Enemigos al alcance que un ataque en área alcanzaría, empezando por el elegido. */
 export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchador[] {
+  nuevaDecision();
   const otros = enemigos(ctx, atk).filter((e) => e !== def && enAlcance(atk, e));
   return [def, ...otros].slice(0, atk.cap.est.blancosArea);
 }
@@ -543,6 +591,7 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  * la maniobra: un rival derribado o apresado pega y defiende peor, uno desarmado amenaza menos.
  */
 export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number): PlanAtaque {
+  nuevaDecision();
   if (perfil(atk) === 'bestia' || ctx.opciones.sinManiobras) return NORMAL;
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
@@ -550,11 +599,10 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
   // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa, sin pasar de los
   // PV que le quedarían después de este golpe y de esos mismos golpes sin la ventaja.
-  const hNormal = ataqueFinal(atk, def, { bono: 0 });
-  const golpeNormal = pronostico(atk, def, hNormal, habDef).dano;
+  const { hab: hNormal, golpe: golpeNormal } = base(atk, def);
   const ganancia = (pen: number, golpes: number, danoEste: number) => {
     const quedan = Math.max(0, def.pv - danoEste - golpes * golpeNormal);
-    return Math.min(golpes * (pronostico(atk, def, hNormal, habDef - pen).dano - golpeNormal), quedan);
+    return Math.min(golpes * (danoEsperado(atk, def, hNormal, habDef - pen) - golpeNormal), quedan);
   };
 
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
@@ -683,6 +731,7 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
  * daño (arcano +60 / +100). Conviene si el golpe potenciado vale más que el ataque que se pierde.
  */
 export function prepararGodhand(ctx: Contexto, l: Luchador) {
+  nuevaDecision();
   const g = l.cap.est.godhand;
   if (!g || l.godhandPreparado || l.ataquesRestantes < 1 || !puedeActuar(l)) return;
   let normal = 0;
@@ -692,8 +741,8 @@ export function prepararGodhand(ctx: Contexto, l: Luchador) {
     if (!alcanzable(l, e)) continue;
     const h = ataqueFinal(l, e);
     const d = defensaFinal(e, l);
-    normal = Math.max(normal, pronostico(l, e, h, d).dano);
-    potenciado = Math.max(potenciado, (pronostico(l, e, h + g.ataque, d).dano * (base + g.dano)) / base);
+    normal = Math.max(normal, danoEsperado(l, e, h, d));
+    potenciado = Math.max(potenciado, (danoEsperado(l, e, h + g.ataque, d) * (base + g.dano)) / base);
   }
   // El golpe potenciado llega un asalto tarde: se descuenta.
   if (potenciado * 0.7 - normal > normal * (l.ataquesRestantes > 1 ? 0.5 : 1)) {
@@ -704,6 +753,7 @@ export function prepararGodhand(ctx: Contexto, l: Luchador) {
 
 /** Puntos de Samiel a gastar (máx. 150 por acción) contra quien lo dañó (Dominus p.92). */
 export function gastoSamiel(l: Luchador, rival: Luchador, uso: 'ataque' | 'defensa'): number {
+  nuevaDecision();
   const puntos = l.samiel.get(rival) ?? 0;
   if (puntos < 20) return 0;
   const urgente = uso === 'ataque' ? rival.pv <= 0.4 * rival.ficha.pv : l.pv <= 0.35 * l.ficha.pv;
@@ -725,6 +775,7 @@ export interface Proteccion {
  *   activa: necesita haber ganado el turno al atacante y tener reservado un ataque sin usar.
  */
 export function protectorPara(ctx: Contexto, def: Luchador, atk: Luchador): Proteccion | null {
+  nuevaDecision();
   let mejor: Proteccion | null = null;
   let mejorDefensa = defensaFinal(def, atk) + 10;
   for (const g of ctx.luchadores) {
@@ -752,6 +803,7 @@ export function protectorPara(ctx: Contexto, def: Luchador, atk: Luchador): Prot
  * el golpe probablemente impacta: se sacrifica algo más de la mitad del daño esperado si impacta.
  */
 export function sacrificioHaima(def: Luchador, atk: Luchador, habAtk: number): number {
+  nuevaDecision();
   const p = pronostico(atk, def, habAtk, defensaFinal(def, atk));
   if (p.pImpacto < 0.5 || p.dano <= 0) return 0;
   const danoSiImpacta = p.dano / p.pImpacto;
@@ -765,6 +817,7 @@ export function sacrificioHaima(def: Luchador, atk: Luchador, habAtk: number): n
  * claramente el intercambio de daño. Los agresivos no huyen.
  */
 export function quiereHuir(ctx: Contexto, l: Luchador): boolean {
+  nuevaDecision();
   if (perfil(l) === 'agresivo') return false;
   return l.pv < l.ficha.pv / 4 && ctx.ventaja[l.equipo] < 0.5;
 }

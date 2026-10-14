@@ -24,6 +24,12 @@ function fueraPorTramo(loc: Localizacion | null, inconsciencia: boolean, sinMuer
   return [0, 0.1, sinMuerte ? 0.1 : 0.12, 1];
 }
 
+// Memoria por clave exacta: en un combate se repiten pocas combinaciones (unas 3.000 distintas cada
+// 140.000 llamadas). Se vacía si crece demasiado.
+const memo = new Map<number, Map<number, EfectoCritico>>();
+let enMemo = 0;
+const LOCS: (Localizacion | null)[] = [null, 'cabeza', 'corazon', 'extremidad', 'torso'];
+
 /**
  * Crítico de nivel `base` + d100 (reducido sobre 200; a la mitad con acumulación) contra RF + d100.
  * Un 100 natural en la RF siempre resiste. `loc` null: localización al azar.
@@ -31,6 +37,27 @@ function fueraPorTramo(loc: Localizacion | null, inconsciencia: boolean, sinMuer
 export function efectoCritico(
   base: number, rf: number, loc: Localizacion | null,
   o: { inconsciencia?: boolean; sinMuerte?: boolean; acumulacion?: boolean } = {},
+): EfectoCritico {
+  const clave = ((rf * 5 + LOCS.indexOf(loc)) * 2 + Number(!!o.inconsciencia)) * 4 + Number(!!o.sinMuerte) * 2 + Number(!!o.acumulacion);
+  let porBase = memo.get(clave);
+  if (!porBase) memo.set(clave, (porBase = new Map()));
+  let r = porBase.get(base);
+  if (!r) {
+    if (enMemo > 100_000) {
+      memo.clear();
+      enMemo = 0;
+      memo.set(clave, porBase);
+    }
+    r = calcularEfecto(base, rf, loc, o);
+    porBase.set(base, r);
+    enMemo++;
+  }
+  return r;
+}
+
+function calcularEfecto(
+  base: number, rf: number, loc: Localizacion | null,
+  o: { inconsciencia?: boolean; sinMuerte?: boolean; acumulacion?: boolean },
 ): EfectoCritico {
   const fuera = fueraPorTramo(loc, !!o.inconsciencia, !!o.sinMuerte);
   const cortes = [0, 50, 100, 150, Infinity];

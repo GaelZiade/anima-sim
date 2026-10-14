@@ -168,7 +168,11 @@ const DERRIBADO: ModEstado = { ataque: -30, parada: -30, esquiva: -30, turno: -1
 export const AMENAZADO: ModEstado = { ataque: -20, parada: -120, esquiva: -120, turno: -50 };
 
 /** Suma de los modificadores por estado de un luchador. */
-export function modEstados(l: Luchador): ModEstado {
+const SIN_ESTADOS: Readonly<ModEstado> = Object.freeze({ ataque: 0, parada: 0, esquiva: 0, turno: 0 });
+
+export function modEstados(l: Luchador): Readonly<ModEstado> {
+  // Lo más común: ni derribado, ni paralizado, ni apresando.
+  if (!l.derribado && l.paralisis === 0 && l.paralisisTurnos <= 0 && !l.apresando) return SIN_ESTADOS;
   const m: ModEstado = { ataque: 0, parada: 0, esquiva: 0, turno: 0 };
   const sumar = (x: ModEstado, sinDefensa = false) => {
     m.ataque += x.ataque;

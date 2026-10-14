@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "sim": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bench": "esbuild scripts/bench.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/bench.mjs --log-level=warning && node node_modules/.cache/bench.mjs"
   },
   "devDependencies": {
     "@types/node": "22.15.3",
