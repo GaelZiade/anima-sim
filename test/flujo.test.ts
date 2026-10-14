@@ -187,3 +187,17 @@ describe('situaciones de la Tabla 43 que faltaban', () => {
     expect(ataqueFinal(d.atk, d.def)).toBe(atk0 - 40);
   });
 });
+
+describe('la narración aclara las acciones perdidas (Core p.89, p.98)', () => {
+  it('Kaito vs Teseo, semilla 74523: defensiva, pifia y contra que no se puede tomar', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const { hojaAFicha } = await import('../src/hoja/ficha');
+    const hoja = (p: string) => hojaAFicha(readFileSync(`fichas/${readdirSync('fichas').find((f) => f.startsWith(p))!}`));
+    const r = simularCombate([hoja('Kaito')], [hoja('Teseo')], { semilla: 74523, registrar: true, distanciaInicial: 10 });
+    const asalto1 = r.registro!.filter((e) => e.asalto === 1).map((e) => e.texto.trim());
+    expect(asalto1).toContain('Teseo Heracles queda a la defensiva: no puede actuar ni contraatacar el resto del asalto.');
+    expect(asalto1).toContain('Kaito Oma pierde el resto de sus acciones activas del asalto por la pifia.');
+    expect(asalto1).toContain('Teseo Heracles no puede aprovechar la contra (+80): está a la defensiva.');
+    expect(asalto1).toContain('Teseo Heracles está a la defensiva: no puede actuar este asalto.');
+  });
+});

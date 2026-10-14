@@ -251,6 +251,8 @@ function jugarAsalto(ctx: Contexto) {
 }
 
 function turno(ctx: Contexto, l: Luchador) {
+  if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0)
+    log(ctx, () => `${l.ficha.nombre} está a la defensiva: no puede actuar este asalto.`);
   if (puedeActuar(l) && ctx.opciones.huida && ia.quiereHuir(ctx, l)) {
     retirarse(ctx, l);
     l.haActuado = true;
@@ -431,6 +433,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
       atk.sorprendeA.clear();
       log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+      avisarPifia(ctx, atk);
       ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
     }
@@ -478,12 +481,20 @@ function disparoCombinado(ctx: Contexto, atk: Luchador, def: Luchador) {
   const tA = tirar(ctx, atk.cap.umbralAtaque);
   const etiqueta = `${atk.ficha.nombre} dispara a bocajarro a ${def.ficha.nombre}`;
   if (tA.pifia) {
+    atk.aLaDefensiva = true;
     log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`);
+    avisarPifia(ctx, atk);
     ofrecerContra(ctx, def, atk, tA.nivelPifia);
     return;
   }
   const r = resolverDefensa(ctx, atk, def, hab, tA, { maniobra: 'normal', esContra: false, ranura: RANURA_BALA, tipo: perfilDe(atk, RANURA_BALA).tipoAtaque }, etiqueta);
   if (r.contra !== null) ofrecerContra(ctx, r.defensor, atk, r.contra);
+}
+
+/** La pifia niega el resto de las acciones activas del asalto (Core p.98). */
+function avisarPifia(ctx: Contexto, atk: Luchador) {
+  if (atk.ataquesRestantes > 0 && activo(atk))
+    log(ctx, () => `  ${atk.ficha.nombre} pierde el resto de sus acciones activas del asalto por la pifia.`);
 }
 
 /** Tirada de un Ataque o Defensa Predeterminada: no se tiran dados. */
@@ -587,7 +598,16 @@ function resolverDefensa(
 
   // Impacta: el agredido queda a la defensiva (aunque lo haya cubierto un Guardián que falló).
   // Seraphite arcano sigue actuando salvo que un crítico tenga efecto (Dominus p.40).
+  const yaEstaba = def.aLaDefensiva;
   if (!def.ficha.acumulacion && !resiste && def.modo.seraphite !== 3) def.aLaDefensiva = true;
+  // Se narra después del daño: impactado, queda a la defensiva le haya hecho daño o no (Core p.89).
+  const avisar = () => {
+    if (yaEstaba || !activo(def) || def.ficha.acumulacion) return;
+    if (def.aLaDefensiva) {
+      const porCritico = resiste || def.modo.seraphite === 3 ? ' por el crítico' : '';
+      log(ctx, () => `  ${def.ficha.nombre} queda a la defensiva${porCritico}: no puede actuar ni contraatacar el resto del asalto.`);
+    } else if (resiste) log(ctx, () => `  ${def.ficha.nombre} resistió el golpe: sigue pudiendo actuar.`);
+  };
   liberarAmenazados(ctx, def);
   const m = o.maniobra;
   const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
@@ -595,7 +615,10 @@ function resolverDefensa(
   if (esManiobraDeControl(m)) {
     if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra);
     else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
-    if (m === 'desarmar') return { defensor: def, contra: null, impacto: true };
+    if (m === 'desarmar') {
+      avisar();
+      return { defensor: def, contra: null, impacto: true };
+    }
   }
 
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
@@ -616,12 +639,14 @@ function resolverDefensa(
       def.amenazadoPor = atk;
       log(ctx, () => `  ${def.ficha.nombre} queda amenazado por ${atk.ficha.nombre}.`);
     } else log(ctx, () => `  No logra engatillarlo.`);
+    avisar();
     return { defensor: def, contra: null, impacto: true };
   }
   // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
   if (m === 'puntosPresion') {
     if (dano > 0) puntosDePresion(ctx, atk, def, dano, o.estadoMushin ?? null);
     else log(ctx, () => `  No alcanza los puntos de presión.`);
+    avisar();
     return { defensor: def, contra: null, impacto: true };
   }
   if (dano > 0) aplicarDano(ctx, atk, def, dano, resiste, m);
@@ -631,6 +656,7 @@ function resolverDefensa(
     // La armadura evitó el daño: puede romperse (Core p.93).
     if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura, zonaDe(m));
   }
+  avisar();
   return { defensor: def, contra: null, impacto: true };
 }
 
@@ -852,10 +878,21 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
 
 function ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number) {
   const ilimitadas = def.cap.est.contrasIlimitadas;
-  if (
-    !activo(atk) || !activo(def) || def.ficha.acumulacion || !puedeActuar(def) ||
-    (def.ataquesRestantes <= 0 && !ilimitadas) || !enAlcance(def, atk) || !ia.usarContra(ctx, def, atk, bono)
-  ) return;
+  if (!activo(atk) || !activo(def) || def.ficha.acumulacion) return;
+  // Sólo puede aprovechar la contra quien todavía puede hacer acciones activas y atacar (Core p.89).
+  const motivo = def.aLaDefensiva ? 'está a la defensiva'
+    : def.defensaTotal ? 'está en Defensa total'
+    : def.ataquesRestantes <= 0 && !ilimitadas ? 'ya usó todos sus ataques del asalto'
+    : !enAlcance(def, atk) ? `no tiene a ${atk.ficha.nombre} a su alcance`
+    : null;
+  if (motivo) {
+    log(ctx, () => `  ${def.ficha.nombre} no puede aprovechar la contra (+${bono}): ${motivo}.`);
+    return;
+  }
+  if (!ia.usarContra(ctx, def, atk, bono)) {
+    log(ctx, () => `  ${def.ficha.nombre} no aprovecha la contra (+${bono}).`);
+    return;
+  }
   atacar(ctx, def, atk, { esContra: true, bono });
 }
 
