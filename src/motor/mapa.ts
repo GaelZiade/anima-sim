@@ -29,17 +29,26 @@ export interface MapaListo {
   ocupadas: Uint8Array;
 }
 
-const listos = new WeakMap<Mapa, MapaListo>();
+const listos = new WeakMap<Mapa, { firma: string; listo: MapaListo }>();
 const abiertos = new Map<string, MapaListo>();
 
-/** Prepara un mapa una vez; las consultas se guardan con él y valen para todos los combates. */
+/** Tamaño y paredes: si cambian, el mapa preparado ya no sirve. */
+function firma(m: Mapa): string {
+  return `${m.ancho}x${m.alto}:${(m.bloqueadas ?? []).map((c) => `${c.x},${c.y}`).join(';')}`;
+}
+
+/**
+ * Prepara un mapa una vez; las consultas se guardan con él y valen para todos los combates. Si el
+ * mismo objeto cambió (otro tamaño u otras paredes), se vuelve a preparar.
+ */
 export function prepararMapa(m: Mapa): MapaListo {
-  let p = listos.get(m);
-  if (p) return p;
+  const f = firma(m);
+  const guardado = listos.get(m);
+  if (guardado && guardado.firma === f) return guardado.listo;
   const muro = new Uint8Array(m.ancho * m.alto);
   for (const c of m.bloqueadas ?? []) if (dentro(m, c)) muro[c.y * m.ancho + c.x] = 1;
-  p = { ancho: m.ancho, alto: m.alto, muro, campos: new Map(), costos: new Float32Array(muro.length), ocupadas: new Uint8Array(muro.length) };
-  listos.set(m, p);
+  const p: MapaListo = { ancho: m.ancho, alto: m.alto, muro, campos: new Map(), costos: new Float32Array(muro.length), ocupadas: new Uint8Array(muro.length) };
+  listos.set(m, { firma: f, listo: p });
   return p;
 }
 

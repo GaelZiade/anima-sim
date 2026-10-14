@@ -56,3 +56,12 @@ describe('mapa en grilla', () => {
     for (const e of r.registro!) for (const f of e.foto ?? []) expect(f.x === 5 && f.y < 8).toBe(false);
   });
 });
+
+describe('mapa editado en el lugar', () => {
+  it('si el mismo objeto cambia de paredes, se vuelve a preparar', () => {
+    const m: Mapa = { ancho: 9, alto: 5, bloqueadas: [] };
+    expect(prepararMapa(m).muro[indice(prepararMapa(m), { x: 4, y: 2 })]).toBe(0);
+    m.bloqueadas!.push({ x: 4, y: 2 });
+    expect(prepararMapa(m).muro[indice(prepararMapa(m), { x: 4, y: 2 })]).toBe(1);
+  });
+});

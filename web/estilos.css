@@ -226,3 +226,25 @@ td:last-child { white-space: normal; min-width: 160px; }
 .cartel .abierta { color: var(--abierta); font-weight: 600; }
 .cartel .pifia { color: var(--pifia); font-weight: 600; }
 .en-linea { display: flex; align-items: center; gap: 6px; }
+
+/* Botones de simular siempre a mano: fijos arriba al bajar por la página. */
+.acciones-fijas {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 0;
+  margin-top: 16px;
+  background: var(--fondo);
+  border-bottom: 1px solid var(--borde);
+}
+.acciones-fijas .progreso { flex: 1 1 140px; margin: 0; }
+.resumen-corto { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto); text-decoration: none; }
+.resumen-corto:hover { text-decoration: underline; }
+.resumen-corto .a { color: var(--equipo-a); }
+.resumen-corto .b { color: var(--equipo-b); }
+.resumen-corto .e { color: var(--tenue); }
+.acciones-fijas ~ .panel:first-of-type { margin-top: 12px; }

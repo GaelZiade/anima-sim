@@ -173,7 +173,8 @@ function escenarioActual() {
     desequilibrio: marcado('desequilibrio'),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
-    mapa: estado.mapa,
+    // Una copia: el mapa del estado se edita en el lugar y el motor guarda lo que preparó con él.
+    mapa: { ...estado.mapa!, bloqueadas: [...estado.mapa!.bloqueadas] },
     posiciones: { A: a.celdas, B: b.celdas },
   };
   return { equipoA: a.fichas, equipoB: b.fichas, escenario: opciones };
@@ -496,6 +497,11 @@ function mostrarResultado(r: ResultadoMonteCarlo, final: boolean) {
   $('resultados').hidden = false;
   const barra = $('victorias');
   const tramos: [string, number, string][] = [['a', r.victoriasA, 'A'], ['e', r.empates, 'Empate'], ['b', r.victoriasB, 'B']];
+  // Resumen en la barra fija de arriba; lleva a la tabla.
+  const corto = $('resumenCorto');
+  corto.hidden = false;
+  corto.replaceChildren(...tramos.filter(([, n]) => n > 0).flatMap(([c, n, texto], i) => [
+    ...(i ? [' · '] : []), crear('span', { className: c }, `${texto} ${pct(n, r.combates)}`)]), final ? '' : ' …');
   barra.replaceChildren(...tramos.filter(([, n]) => n > 0).map(([c, n, texto]) =>
     crear('div', { className: c, style: `flex: ${n}`, title: `${texto}: ${pct(n, r.combates)}` },
       `${texto} ${pct(n, r.combates)}`)));

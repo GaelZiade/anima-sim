@@ -29,6 +29,15 @@
     </aside>
 
     <div class="centro">
+      <!-- Siempre a mano: queda fija arriba al bajar por la página. -->
+      <div class="acciones-fijas">
+        <button type="button" id="enVivo" class="principal">Ver un combate en vivo</button>
+        <button type="button" id="simular">Simular muchos</button>
+        <button type="button" id="cancelar" hidden>Cancelar</button>
+        <div class="progreso" id="progreso" hidden><div id="barraProgreso"></div></div>
+        <a class="resumen-corto" id="resumenCorto" href="#resultados" hidden></a>
+      </div>
+
       <section class="panel" id="panelMapa" aria-labelledby="t-mapa">
         <h2 id="t-mapa">Mapa</h2>
         <div class="barra" id="editor">
@@ -57,6 +66,19 @@
         <div class="orden-turno" id="ordenTurno" aria-label="Orden de iniciativa"></div>
         <div class="lienzo"><canvas id="mapa"></canvas></div>
         <p class="cartel" id="cartel" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" id="resultados" aria-labelledby="t-resultados" hidden>
+        <h2 id="t-resultados">Resultados</h2>
+        <div class="victorias" id="victorias"></div>
+        <p class="resumen" id="resumen"></p>
+        <div class="tabla"><table id="tabla"></table></div>
+      </section>
+
+      <section class="panel" id="narracion" aria-labelledby="t-narracion" hidden>
+        <h2 id="t-narracion">Narración</h2>
+        <p class="nota">Clic en una línea para ir a ese momento. Espacio pausa; las flechas avanzan o retroceden.</p>
+        <div id="registro" class="registro"></div>
       </section>
 
       <section class="panel" aria-labelledby="t-combate">
@@ -106,26 +128,6 @@
             <label><input type="checkbox" id="desequilibrio"> Desequilibrio de atributos (Dominus)</label>
           </div>
         </details>
-
-        <div class="acciones">
-          <button type="button" id="enVivo" class="principal">Ver un combate en vivo</button>
-          <button type="button" id="simular">Simular muchos</button>
-          <button type="button" id="cancelar" hidden>Cancelar</button>
-        </div>
-        <div class="progreso" id="progreso" hidden><div id="barraProgreso"></div></div>
-      </section>
-
-      <section class="panel" id="narracion" aria-labelledby="t-narracion" hidden>
-        <h2 id="t-narracion">Narración</h2>
-        <p class="nota">Clic en una línea para ir a ese momento. Espacio pausa; las flechas avanzan o retroceden.</p>
-        <div id="registro" class="registro"></div>
-      </section>
-
-      <section class="panel" id="resultados" aria-labelledby="t-resultados" hidden>
-        <h2 id="t-resultados">Resultados</h2>
-        <div class="victorias" id="victorias"></div>
-        <p class="resumen" id="resumen"></p>
-        <div class="tabla"><table id="tabla"></table></div>
       </section>
     </div>
   </main>
