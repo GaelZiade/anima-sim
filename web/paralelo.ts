@@ -3,9 +3,8 @@
 // así ninguno queda ocioso aunque los combates tarden distinto.
 
 import { combinar, type ResultadoMonteCarlo } from '../src/motor/montecarlo';
+import { tandas as cortar } from '../src/motor/tandas';
 import type { Preparar, Tanda, TandaHecha, Fallo } from './simulacion.worker';
-
-const COMBATES_POR_TANDA = 250;
 
 export interface Corrida {
   /** Resultado final, con el tiempo real (no la suma de los workers). */
@@ -19,10 +18,12 @@ export function correrEnParalelo(
   o: { hilos: number; semilla: number; alAvanzar?: (hechos: number, parcial: ResultadoMonteCarlo) => void },
 ): Corrida {
   const inicio = performance.now();
-  const tandas = Math.ceil(combates / COMBATES_POR_TANDA);
+  const lista = cortar(combates, o.semilla);
+  const tandas = lista.length;
+  // Las partes se guardan por índice de tanda: el resultado no depende del orden en que terminan.
+  const partes: ResultadoMonteCarlo[] = new Array(tandas);
   const workers = Array.from({ length: Math.max(1, Math.min(o.hilos, tandas)) }, () =>
     new Worker(new URL('./simulacion.worker.ts', import.meta.url), { type: 'module' }));
-  const partes: ResultadoMonteCarlo[] = [];
   let siguiente = 0;
   let hechos = 0;
   let ultimoAviso = 0;
@@ -36,13 +37,8 @@ export function correrEnParalelo(
     };
     const pedir = (w: Worker) => {
       if (siguiente >= tandas) return;
-      const i = siguiente++;
-      const tanda: Tanda = {
-        tipo: 'tanda',
-        combates: Math.min(COMBATES_POR_TANDA, combates - i * COMBATES_POR_TANDA),
-        // Una semilla distinta por tanda, derivada de la semilla de la corrida.
-        semilla: (Math.imul(o.semilla, 0x9e3779b1) + i) >>> 0,
-      };
+      const { indice, combates: n, semilla } = lista[siguiente++];
+      const tanda: Tanda = { tipo: 'tanda', indice, combates: n, semilla };
       w.postMessage(tanda);
     };
     for (const w of workers) {
@@ -52,7 +48,7 @@ export function correrEnParalelo(
           rechazar(new Error(e.data.mensaje));
           return;
         }
-        partes.push(e.data.resultado);
+        partes[e.data.indice] = e.data.resultado;
         hechos += e.data.resultado.combates;
         if (hechos >= combates) {
           terminar();
@@ -64,7 +60,7 @@ export function correrEnParalelo(
         const ahora = performance.now();
         if (o.alAvanzar && ahora - ultimoAviso > 200) {
           ultimoAviso = ahora;
-          o.alAvanzar(hechos, combinar(partes));
+          o.alAvanzar(hechos, combinar(partes.filter(Boolean)));
         }
       };
       w.onerror = (e) => {

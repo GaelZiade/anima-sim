@@ -14,12 +14,14 @@ export interface Preparar {
 
 export interface Tanda {
   tipo: 'tanda';
+  indice: number;
   combates: number;
   semilla: number;
 }
 
 export interface TandaHecha {
   tipo: 'tanda';
+  indice: number;
   resultado: ResultadoMonteCarlo;
 }
 
@@ -44,7 +46,7 @@ ambito.onmessage = (e) => {
   try {
     const { equipoA, equipoB, distanciaInicial, escenario: opciones } = escenario!;
     const resultado = monteCarlo(equipoA, equipoB, m.combates, { semilla: m.semilla, distanciaInicial, escenario: opciones });
-    ambito.postMessage({ tipo: 'tanda', resultado });
+    ambito.postMessage({ tipo: 'tanda', indice: m.indice, resultado });
   } catch (error) {
     ambito.postMessage({ tipo: 'error', mensaje: error instanceof Error ? error.message : String(error) });
   }

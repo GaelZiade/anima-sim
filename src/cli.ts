@@ -1,6 +1,7 @@
 // Uso:
 //   npm run sim -- ejemplos/duelo.json            → 10.000 combates
-//   npm run sim -- ejemplos/duelo.json 50000      → cantidad a elección
+//   npm run sim -- ejemplos/duelo.json 50000      → cantidad a elección (en todos los núcleos)
+//   npm run sim -- ejemplos/duelo.json 50000 --hilos=1 --semilla=7
 //   npm run sim -- ejemplos/duelo.json ver 7      → narra un combate (semilla 7)
 //   npm run sim -- ficha "Kaito.xlsm"             → muestra lo que se lee de una planilla
 //
@@ -11,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Ficha, OpcionesEscenario, Perfil } from './motor/modelo';
-import { monteCarlo } from './motor/montecarlo';
+import { monteCarloParalelo } from './paralelo-node';
 import { simularCombate } from './motor/combate';
 import { armasCuerpoACuerpo, jsonAFicha, leerHoja } from './hoja/ficha';
 
@@ -38,7 +39,8 @@ function cargar(entrada: Ficha | DesdeHoja, carpeta: string): Ficha {
   return entrada.nombre ? { ...ficha, nombre: entrada.nombre, id: entrada.nombre } : ficha;
 }
 
-const [primero, modo, extra] = process.argv.slice(2);
+const banderas = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));
+const [primero, modo, extra] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 if (!primero) {
   console.error('Falta el archivo del escenario. Ej: npm run sim -- ejemplos/duelo.json');
   process.exit(1);
@@ -82,7 +84,10 @@ if (modo === 'ver') {
   }
 } else {
   const n = Number(modo ?? 10000);
-  const r = monteCarlo(esc.equipoA, esc.equipoB, n, { distanciaInicial: esc.distanciaInicial, escenario: esc.escenario });
+  const r = await monteCarloParalelo(
+    { equipoA: esc.equipoA, equipoB: esc.equipoB, distanciaInicial: esc.distanciaInicial, escenario: esc.escenario },
+    n, { hilos: banderas.hilos ? Number(banderas.hilos) : undefined, semilla: banderas.semilla ? Number(banderas.semilla) : 1 },
+  );
   const pct = (x: number) => `${((100 * x) / r.combates).toFixed(1)}%`;
   const nombres = (fs: Ficha[]) => fs.map((f) => f.nombre).join(', ');
   console.log(`${r.combates} combates en ${(r.milisegundos / 1000).toFixed(2)} s (${Math.round(r.combates / (r.milisegundos / 1000))}/s)`);

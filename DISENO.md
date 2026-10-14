@@ -251,7 +251,9 @@ El contenedor de desarrollo queda para tests, simulaciones largas y mediciones.
 ```bash
 npm install
 npm test                                     # reglas, tablas contra dados reales, combate
-npm run sim -- ejemplos/duelo.json           # 10.000 combates
+npm run sim -- ejemplos/duelo.json           # 10.000 combates en todos los núcleos
+npm run sim -- ejemplos/duelo.json 50000 --hilos=1 --semilla=7
+npm run bench                                # combates por segundo (un hilo)
 npm run sim -- ejemplos/duelo.json ver 7     # narra el combate con semilla 7
 npm run sim -- ficha "Kaito.xlsm"            # lo que se lee de una planilla
 npm run sim -- ejemplos/mesa.json            # Kaito contra Teseo desde sus planillas
@@ -259,8 +261,34 @@ npm run dev                                  # la página en http://localhost:51
 npm run build                                # la página estática en dist/
 ```
 
-Velocidad (un hilo, empaquetado): ~4.500 duelos/s de ~10 asaltos. El tiempo se va en la IA
-(`pronostico`), no en los dados.
+## Velocidad
+
+`npm run bench` mide combates por segundo con un hilo, con el código empaquetado igual que la
+página; `npm run bench -- huella` agrega una huella de los resultados que, con la misma semilla,
+tiene que quedar idéntica después de cualquier optimización.
+
+| Escenario | Antes de optimizar | Ahora |
+|---|---|---|
+| Duelo simple | 405/s | ~1.100/s |
+| Kaito contra Teseo | 275/s | ~800/s |
+| Kiran contra 8 soldados | 171/s | ~430/s |
+| Grupo (5) contra 22 | 30/s | ~90/s |
+
+Con todos los núcleos (página y CLI) se multiplica por los hilos: en el contenedor, 4 hilos dan
+~2,8×. El tiempo se va en la IA, no en los dados. Lo que más rindió, sin cambiar resultados:
+
+- Memoria por decisión del golpe normal de cada par (`base` en `ia.ts`), que se vacía al empezar
+  cada decisión y al probar otro modo: nunca sobrevive a un cambio de estado.
+- `efectoCritico` memorizado por clave exacta: unas 3.000 combinaciones distintas cada 140.000
+  llamadas.
+- Capacidades por ficha y planes de ataque por capacidades (no se modifican en combate: si algo
+  cambia, el motor arma una ficha nueva).
+- `danoEsperado` cuando sólo hace falta el daño.
+- `declarar` sólo recalcula el blanco elegido entre ranuras iguales.
+
+Monte Carlo en paralelo: `motor/tandas.ts` corta en tandas de 250 con semilla propia, y el
+resultado se combina por índice. Con la misma semilla da lo mismo con 1 o con N hilos, en la página
+y en el CLI (`src/paralelo-node.ts`, `--hilos=N`).
 
 ## Mapa
 
