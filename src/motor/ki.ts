@@ -164,6 +164,93 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
   return r;
 }
 
+// --------------------------------------------------------------------------- combinadas y forzadas
+
+/** Técnicas reales que forman una combinada o forzada (la propia, si es una técnica de la ficha). */
+const partes = new WeakMap<Tecnica, Tecnica[]>();
+
+export function partesDe(t: Tecnica): Tecnica[] {
+  return partes.get(t) ?? [t];
+}
+
+/** Alguna de sus partes ya está mantenida: no se vuelve a ejecutar. */
+export function enUso(e: EstadoKi, t: Tecnica): boolean {
+  for (const p of partesDe(t)) if (e.mantenidas.has(p)) return true;
+  return false;
+}
+
+/**
+ * Técnicas Combinables usadas a la vez en una sola acción (Dominus p.49): suman sus costes y reúnen
+ * sus efectos, pero los efectos iguales no se suman; vale el más alto (`efectosDe` ya toma el mayor).
+ */
+function combinada(ts: Tecnica[]): Tecnica {
+  const coste: Partial<Record<CaracteristicaKi, number>> = {};
+  for (const t of ts) for (const c of CARACTERISTICAS_KI) if (t.coste[c]) coste[c] = (coste[c] ?? 0) + t.coste[c]!;
+  const v: Tecnica = {
+    nombre: ts.map((t) => t.nombre).join(' + '),
+    nivel: Math.max(...ts.map((t) => t.nivel)) as Tecnica['nivel'],
+    cm: ts.reduce((s, t) => s + t.cm, 0),
+    coste,
+    mantenimiento: ts.reduce((s, t) => s + t.mantenimiento, 0),
+    combinable: true,
+    efectos: ts.flatMap((t) => t.efectos),
+  };
+  partes.set(v, ts);
+  return v;
+}
+
+/**
+ * Forzar Técnicas (Dominus p.21): sube cada efecto la mitad de su valor hacia abajo (+100 → +150,
+ * 5 ataques adicionales → 7) y un punto el multiplicador al daño. Las dificultades de RF, +40.
+ */
+function escalar(m: ModKi): ModKi {
+  const r: ModKi = { ...m };
+  for (const k of Object.keys(r) as (keyof ModKi)[]) {
+    const v = r[k];
+    if (typeof v !== 'number' || v <= 0) continue;
+    (r[k] as number) = k === 'multDano' ? (v > 1 ? v + 1 : v) : v + Math.floor(v / 2);
+  }
+  return r;
+}
+
+/**
+ * Técnica forzada: acumula el doble de cada coste. Una mantenida se fuerza sólo en el asalto en que
+ * se ejecuta; en los siguientes se mantiene la técnica normal (`ejecutar` mantiene las partes).
+ */
+function forzada(t: Tecnica): Tecnica {
+  const coste: Partial<Record<CaracteristicaKi, number>> = {};
+  for (const c of CARACTERISTICAS_KI) if (t.coste[c]) coste[c] = 2 * t.coste[c]!;
+  const v: Tecnica = { ...t, nombre: `${t.nombre} (forzada)`, coste };
+  partes.set(v, partesDe(t));
+  const ef = efectosDe(t);
+  efectosCache.set(v, { ...ef, accion: escalar(ef.accion), asalto: escalar(ef.asalto) });
+  return v;
+}
+
+/** Subconjuntos de 2 o más (hasta 3) de las combinables. */
+function combinaciones(ts: Tecnica[]): Tecnica[][] {
+  const r: Tecnica[][] = [];
+  for (let i = 0; i < ts.length; i++)
+    for (let j = i + 1; j < ts.length; j++) {
+      r.push([ts[i], ts[j]]);
+      for (let k = j + 1; k < ts.length; k++) r.push([ts[i], ts[j], ts[k]]);
+    }
+  return r;
+}
+
+const repertorios = new WeakMap<Ficha, Tecnica[]>();
+
+/** Todo lo que puede ejecutar: sus técnicas, las combinaciones de las combinables y, si sabe, forzadas. */
+export function repertorio(f: Ficha): Tecnica[] {
+  let r = repertorios.get(f);
+  if (r) return r;
+  const base = f.ki?.tecnicas ?? [];
+  r = [...base, ...combinaciones(base.filter((t) => t.combinable)).map(combinada)];
+  if (habilidadesKi(f).forzar) r = [...r, ...r.map(forzada)];
+  repertorios.set(f, r);
+  return r;
+}
+
 // --------------------------------------------------------------------------- habilidades del Ki
 
 /**
@@ -193,6 +280,8 @@ export interface HabilidadesKi {
   asaltosPorPagoAumento: number;
   /** Destrucción por Ki (Core p.104). */
   destruccion: boolean;
+  /** Forzar Técnicas: el doble de Ki por la mitad más de efecto (Dominus p.21). */
+  forzar: boolean;
 }
 
 const habilidades = new WeakMap<Ficha, HabilidadesKi>();
@@ -213,6 +302,7 @@ export function habilidadesKi(f: Ficha): HabilidadesKi {
       aumento: tiene(hk, 'incremento superior') ? 4 : tiene(hk, 'aumento de caracteristicas') ? 3 : 0,
       asaltosPorPagoAumento: tiene(hk, 'incremento superior') ? 10 : 1,
       destruccion: tiene(hk, 'destruccion por ki'),
+      forzar: tiene(hk, 'forzar tecnicas'),
     };
     habilidades.set(f, h);
   }
@@ -539,7 +629,7 @@ export function ponerEnEspera(l: Luchador, t: Tecnica) {
  */
 export function puedePonerEnEspera(l: Luchador, t: Tecnica): boolean {
   const e = l.ki;
-  return !!e && e.objetivo === t && !e.enEspera.has(t) && !e.mantenidas.has(t) && alcanzaLoAcumulado(e, t) &&
+  return !!e && e.objetivo === t && !e.enEspera.has(t) && !enUso(e, t) && alcanzaLoAcumulado(e, t) &&
     totalConcentrado(e) <= e.reserva;
 }
 
@@ -563,7 +653,7 @@ export function ejecutar(l: Luchador, t: Tecnica): ModKi {
   const ef = efectosDe(t);
   e.activo = combinar(e.activo, ef.asalto);
   e.defensasLibres = Math.max(e.defensasLibres, ef.accion.defensasAdicionales);
-  if (t.mantenimiento > 0) e.mantenidas.set(t, true);
+  for (const p of partesDe(t)) if (p.mantenimiento > 0) e.mantenidas.set(p, true);
   return combinar(e.activo, ef.accion);
 }
 
@@ -587,10 +677,10 @@ export function modDeAccion(l: Luchador, clase: 'ataque' | 'defensa', consumir: 
 /** Técnicas que se pueden ejecutar ahora atadas a esta clase de acción. */
 export function tecnicasPara(l: Luchador, clase: Clase, esContra = false): Tecnica[] {
   if (!l.ki) return [];
-  return l.ficha.ki!.tecnicas.filter((t) => {
+  return repertorio(l.ficha).filter((t) => {
     const c = efectosDe(t).clase;
     const encaja = c === clase || (clase === 'ataque' && esContra && c === 'contra');
-    return encaja && !l.ki!.mantenidas.has(t) && puedeEjecutar(l, t);
+    return encaja && !enUso(l.ki!, t) && puedeEjecutar(l, t);
   });
 }
 

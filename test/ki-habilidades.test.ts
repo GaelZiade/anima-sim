@@ -1,10 +1,10 @@
 // Habilidades del Ki en combate (Core p.103-105, Dominus p.19-22).
 
 import { describe, expect, it } from 'vitest';
-import type { Ficha } from '../src/motor/modelo';
+import type { Ficha, Tecnica } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra } from '../src/motor/calculos';
-import { curable, dificultadDestruccion, empezarAsalto, fichaConAumento, type DecisionKi } from '../src/motor/ki';
+import { curable, dificultadDestruccion, efectosDe, ejecutar, empezarAsalto, fichaConAumento, repertorio, tecnicasPara, type DecisionKi } from '../src/motor/ki';
 import { curacionKi } from '../src/motor/ia';
 import { absorcion } from '../src/motor/reglas';
 
@@ -159,5 +159,56 @@ describe('Destrucción por Ki (Core p.104)', () => {
     expect(usos.length).toBeGreaterThan(0);
     const falla = r.registro!.findIndex((x) => x.texto.includes('falla la RF contra la Destrucción por Ki'));
     if (falla >= 0) expect(r.registro![falla + 1].texto).toMatch(/Rival pierde \d+ PV/);
+  });
+});
+
+describe('Forzar Técnicas (Dominus p.21) y Técnicas Combinables (Dominus p.49)', () => {
+  const tecnica = (nombre: string, efectos: [string, string][], coste: Record<string, number>, extra: Partial<Tecnica> = {}): Tecnica => ({
+    nombre, nivel: 1, cm: 10, coste, mantenimiento: 0, combinable: false,
+    efectos: efectos.map(([n, o]) => ({ nombre: n, opciones: [o], mantenido: false })), ...extra,
+  });
+  const golpe = tecnica('Golpe', [['Habilidad de Ataque', '+50'], ['Multiplicador al Dano', 'x3'], ['Ataque adicional', '5']], { DES: 4, FUE: 5 });
+
+  it('forzada: doble de Ki, +la mitad de cada efecto y +1 al multiplicador', () => {
+    const f = maestro(['Forzar Tecnicas'], { ki: { reserva: 60, acumulacion: {}, tecnicas: [golpe] } });
+    const forz = repertorio(f).find((t) => t.nombre === 'Golpe (forzada)')!;
+    expect(forz.coste).toEqual({ DES: 8, FUE: 10 });
+    const ef = efectosDe(forz).accion;
+    expect([ef.ataque, ef.multDano, ef.ataquesAdicionales]).toEqual([75, 4, 7]);
+    // Sin la habilidad no hay forzadas.
+    expect(repertorio(maestro([], { ki: { reserva: 60, acumulacion: {}, tecnicas: [golpe] } }))).toEqual([golpe]);
+  });
+
+  it('una mantenida forzada sólo rinde de más en el asalto en que se ejecuta', () => {
+    const veloz = tecnica('Veloz', [['Incrementar Turno', '+100']], { AGI: 4 }, { mantenimiento: 2 });
+    const l = crearLuchador(maestro(['Forzar Tecnicas'], { ki: { reserva: 60, acumulacion: { AGI: 8 }, tecnicas: [veloz] } }), 'A', 0, 0);
+    empezarAsalto(l, decision({ acumula: true }), 0, 1);
+    const forz = repertorio(l.ficha).find((t) => t.nombre === 'Veloz (forzada)')!;
+    expect(ejecutar(l, forz).turno).toBe(150);
+    expect(l.ki!.mantenidas.has(veloz)).toBe(true);
+    // Mantenida, ninguna de sus variantes se puede volver a ejecutar.
+    expect(tecnicasPara(l, 'variable')).toEqual([]);
+    empezarAsalto(l, decision(), 0, 2);
+    expect(l.ki!.activo.turno).toBe(100);
+  });
+
+  it('combinadas: suman los costes, reúnen los efectos y de los iguales vale el mayor', () => {
+    const a = tecnica('A', [['Habilidad de Ataque', '+75'], ['Ataque a distancia', '250 metros']], { DES: 5 }, { combinable: true });
+    const b = tecnica('B', [['Multiplicador al Dano', 'x2'], ['Habilidad de Ataque', '+100']], { FUE: 6, DES: 2 }, { combinable: true });
+    const c = tecnica('C', [['Habilidad de Parada', '+50']], { AGI: 3 });
+    const r = repertorio(maestro([], { ki: { reserva: 60, acumulacion: {}, tecnicas: [a, b, c] } }));
+    expect(r.map((t) => t.nombre)).toEqual(['A', 'B', 'C', 'A + B']);
+    const ab = r[3];
+    expect(ab.coste).toEqual({ DES: 7, FUE: 6 });
+    const ef = efectosDe(ab).accion;
+    expect([ef.ataque, ef.multDano]).toEqual([100, 2]);
+  });
+
+  it('la IA fuerza o combina cuando le rinde', () => {
+    const a = tecnica('Tajo', [['Habilidad de Ataque', '+50']], { DES: 3 }, { combinable: true });
+    const b = tecnica('Fuerza', [['Aumento de Dano', '+50']], { FUE: 3 }, { combinable: true });
+    const r = simularCombate([maestro(['Forzar Tecnicas'], { ki: { reserva: 80, acumulacion: { DES: 3, FUE: 3 }, tecnicas: [a, b] } })],
+      [{ ...rival('FIL'), pv: 400 }], { semilla: 4, registrar: true });
+    expect(r.registro!.some((x) => /Tajo \+ Fuerza|\(forzada\)/.test(x.texto))).toBe(true);
   });
 });

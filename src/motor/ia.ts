@@ -12,7 +12,7 @@ import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import {
   asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
-  vistaPrevia, type DecisionKi, type ModKi,
+  enUso, repertorio, vistaPrevia, type DecisionKi, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
 import {
@@ -1056,8 +1056,8 @@ function convieneRecuperar(l: Luchador): boolean {
  */
 function convieneGuardar(ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number): boolean {
   const sinTecnica = mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
-  for (const t of l.ficha.ki!.tecnicas) {
-    if (t === elegida || efectosDe(t).clase !== 'ataque' || l.ki!.mantenidas.has(t)) continue;
+  for (const t of repertorio(l.ficha)) {
+    if (t === elegida || efectosDe(t).clase !== 'ataque' || enUso(l.ki!, t)) continue;
     const faltan = asaltosQueFaltan(l, t);
     if (faltan < 1 || faltan > 3) continue;
     const otra = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica - precioKi(l) * costeKi(t);
@@ -1148,9 +1148,9 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
   nuevaDecision(ctx);
   let mejor: Tecnica | null = null;
   let mejorNeto = 0;
-  for (const t of l.ficha.ki!.tecnicas) {
+  for (const t of repertorio(l.ficha)) {
     const bono = efectosDe(t).asalto.turno;
-    if (!bono || efectosDe(t).clase !== 'variable' || l.ki.mantenidas.has(t) || !puedeEjecutar(l, t)) continue;
+    if (!bono || efectosDe(t).clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
     const neto = valorTurno(ctx, l, bono) - precioKi(l) * costeKi(t);
     if (neto > mejorNeto) {
       mejor = t;
@@ -1254,7 +1254,7 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
   if (acumula && rival && !CARACTERISTICAS_KI.some((c) => e.acumulado[c])) {
     let mejorRitmo = 0;
     // Sólo vale declarar las que tardan más de un asalto en juntarse: las demás se usan en el asalto.
-    const candidatas = l.ficha.ki!.tecnicas.filter(
+    const candidatas = repertorio(l.ficha).filter(
       (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosDesdeCero(l, t) >= 2,
     );
     const sinTecnica = candidatas.length ? mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor : 0;
