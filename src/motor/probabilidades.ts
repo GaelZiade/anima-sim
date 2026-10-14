@@ -147,13 +147,13 @@ export class TablaEnfrentamiento {
 /** Rango de ventajas precalculado para el bono de contra. Fuera de él el valor ya no cambia. */
 const OFF_S = 1000;
 
-// Índice directo: umbral de ataque (1-3) × umbral de defensa (1-3, o 0 sin defensa).
+// Índice directo: umbral de ataque × umbral de defensa (0 a 7 con Mala suerte y arma Compleja).
 const cache: (TablaEnfrentamiento | undefined)[] = [];
 
-/** Tabla para un umbral de pifia del atacante y otro del defensor (1-3, ver `umbralPifia`). */
+/** Tabla para un umbral de pifia del atacante y otro del defensor (ver `umbralPifia`). */
 export function tabla(umbralAtaque: number, umbralDefensa: number, sinDefensa: boolean): TablaEnfrentamiento {
   // Sin defensa, el umbral del defensor no importa: comparten tabla.
-  const clave = umbralAtaque * 4 + (sinDefensa ? 0 : umbralDefensa);
+  const clave = umbralAtaque * 16 + (sinDefensa ? 0 : umbralDefensa + 1);
   return (cache[clave] ??= new TablaEnfrentamiento(umbralAtaque, umbralDefensa, sinDefensa));
 }
 

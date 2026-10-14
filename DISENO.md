@@ -18,10 +18,10 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 
 | Regla | Fuente |
 |---|---|
-| Iniciativa = turno + d100 abierta cada asalto; una pifia tira nivel y vale natural − nivel, como la defensa; se ordena con ese valor | Core p.10, p.86 |
+| Iniciativa = turno + d100 abierta cada asalto; el negativo a toda acción cuenta la mitad. Una pifia en turno actúa último, sin nivel; para la sorpresa usa el turno con la Tabla 52 (−125/−100/−75) | Core p.86, p.98, p.232 |
 | Sorpresa: diferencia de iniciativa ≥150 → −90 a la defensa en la primera acción del que sorprende | Core p.86 |
 | Ataque y defensa: habilidad + d100 abierta (90+, luego 91+, 92+…; 100 siempre abre) | Core p.10 |
-| Pifia 1-3 (maestría >200: 1-2; Buena suerte, uno menos: 1-2, o sólo 1 con maestría). La maestría sale de la habilidad que se tira (ataque, defensa, turno, Acrobacias). Una pifia tira nivel (d100) y vale natural − nivel. Ataque pifiado: falla, contra con bono = nivel de pifia, pierde acciones | Core p.10, p.97 |
+| Pifia 1-3 (maestría, 200 o más: 1-2; Buena suerte −1; Mala suerte y armas Complejas +2, Compleja no con maestría). La maestría sale de la habilidad que se tira (ataque, defensa, Acrobacias); el turno no es una habilidad y no tiene maestría. Una pifia tira nivel (d100) y vale natural − nivel. Ataque pifiado: falla, contra con bono = nivel de pifia, pierde acciones | Core p.10, p.17, p.25, p.76, p.97 |
 | Defensa pifiada: resta el nivel de pifia | Core p.97 |
 | Impacto: resultado > 0. Daño % = (resultado − absorción) en grupos de 10. Absorción = 20 + 10×TA | Core p.88 |
 | Impactado (aunque sea sin daño) → a la defensiva: pierde acciones activas del asalto | Core p.89 |
@@ -36,7 +36,8 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 | Crítico: un golpe ≥ ½ de los PV actuales. Nivel = daño + d100 (exceso sobre 200 a la mitad) vs RF + d100 | Core p.97 |
 | Efectos del crítico: ≤50 dolor; >50 mitad permanente + localización; >100 miembro/cabeza/corazón; >150 inconsciente | Core Tabla 50-51 |
 | Acumulación de daño: sin tirada de defensa, nunca a la defensiva, sin contras, crítico a la mitad | Core p.98 |
-| PV ≤ 0: fuera de combate. PV ≤ −5×CON: muerto | Core p.58 |
+| Apuntados: sólo la armadura de la zona (peto = torso, camisola + brazos, completa = todo menos la cabeza, yelmo = cabeza); las armaduras especiales de la planilla cubren todo | Core p.83, p.92 |
+| PV ≤ 0: fuera de combate. PV por debajo de −5×CON: muerto | Core p.60 |
 
 ## Decisiones de la IA (cuándo y qué)
 
@@ -129,7 +130,7 @@ casos que los tests del toolkit.
 | Ataques extra fuera del tope | Segunda arma −40 (Ambidestría −10); patada de Tae Kwon Do −30/−20/0. No suman al penalizador compartido |
 | Tamaño del arma | De la planilla, o deducido del nombre con las Tablas 29, 30 y 32 |
 | Reducción de TA | Calidad (cada +5 resta 1), Tabla de Reducción de Armadura (n), Dumah sin armas (−2, Arcano −6). La TA no baja de 0 |
-| Barrera de daño | Escudo físico (= Presencia base), Hanja (60, Arcano 200), a mano. Un daño base menor no quita PV, salvo que dañe energía |
+| Barrera de daño | Escudo físico (= Presencia base), Rex Frame sin armas (60, Arcano 200), a mano. Un daño base menor no quita PV, salvo que dañe energía |
 | Dañar energía | Arma mágica (por su descripción), Extensión del aura al arma, Extrusión de presencia sin armas |
 | Defensas sin penalizador | Lama (Avanzado 1, Supremo 2), Lama Tsu (+2, Arcano todas), 2ª Arma: Estilo Defensivo (1) |
 | Negativos | Inmunidad al dolor y al cansancio, Eliminación de penalizadores, Exhausto, Esencia de vacío |
@@ -143,7 +144,7 @@ Diferencias con el toolkit resueltas así (el toolkit tiene estos errores):
 1. **Crítico** con la mitad de los PV actuales **o más** (Core p.97). El nivel (daño + d100) se
    reduce sobre 200 y después se compara con RF + d100. → `esCritico`, `nivelCritico`
 2. **Inmunidad al dolor y al cansancio** también reduce el dolor de los críticos.
-3. **Cansancio en la iniciativa**: negativo entero, como cualquier negativo a toda acción.
+3. **Negativos en la iniciativa**: cuentan la mitad, cansancio incluido (Core p.232: "la única excepción […] es el cálculo de la iniciativa"). Corregido en la auditoría; antes se aplicaba entero.
 4. **Sorpresa** con 150 **o más** de diferencia (Core p.86). → `haySorpresa`
 
 ## Combate cuerpo a cuerpo completo

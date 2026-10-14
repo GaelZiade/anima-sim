@@ -63,26 +63,24 @@ describe('combinar tandas', () => {
 });
 
 describe('pifia en la iniciativa', () => {
-  it('tira nivel y lo resta: alguien muy rápido que pifia no actúa necesariamente último', () => {
+  it('actúa automáticamente último, sin nivel de pifia (Core p.98)', () => {
     const rapido = ficha('Rápido', { turno: 300 });
     const lento = ficha('Lento', { turno: 20 });
     let pifiasVistas = 0;
-    let rapidoPrimeroPifiando = 0;
     for (let semilla = 1; semilla <= 400; semilla++) {
       const r = simularCombate([rapido], [lento], { semilla, registrar: true });
       for (const e of r.registro!) {
         if (!e.texto.startsWith('Iniciativa:')) continue;
-        // El orden del registro sigue la iniciativa de mayor a menor, pifie quien pifie.
-        const valores = [...e.texto.matchAll(/(?:Rápido|Lento) (-?\d+) \[/g)].map((m) => Number(m[1]));
-        expect(valores).toEqual([...valores].sort((a, b) => b - a));
-        const pifia = /Rápido (-?\d+) \[300[−+](\d+) \(pifia: (\d), nivel (\d+)\)\]/.exec(e.texto);
+        const pifia = /Rápido (-?\d+) \[300\+(\d) \(pifia: actúa último, (-\d+) para la sorpresa\)\]/.exec(e.texto);
         if (!pifia) continue;
         pifiasVistas++;
-        expect(Number(pifia[1])).toBe(300 + Number(pifia[3]) - Number(pifia[4]));
-        if (e.texto.indexOf('Rápido') < e.texto.indexOf('Lento')) rapidoPrimeroPifiando++;
+        // Sin nivel: vale el natural, y la Tabla 52 da −125, −100 o −75 según saque 1, 2 o 3.
+        expect(Number(pifia[1])).toBe(300 + Number(pifia[2]));
+        expect(Number(pifia[3])).toBe({ 1: -125, 2: -100, 3: -75 }[Number(pifia[2])]);
+        // Aunque su turno sea muy superior, actúa después del lento (salvo que el lento también pifie).
+        if (!/Lento -?\d+ \[[^\]]*pifia/.test(e.texto)) expect(e.texto.indexOf('Lento')).toBeLessThan(e.texto.indexOf('Rápido'));
       }
     }
     expect(pifiasVistas).toBeGreaterThan(0);
-    expect(rapidoPrimeroPifiando).toBeGreaterThan(0);
   });
 });

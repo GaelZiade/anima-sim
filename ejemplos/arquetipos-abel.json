@@ -1,5 +1,5 @@
 {
- "fuente": "Arquetipos genéricos del Sacro Santo Imperio de Abel. Turno con el arma; TA aproximadas de la Tabla de armaduras.",
+ "fuente": "Arquetipos genéricos del Sacro Santo Imperio de Abel (Gaia I p.37). Turno con el arma; TA de la Tabla 38 y entereza de la Tabla 37 del Core.",
  "fichas": [
   {
    "id": "marinero",
@@ -79,11 +79,12 @@
     "nombre": "Espada larga"
    },
    "ta": {
-    "FIL": 2,
+    "FIL": 3,
     "CON": 1,
     "PEN": 2,
-    "CAL": 1,
-    "FRI": 1
+    "CAL": 2,
+    "ELE": 1,
+    "FRI": 2
    },
    "rf": 35,
    "constitucion": 7,
@@ -105,14 +106,15 @@
      "nombre": "Cuero tachonado",
      "clase": "dura",
      "ta": {
-      "FIL": 2,
+      "FIL": 3,
       "CON": 1,
       "PEN": 2,
-      "CAL": 1,
-      "FRI": 1
+      "CAL": 2,
+      "ELE": 1,
+      "FRI": 2
      },
      "calidad": 0,
-     "entereza": 0
+     "entereza": 14
     }
    ]
   },
@@ -131,9 +133,9 @@
     "nombre": "Espada larga"
    },
    "ta": {
-    "FIL": 3,
-    "CON": 3,
-    "PEN": 3,
+    "FIL": 4,
+    "CON": 5,
+    "PEN": 4,
     "CAL": 1,
     "FRI": 1
    },
@@ -157,14 +159,14 @@
      "nombre": "Peto",
      "clase": "dura",
      "ta": {
-      "FIL": 3,
-      "CON": 3,
-      "PEN": 3,
+      "FIL": 4,
+      "CON": 5,
+      "PEN": 4,
       "CAL": 1,
       "FRI": 1
      },
      "calidad": 0,
-     "entereza": 0
+     "entereza": 16
     }
    ]
   },
@@ -184,10 +186,10 @@
    },
    "ta": {
     "FIL": 4,
-    "CON": 4,
-    "PEN": 4,
-    "CAL": 2,
-    "ELE": 1,
+    "CON": 3,
+    "PEN": 2,
+    "CAL": 3,
+    "ELE": 2,
     "FRI": 2
    },
    "rf": 50,
@@ -211,14 +213,14 @@
      "clase": "dura",
      "ta": {
       "FIL": 4,
-      "CON": 4,
-      "PEN": 4,
-      "CAL": 2,
-      "ELE": 1,
+      "CON": 3,
+      "PEN": 2,
+      "CAL": 3,
+      "ELE": 2,
       "FRI": 2
      },
      "calidad": 0,
-     "entereza": 0
+     "entereza": 15
     }
    ]
   },

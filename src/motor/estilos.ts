@@ -29,7 +29,7 @@ export interface Estilos {
   desarmarLibreEnContra: boolean;
   /** Daño completo (en vez de la mitad) en Presa y Derribo: Grappling supremo (Dominus p.37). */
   danoCompletoEnPresa: boolean;
-  /** Engatillar: Core −100; Tabla de Precisión −50 (Core p.65). */
+  /** Engatillar: Core −100; Tabla de Precisión o arma Precisa a la mitad, las dos −25 (Core p.65, p.76). */
   penEngatillar: number;
   /** Mushin: 1 base, 3 arcano (puntos de presión, Dominus p.42). */
   mushin: 0 | 1 | 3;
@@ -69,7 +69,7 @@ export interface Estilos {
   controlDesarmarEnContra: number;
   /** Bono al resistir Presa/Derribo o zafarse: Kardad +1 / +3 (p.37). */
   resistePresaDerribo: number;
-  /** Kardad supremo: repite una vez por asalto un control fallado al defenderse (p.38). */
+  /** Kardad supremo: repite una vez por asalto un control fallado al defenderse (p.37). */
   repiteControlDefensivo: boolean;
   /** Tabla de Sujeción: +3 para no ser desarmado (Dominus p.28). */
   resisteDesarme: number;
@@ -87,7 +87,7 @@ export interface Estilos {
   contrasIlimitadas: boolean;
   /** Aikido: al contraatacar suma 2× el bono de FUE del rival (mín. +5); supremo 4× (p.31-32). */
   aikidoMultiplicadorFue: number;
-  /** Xing Quan: bono contra un único adversario si lleva la iniciativa: +10/+20/+30 (p.38). */
+  /** Xing Quan: bono contra un único adversario si lleva la iniciativa: +10/+20/+30 (p.37). */
   xingQuan: number;
   /** Bono al nivel de crítico: Tabla de Crítico Incrementado +10, Moai Thai supremo +20, Hakyoukuken +20/+40. */
   bonoCriticoEstilos: number;
@@ -108,7 +108,7 @@ export interface Estilos {
   /** Soo Bahk: fracción del penalizador de flanco a la defensa (1, 1/2 base, 0 avanzado). Hanja: espalda 0. */
   factorFlanco: number;
   factorEspalda: number;
-  /** Soo Bahk supremo: derribado sin penalizador a ataque ni defensa (p.38). */
+  /** Soo Bahk supremo: derribado sin penalizador a ataque ni defensa (p.37). */
   derribadoSinPenalizador: boolean;
   /** Hanja arcano: sin penalizador a la defensa por parálisis menor o parcial ni por estar amenazado (p.44). */
   defensaSinParalisis: boolean;
@@ -217,7 +217,9 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     presaDerriboLibreEnContra: aikido >= 2,
     desarmarLibreEnContra: malla >= 3,
     danoCompletoEnPresa: grappling >= 3,
-    penEngatillar: tiene(tablas, 'tabla de precision') ? 50 : 100,
+    // Precisa (y los ataques desarmados lo son) también lo reduce a la mitad (Core p.76); con la
+    // Tabla de Precisión se acumulan, como Sambo supremo con Precisa en los apuntados.
+    penEngatillar: (tiene(tablas, 'tabla de precision') ? 50 : 100) * (precisa ? 0.5 : 1),
     mushin: g('Mushin') >= 3 ? 3 : g('Mushin') >= 1 ? 1 : 0,
     enuth: g('Enuth') >= 3 ? 3 : g('Enuth') >= 1 ? 1 : 0,
     hakyoukuken: hakyou >= 3 ? 3 : hakyou >= 1 ? 1 : 0,

@@ -92,6 +92,29 @@ export function tamanoPorNombre(nombre: string): TamanoArma | null {
   return resultado;
 }
 
+// --------------------------------------------------------------------------- armaduras
+
+export type LocalizacionArmadura = 'peto' | 'camisola' | 'completa' | 'cabeza';
+
+/** Qué cubre una armadura según su nombre (Tablas 37 y 39); lo desconocido se toma como completa. */
+export function localizacionArmadura(nombre: string): LocalizacionArmadura {
+  const n = normalizarRasgo(nombre);
+  if (/yelmo|casco|capucha|fronton|coronilla|completo (abierto|cerrado)|^anilla$/.test(n)) return 'cabeza';
+  if (/endurecid|tachonad|peto/.test(n)) return 'peto';
+  if (/acolchad|cota de cuero|^cuero$|^piel|anillas/.test(n)) return 'camisola';
+  return 'completa';
+}
+
+/** Lee la localización tal como la escribe la planilla ("Camisola", "Cabeza"…). */
+export function leerLocalizacion(texto: string | undefined, nombre: string): LocalizacionArmadura {
+  const t = normalizarRasgo(texto ?? '');
+  if (t.startsWith('cabeza')) return 'cabeza';
+  if (t.startsWith('peto')) return 'peto';
+  if (t.startsWith('camisola')) return 'camisola';
+  if (t.startsWith('completa')) return 'completa';
+  return localizacionArmadura(nombre);
+}
+
 // --------------------------------------------------------------------------- capacidades
 
 export interface AtaqueExtra {
@@ -157,14 +180,16 @@ export interface Capacidades {
   /** Tiene la Tabla de 2ª Arma: Estilo Defensivo y dos armas: puede cambiar el ataque extra por una defensa. */
   estiloDefensivo: boolean;
   bonoCritico: number;
-  // Negativos (Core p.21, p.30, p.104; Dominus Esencia de vacío)
+  // Negativos (Core p.21, p.25, p.104; Dominus Esencia de vacío)
   mitadCansancio: boolean;
   dobleCansancio: boolean;
   mitadDolorCritico: boolean;
   sinDolorNiCansancio: boolean;
   /** Ventaja Buena suerte: pifia con un número menos (Core p.10). */
   buenaSuerte: boolean;
-  /** Umbral de pifia al atacar y al defenderse (maestría y Buena suerte, ver `umbralPifia`). */
+  /** Ajuste al umbral de pifia por ventajas: Buena suerte −1, Mala suerte +2 (Core p.21, p.25). */
+  ajustePifia: number;
+  /** Umbral de pifia al atacar y al defenderse (maestría, suerte y arma Compleja, ver `umbralPifia`). */
   umbralAtaque: number;
   umbralDefensa: number;
 }
@@ -180,11 +205,15 @@ export function capacidades(f: Ficha): Capacidades {
 }
 
 function calcularCapacidades(f: Ficha): Capacidades {
-  const buenaSuerte = tiene(f.rasgos?.ventajas, 'buena suerte') || tiene(f.rasgos?.ventajas, 'afortunad');
+  // Sólo Buena suerte baja la pifia; Afortunado es otra ventaja (evita trampas y ataques al azar, p.21).
+  const buenaSuerte = tiene(f.rasgos?.ventajas, 'buena suerte');
+  const ajustePifia = (buenaSuerte ? -1 : 0) + (tiene(f.rasgos?.desventajas, 'mala suerte') ? 2 : 0);
   const r = f.rasgos ?? {};
   const arma = f.arma ?? {};
   const nombreArma = arma.nombre ?? '';
   const desarmado = arma.desarmado ?? esDesarmado(nombreArma);
+  // Arma Compleja (látigo, mangual, mayal, katar…): la regla especial figura en su descripción.
+  const compleja = !desarmado && normalizarRasgo(arma.descripcion ?? '').includes('compleja');
   const artes = r.artesMarciales;
   const kempo = desarmado ? gradoArteMarcial(artes, 'Kempo') : 0;
   const encadenado = tiene(r.tablas, 'ataque encadenado');
@@ -262,7 +291,9 @@ function calcularCapacidades(f: Ficha): Capacidades {
     mitadDolorCritico: inmunidad || eliminacion,
     sinDolorNiCansancio: tiene(r.habilidadesKi, 'esencia de vacio'),
     buenaSuerte,
-    umbralAtaque: umbralPifia(f.ataque, buenaSuerte),
-    umbralDefensa: umbralPifia(f.defensa, buenaSuerte),
+    ajustePifia,
+    umbralAtaque: umbralPifia(f.ataque, ajustePifia, compleja),
+    // La esquiva no usa el arma: lo Complejo sólo cuenta al parar con ella.
+    umbralDefensa: umbralPifia(f.defensa, ajustePifia, compleja && (f.tipoDefensa ?? 'parada') === 'parada'),
   };
 }

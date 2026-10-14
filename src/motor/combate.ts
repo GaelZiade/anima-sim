@@ -5,12 +5,12 @@ import { crearRng, dado, type Rng } from './rng';
 import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  bonoContraataque, danoFinal, esCritico, haySorpresa, localizar, nivelCritico, umbralPifia,
+  bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
   porcentajeDano, type Localizacion, type TipoAtaque,
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
-  enAlcance, metrosTotales, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal,
+  enAlcance, metrosTotales, modControl, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, type ZonaArmadura,
 } from './calculos';
 import {
   atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
@@ -53,7 +53,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ataqueFinalUsado: false, maniobraEspecialUsada: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {},
@@ -61,9 +61,9 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
   };
 }
 
-/** D100 abierta de un luchador con una habilidad: maestría y Buena suerte bajan el umbral de pifia. */
-function tirar(ctx: Contexto, l: Luchador, habilidad: number): TiradaD100 {
-  return tirarD100(ctx.rng, umbralPifia(habilidad, l.cap.buenaSuerte));
+/** D100 abierta con el umbral de pifia de esa tirada (ver `umbralPifia`). */
+function tirar(ctx: Contexto, umbral: number): TiradaD100 {
+  return tirarD100(ctx.rng, umbral);
 }
 
 function log(ctx: Contexto, texto: string | (() => string)) {
@@ -120,6 +120,7 @@ function jugarAsalto(ctx: Contexto) {
     l.haActuado = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
     l.movioActivo = false; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
     l.planResistir = null;
+    l.repitioControl = false;
     // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
     l.godhandListo = l.godhandPreparado;
     l.godhandPreparado = false;
@@ -155,26 +156,39 @@ function jugarAsalto(ctx: Contexto) {
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
   }
 
-  // 2. Iniciativa: turno + d100 abierta. Una pifia tira su nivel y lo resta, como en cualquier
-  // tirada (Core p.10): vale natural − nivel, y el personaje queda donde le toque en el orden.
+  // 2. Iniciativa: turno + d100 abierta. Una pifia en turno actúa automáticamente último, sin nivel
+  // de pifia; para la sorpresa vale el turno con el penalizador de la Tabla 52 (Core p.98). El turno
+  // no es una habilidad: la maestría no baja el umbral, Buena suerte sí (Core p.21).
   const desempate = new Map<Luchador, number>();
+  const pifiados = new Set<Luchador>();
+  const paraSorpresa = new Map<Luchador, number>();
   const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
-    const t = tirar(ctx, l, l.ficha.turno);
+    const t = tirarD100(ctx.rng, umbralPifiaTurno(l));
     const turno = turnoFinal(l);
-    l.iniciativa = turno + valorTirada(t);
-    tiradas?.set(l, textoTirada(turno, t));
+    if (t.pifia) {
+      pifiados.add(l);
+      l.iniciativa = turno + t.natural;
+      paraSorpresa.set(l, turno + penPifiaTurno(t.natural));
+      tiradas?.set(l, `${turno}+${t.natural} (pifia: actúa último, ${penPifiaTurno(t.natural)} para la sorpresa)`);
+    } else {
+      l.iniciativa = turno + t.valor;
+      paraSorpresa.set(l, l.iniciativa);
+      tiradas?.set(l, textoTirada(turno, t));
+    }
   }
   const orden = [...vivos].sort(
-    (a, b) => b.iniciativa - a.iniciativa || b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
+    (a, b) =>
+      Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
+      b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
   );
   for (const a of vivos)
     for (const b of vivos)
       // Uroboros sorprende con 100 de diferencia en vez de 150 (Dominus p.79).
       if (
         a.equipo !== b.equipo && !b.previene.has(a) &&
-        haySorpresa(a.iniciativa - b.iniciativa, a.cap.est.diferenciaSorpresa)
+        haySorpresa(paraSorpresa.get(a)! - paraSorpresa.get(b)!, a.cap.est.diferenciaSorpresa)
       ) {
         a.sorprendeA.add(b);
         log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre}.`);
@@ -244,9 +258,9 @@ function retirarse(ctx: Contexto, l: Luchador) {
   if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
   if (l.ficha.acrobacias !== undefined) {
     const base = l.ficha.acrobacias - penAccion(l);
-    const t = tirar(ctx, l, l.ficha.acrobacias);
+    const t = tirar(ctx, umbralPifia(l.ficha.acrobacias, l.cap.ajustePifia));
     const acrobacias = base + valorTirada(t);
-    const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e, e.ficha.ataque))) > 40);
+    const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e.cap.umbralAtaque))) > 40);
     log(ctx, () => `${l.ficha.nombre} intenta escapar con Acrobacias (${textoTirada(base, t)} = ${acrobacias})${supera ? ' y lo logra' : ''}.`);
     if (supera) return huir(ctx, l);
   }
@@ -353,7 +367,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.sorprendeA.clear(); // la sorpresa sólo vale para su primera acción
   atk.previenePendiente.delete(def);
 
-  const tA = tirar(ctx, atk, atk.ficha.ataque);
+  const tA = tirar(ctx, atk.cap.umbralAtaque);
   const etiqueta = `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${def.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}`;
 
   if (tA.pifia) {
@@ -429,7 +443,7 @@ function resolverDefensa(
     resultado = habAtk + tA.valor;
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`);
   } else {
-    const tD = tirar(ctx, quienDefiende, quienDefiende.ficha.defensa);
+    const tD = tirar(ctx, quienDefiende.cap.umbralDefensa);
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
     // La defensa final nunca es negativa.
@@ -444,7 +458,8 @@ function resolverDefensa(
     // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
     if (quienDefiende.cap.est.desarmaAlDefender && !atk.cap.desarmado && activo(atk)) {
       const c = caracteristicasControl('desarmar', quienDefiende, atk);
-      if (controlEnfrentado(ctx.rng, c.atk, c.def) > 0) desarmar(ctx, atk, quienDefiende);
+      // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
+      if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
     }
     return { defensor: quienDefiende, contra: resultado < 0 ? bonoContraataque(resultado) : null };
   }
@@ -452,7 +467,7 @@ function resolverDefensa(
   // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
   // si lo supera, recibe el daño pleno y queda a la defensiva.
   if (sacrificio) {
-    const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura), porcentajeDano(resultado, absorcionContra(def, atk, 'normal', o.tipo, o.ranura)));
+    const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura), porcentajeDano(resultado, absorcionContra(def, atk, esManiobraDeControl(o.maniobra) ? 'normal' : o.maniobra, o.tipo, o.ranura)));
     if (golpe <= 2 * sacrificio) {
       log(ctx, () => `  La sombra de sangre recibe el golpe (${golpe} de ${2 * sacrificio}).`);
       return { defensor: def, contra: null };
@@ -476,7 +491,9 @@ function resolverDefensa(
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
   let base = danoBase(atk, def, o.esContra, o.ranura);
   if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
-  const abs = absorcionContra(def, atk, 'normal', o.tipo, o.ranura);
+  // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
+  // apuntado, la de la zona.
+  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura);
   const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
   const frena = barreraFrena(def, atk, base);
   let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
@@ -502,7 +519,7 @@ function resolverDefensa(
   else if (!esManiobraDeControl(m)) {
     log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
     // La armadura evitó el daño: puede romperse (Core p.93).
-    if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura);
+    if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura, zonaDe(m));
   }
   return { defensor: def, contra: null };
 }
@@ -514,7 +531,8 @@ function resolverDefensa(
 function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, estado: EstadoMushin | null) {
   const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = def.ficha.rf - penAccion(def);
+  // Las Resistencias no sufren el negativo a toda acción (Core p.232).
+  const baseRf = def.ficha.rf;
   const res = baseRf + dadoRf;
   if (dadoRf === 100 || res >= dif) {
     log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
@@ -568,7 +586,7 @@ function roturaEnParada(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ran
   const atkArmado = !ranura.sinArmas && !atk.cap.desarmado;
   if (!atkArmado) return;
   if (def.cap.desarmado) {
-    if (!paro || def.ficha.defensa > 200 || def.cap.est.paradaSinArmasSegura) return;
+    if (!paro || esMaestro(def.ficha.defensa) || def.cap.est.paradaSinArmasSegura) return;
     const entereza = Math.max(atributo(def, 'CON'), atributo(def, 'DES')) + def.cap.est.enterezaSinArmas;
     const falla = controlRotura(ctx, roturaDe(atk, ranura), entereza);
     if (falla > 0) {
@@ -610,22 +628,30 @@ function romperArma(ctx: Contexto, l: Luchador) {
   log(ctx, () => `  El arma de ${l.ficha.nombre} se mella: baja a calidad +${calidad - 5}.`);
 }
 
-/** La armadura que evitó el daño puede romperse: cada capa rota pierde un punto de todas sus TA. */
-function roturaDeArmadura(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura) {
+/**
+ * La armadura que evitó el daño puede romperse: cada capa rota pierde un punto de todas sus TA. Sólo
+ * se controlan las capas de la zona golpeada (el yelmo en un golpe a la cabeza).
+ */
+function roturaDeArmadura(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, zona: ZonaArmadura) {
   const capas = def.ficha.capasArmadura;
   if (!capas?.length) return;
+  const enZona = new Set(capasDe(def.ficha, zona));
+  if (!enZona.size) return;
   const rotura = roturaDe(atk, ranura);
   let rotas = 0;
+  let rotasCuerpo = 0;
   const nuevas = capas.map((c) => {
-    if (controlRotura(ctx, rotura, c.entereza) === 0) return c;
+    if (!enZona.has(c) || controlRotura(ctx, rotura, c.entereza) === 0) return c;
     rotas++;
+    if ((c.localizacion ?? 'completa') !== 'cabeza') rotasCuerpo++;
     return { ...c, ta: Object.fromEntries(Object.entries(c.ta).map(([t, v]) => [t, Math.max(0, (v ?? 0) - 1)])) };
   });
   if (!rotas) return;
+  // La TA total de la planilla es la del cuerpo: el yelmo no cuenta en ella.
   const ta = { ...def.ficha.ta };
-  for (const t of Object.keys(ta) as (keyof typeof ta)[]) ta[t] = Math.max(0, (ta[t] ?? 0) - rotas);
+  for (const t of Object.keys(ta) as (keyof typeof ta)[]) ta[t] = Math.max(0, (ta[t] ?? 0) - rotasCuerpo);
   def.ficha = { ...def.ficha, ta, capasArmadura: nuevas };
-  log(ctx, () => `  La armadura de ${def.ficha.nombre} se daña: −${rotas} a su TA.`);
+  log(ctx, () => `  La armadura de ${def.ficha.nombre} se daña: −${rotas} a la TA de ${zona === 'cabeza' ? 'su yelmo' : 'las capas golpeadas'}.`);
 }
 
 /** Derribo, Presa o Desarmar: control enfrentado de características (Core p.91-92). */
@@ -636,10 +662,14 @@ function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derrib
     ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)
     : (esContra ? e.controlPresaDerriboEnContra : e.controlPresaDerribo);
   const bonoDef = m === 'desarmar' ? def.cap.est.resisteDesarme : def.cap.est.resistePresaDerribo;
-  const a = c.atk + modificadorPorResultado(porcentaje) + bonoAtk;
-  let dif = controlEnfrentado(ctx.rng, a, c.def + bonoDef);
-  // Kardad supremo: repite una vez un control fallado al defenderse (Dominus p.38).
-  if (dif > 0 && m !== 'desarmar' && def.cap.est.repiteControlDefensivo) dif = controlEnfrentado(ctx.rng, a, c.def + bonoDef);
+  const a = c.atk + modificadorPorResultado(porcentaje) + bonoAtk + modControl(atk);
+  const d = c.def + bonoDef + modControl(def);
+  let dif = controlEnfrentado(ctx.rng, a, d);
+  // Kardad supremo: repite una vez por asalto un control fallado al defenderse (Dominus p.37).
+  if (dif > 0 && m !== 'desarmar' && def.cap.est.repiteControlDefensivo && !def.repitioControl) {
+    def.repitioControl = true;
+    dif = controlEnfrentado(ctx.rng, a, d);
+  }
   if (dif <= 0) {
     log(ctx, () => `  ${def.ficha.nombre} gana el control (${dif}).`);
     return;
@@ -691,10 +721,13 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
     return true;
   }
   if (l.paralisis >= 3) return false; // presa perfecta: ya no puede librarse
-  const yo = Math.max(atributo(l, 'FUE'), atributo(l, 'AGI')) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo;
-  const el = Math.max(atributo(captor, 'FUE'), atributo(captor, 'DES'));
+  const yo = Math.max(atributo(l, 'FUE'), atributo(l, 'AGI')) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
+  const el = Math.max(atributo(captor, 'FUE'), atributo(captor, 'DES')) + modControl(captor);
   let dif = controlEnfrentado(ctx.rng, yo, el);
-  if (dif <= 0 && l.cap.est.repiteControlDefensivo) dif = controlEnfrentado(ctx.rng, yo, el);
+  if (dif <= 0 && l.cap.est.repiteControlDefensivo && !l.repitioControl) {
+    l.repitioControl = true;
+    dif = controlEnfrentado(ctx.rng, yo, el);
+  }
   if (dif > 0) {
     soltar(l);
     l.movioActivo = true;
@@ -726,9 +759,13 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: num
   log(ctx, () => `  ${def.ficha.nombre} pierde ${dano} PV (${def.pv}/${def.ficha.pv}).`);
   // Puntos vulnerables: un ataque apuntado a cabeza, corazón o (para inutilizar) una extremidad
   // critica con 1/10 de los PV actuales (Core p.91, p.97). Inutilizar no funciona con acumulación.
-  const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
+  // Ojos de la Muerte: todo golpe que daña es crítico; contra acumulación, en cambio, todo su cuerpo
+  // cuenta como punto vulnerable (Dominus p.78).
+  const ojos = atk.cap.est.criticoAutomatico;
+  const acumula = !!def.ficha.acumulacion;
+  const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
   const critica =
-    atk.cap.est.criticoAutomatico || esCritico(danoPleno, pvAntes) || (vulnerable && pvAntes > 0 && danoPleno * 10 >= pvAntes);
+    (ojos && !acumula) || esCritico(danoPleno, pvAntes) || (vulnerable && pvAntes > 0 && danoPleno * 10 >= pvAntes);
   const enuthArcano = atk.cap.est.enuth >= 3;
   if (critica) critico(ctx, atk, def, danoPleno, resistia, m);
   // Enuth arcano: todo ataque que dañe obliga a un control de inconsciencia (Dominus p.43).
@@ -740,7 +777,12 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
   if (!activo(def)) return;
   // Sangre Eterna: sigue consciente hasta −20×CON (Dominus p.80).
   const limite = def.cap.est.sangreEterna ? -20 * def.ficha.constitucion : 0;
-  if (def.pv <= limite) caer(ctx, atk, def, def.pv <= -5 * def.ficha.constitucion && !def.cap.est.sangreEterna ? 'muerto' : 'caido');
+  // Aguanta hasta el quíntuple de su Constitución en negativos; por debajo, muere (Core p.60).
+  if (def.pv > limite) return;
+  const muere = def.pv < -5 * def.ficha.constitucion && !def.cap.est.sangreEterna;
+  // Orochi desencadenada no cae a 0 PV: sigue en pie con un control de Voluntad por asalto (Dominus p.81).
+  if (!muere && def.orochi === 2) return;
+  caer(ctx, atk, def, muere ? 'muerto' : 'caido');
 }
 
 function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra) {
@@ -754,7 +796,8 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const dadoCritico = tirarD100Cerrada(ctx.rng);
   const nivel = nivelCritico(dano + bono, dadoCritico, !!def.ficha.acumulacion);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico - penAccion(def);
+  // Las Resistencias no sufren el negativo a toda acción (Core p.232).
+  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico;
   const res = baseRf + dadoRf;
   const tiradas = () => {
     const suma = dano + bono + dadoCritico;
@@ -803,6 +846,13 @@ function furiaDeOrochi(ctx: Contexto, l: Luchador) {
 function sangreDeOrochi(ctx: Contexto, l: Luchador) {
   if (!l.orochi) return;
   l.orochiAsaltos++;
+  if (l.orochi === 2 && l.pv <= 0) {
+    // Desencadenada, a 0 PV deja de perderlos y hace un control de Voluntad por asalto: si lo falla,
+    // cae inconsciente (Dominus p.81). Control sin dificultad precisada: 10 (Core p.9).
+    if (!controlCaracteristica(ctx.rng, atributo(l, 'VOL'), 10)) caer(ctx, l, l, 'inconsciente');
+    else log(ctx, () => `${l.ficha.nombre} sigue en pie a ${l.pv} PV por la sangre de Orochi.`);
+    return;
+  }
   const costo = l.orochi === 2 ? 5 : 2;
   // Desencadenada deja de restar al llegar a 0 PV.
   l.pv = l.orochi === 2 ? Math.max(0, l.pv - costo) : l.pv - costo;

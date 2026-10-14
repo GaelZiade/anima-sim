@@ -1,6 +1,6 @@
 // Habilidades finales con todos los modificadores. Lo usan el combate y la IA, así nunca difieren.
 
-import type { Luchador } from './modelo';
+import type { CapaArmadura, Ficha, Luchador } from './modelo';
 import {
   absorcion, BONO_CANSANCIO, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
@@ -8,10 +8,10 @@ import {
 } from './reglas';
 import { tabla } from './probabilidades';
 import {
-  AMENAZADO, atributo, bonoCaracteristica, esManiobraDeControl, ESTADOS_MUSHIN, modEstados, penManiobra,
+  AMENAZADO, atributo, bonoCaracteristica, esApuntado, esManiobraDeControl, ESTADOS_MUSHIN, modEstados, penManiobra,
   type EstadoMushin, type Maniobra,
 } from './maniobras';
-import type { Ranura } from './rasgos';
+import { localizacionArmadura, type Ranura } from './rasgos';
 
 export const ALCANCE = 2;
 /** Ceguera absoluta (Tabla 43) contra ataques invisibles de Velez arcano. */
@@ -62,6 +62,14 @@ export function penAccion(l: Luchador): number {
   return dolor + l.penFisico + cansancio + negativos - luna;
 }
 
+/**
+ * En los controles enfrentados de características, cada 20 de negativo a toda acción resta 1 al
+ * atributo, y cada +20 de bono suma 1 (Core p.232).
+ */
+export function modControl(l: Luchador): number {
+  return -Math.trunc(penAccion(l) / 20) || 0;
+}
+
 /** Espacio reducido (Tabla 43): ataque y parada −40 sólo con armas grandes, esquiva −40. */
 function penEspacio(l: Luchador, campo: 'ataque' | 'parada' | 'esquiva'): number {
   if (!l.entorno.espacioReducido) return 0;
@@ -90,9 +98,14 @@ function bonoVariable(l: Luchador, campo: Luchador['bonoVariableEn']): number {
   return l.bonoVariableEn === campo ? l.cap.est.bonoVariable : 0;
 }
 
-/** Turno para la iniciativa, sin el dado. */
+/** Umbral de pifia en el turno: 3 más la suerte (el turno no es una habilidad: no tiene maestría). */
+export function umbralPifiaTurno(l: Luchador): number {
+  return Math.max(0, 3 + l.cap.ajustePifia);
+}
+
+/** Turno para la iniciativa, sin el dado. El negativo a toda acción cuenta la mitad (Core p.232). */
 export function turnoFinal(l: Luchador): number {
-  return l.ficha.turno - penAccion(l) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
+  return l.ficha.turno - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
     (l.amenazadoPor ? AMENAZADO.turno : 0);
 }
 
@@ -104,6 +117,21 @@ export function metrosTotales(l: Luchador): number {
 export function posicionDe(atacante: Luchador, defensor: Luchador): Posicion {
   const i = defensor.trabados.indexOf(atacante);
   return i < 0 ? posicionPorOrden(defensor.trabados.length) : posicionPorOrden(i);
+}
+
+/**
+ * Penalizador de flanco o espalda al atacar (Tabla 43): lo sufre quien ataca a un rival que tiene en
+ * su lateral o detrás, no quien está ahí (Core p.90: "−30 a parar […] y −10 para atacarlo"). Soo Bahk
+ * avanzado ataca a sus laterales con habilidad plena; Hanja, en cualquier posición (Dominus p.38, p.43).
+ */
+function modPosicionAtaque(atk: Luchador, def: Luchador): number {
+  const i = atk.trabados.indexOf(def);
+  if (i < 0) return 0;
+  const pos = posicionPorOrden(i);
+  const e = atk.cap.est;
+  if (pos === 'flanco') return e.factorFlanco === 0 ? 0 : MOD_POSICION.flanco.ataque;
+  if (pos === 'espalda') return e.factorEspalda === 0 ? 0 : MOD_POSICION.espalda.ataque;
+  return 0;
 }
 
 export interface OpcionesAtaque {
@@ -130,8 +158,9 @@ export interface OpcionesAtaque {
 /** El Xing Quan da su bono si atacó en su turno, sin defenderse antes, siempre al mismo rival. */
 function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolean {
   if (!atk.cap.est.xingQuan || o.esContra || atk.defensasHechas > 0) return false;
+  // Sólo ataques normales o apuntados (Inutilizar e Inconsciencia también lo son).
   const m = o.maniobra ?? 'normal';
-  return (m === 'normal' || m === 'cabeza' || m === 'corazon') && (atk.objetivoUnico === null || atk.objetivoUnico === def);
+  return (m === 'normal' || esApuntado(m)) && (atk.objetivoUnico === null || atk.objetivoUnico === def);
 }
 
 /** Puede usar la Maniobra Especial: sin usar, y el defensor no la supera por 60 de habilidad base. */
@@ -144,7 +173,9 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   const declarados = Math.max(1, o.declarados ?? atk.ataquesDeclarados);
   const ranura = o.ranura ?? proximaRanura(atk);
   const perfil = perfilDe(atk, ranura);
-  const pen = (declarados - 1) * atk.cap.penPorAtaque + ranura.pen;
+  // Selene arcano contraataca "con Habilidad de Ataque plena": esas contras no cuentan como ataques,
+  // así que no arrastran el penalizador de los ataques adicionales (Dominus p.39).
+  const pen = o.esContra && e.contrasIlimitadas ? 0 : (declarados - 1) * atk.cap.penPorAtaque + ranura.pen;
   const activa = atk.movioActivo || o.conMovimientoActivo ? PEN_ACCION_ACTIVA : 0;
   const tipo = o.tipo ?? perfil.tipoAtaque;
   const secundario = tipo !== perfil.tipoAtaque && !e.criticoSecundarioLibre ? PEN_CRITICO_SECUNDARIO : 0;
@@ -154,7 +185,8 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     perfil.ataque - pen - activa - penAccion(atk) - secundario - penEspacio(atk, 'ataque') -
     (ranura.sinArmas ? 0 : penDesenfundar(atk, 'ataque')) -
     penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) +
-    MOD_POSICION[posicionDe(atk, def)].ataque + modEstados(atk).ataque +
+    // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
+    (atk.paralisis === 3 ? 0 : modPosicionAtaque(atk, def)) + modEstados(atk).ataque + desequilibrio(atk, def) +
     // Contra un rival derribado se suma la posición superior (Tabla 43, Dominus p.38).
     (def.derribado ? BONO_POSICION_SUPERIOR : 0) -
     (atk.previenePendiente.has(def) ? PEN_PREVER_SORPRESA : 0) +
@@ -192,6 +224,32 @@ function noVeElAtaque(def: Luchador, atk: Luchador): boolean {
   return atk.cap.est.intangible && !def.cap.est.veEnergia;
 }
 
+/** Flanco o espalda + ceguera absoluta, a la defensa (Dominus p.11, Tabla 1). */
+const POSICION_Y_CEGUERA: Record<Posicion, number> = { frente: -PEN_CEGUERA, flanco: -100, espalda: -120 };
+
+/**
+ * Posición y ceguera a la defensa, combinadas según la Tabla 1 del Dominus (p.11): flanco + ceguera
+ * absoluta −100 y espalda + ceguera absoluta −120 en vez de sumarse; con parálisis completa quedan en
+ * su −200 (ni posición ni ceguera suman más).
+ */
+function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number): number {
+  if (def.paralisis === 3) return 0;
+  const posicion = MOD_POSICION[pos].defensa * factorPos;
+  if (!noVeElAtaque(def, atk)) return posicion;
+  return Math.max(posicion - PEN_CEGUERA, POSICION_Y_CEGUERA[pos]);
+}
+
+/**
+ * Desequilibrio excesivo en los atributos (Dominus p.10, opcional): si su Destreza + Agilidad supera
+ * en más de 7 a la del rival, +10 a toda acción física enfrentada contra él por cada punto de más.
+ */
+export function desequilibrio(l: Luchador, rival: Luchador): number {
+  if (!l.entorno.desequilibrio) return 0;
+  const suma = (x: Luchador) => atributo(x, 'DES') + atributo(x, 'AGI');
+  const diferencia = suma(l) - suma(rival);
+  return diferencia > 7 ? 10 * (diferencia - 7) : 0;
+}
+
 export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = {}): number {
   if (def.ficha.acumulacion) return 0;
   const e = def.cap.est;
@@ -210,14 +268,14 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   let h =
     base - penDefensaAdicional(previas) - penAccion(def) - penEspacio(def, campo) -
     (sinArma ? 0 : penDesenfundar(def, campo)) +
-    MOD_POSICION[pos].defensa * factorPos +
+    situacionDefensa(def, atk, pos, factorPos) + desequilibrio(def, atk) +
     ((def.ficha.tipoDefensa ?? 'parada') === 'parada' ? est.parada : est.esquiva) +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) -
     (def.previenePendiente.has(atk) ? PEN_PREVER_SORPRESA : 0) +
     (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) -
     (def.modo.seraphite === 3 ? 50 : def.modo.seraphite === 1 ? 30 : 0) -
     (def.modo.berserker ? 20 : 0) + bonoVariable(def, 'defensa') + bonoOrochi(def) +
-    Math.min(150, o.samiel ?? 0) - (noVeElAtaque(def, atk) ? PEN_CEGUERA : 0) +
+    Math.min(150, o.samiel ?? 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   if (paradaAnulada(def, atk)) h = Math.min(h, 0);
@@ -235,20 +293,77 @@ export function absorcionContra(
   if (esManiobraDeControl(maniobra)) return absorcion(0);
   const r = ranura ?? proximaRanura(atk);
   const t = tipo ?? perfilDe(atk, r).tipoAtaque;
-  const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) + reduccionHakyoukuken(def, atk, t);
-  return absorcion(Math.max(0, (def.ficha.ta[t] ?? 0) - reduccion));
+  const zona = zonaDe(maniobra);
+  const reduccion = atk.cap.reduccionTA - (r.sinArmas ? atk.cap.reduccionTAArma : 0) + reduccionHakyoukuken(def, atk, t, zona);
+  return absorcion(Math.max(0, taZona(def.ficha, zona, t) - reduccion));
+}
+
+export type ZonaArmadura = 'cuerpo' | 'cabeza' | 'extremidad';
+
+/**
+ * Zona que protege la armadura ante un golpe (Core p.92: "en los golpes apuntados se aplica
+ * únicamente el tipo de armadura de la zona a la que se ataca"). El corazón está en el torso.
+ * Inutilizar elige brazo o pierna: la pierna sólo la cubre una armadura completa, y una camisola
+ * cubre también los brazos, así que la pierna nunca está más protegida.
+ */
+export function zonaDe(m: Maniobra): ZonaArmadura {
+  if (m === 'cabeza' || m === 'inconsciencia') return 'cabeza';
+  if (m === 'inutilizar') return 'extremidad';
+  return 'cuerpo';
+}
+
+function cubre(c: CapaArmadura, zona: ZonaArmadura): boolean {
+  const loc = c.localizacion ?? localizacionArmadura(c.nombre);
+  return zona === 'cabeza' ? loc === 'cabeza' : zona === 'extremidad' ? loc === 'completa' : loc !== 'cabeza';
+}
+
+/** Capas combinadas (Core p.83): la TA más alta más la mitad de cada una de las otras, hacia abajo. */
+function combinarTA(capas: CapaArmadura[], t: TipoAtaque): number {
+  const v = capas.map((c) => c.ta[t] ?? 0).sort((a, b) => b - a);
+  let total = v[0] ?? 0;
+  for (let i = 1; i < v.length; i++) total += Math.floor(v[i] / 2);
+  return total;
+}
+
+const taPorZona = new WeakMap<Ficha, Map<string, number>>();
+
+/**
+ * TA en una zona. El cuerpo usa la TA total de la planilla. La cabeza (yelmo) y las piernas usan sólo
+ * las capas que las cubren, más lo que la planilla suma fuera de las capas (armaduras especiales o
+ * naturales, como la Armadura de Energía por Ki), que protege todo el cuerpo. Sin capas cargadas no
+ * se sabe qué cubre cada cosa y se usa la total.
+ */
+export function taZona(f: Ficha, zona: ZonaArmadura, t: TipoAtaque): number {
+  const total = f.ta[t] ?? 0;
+  if (zona === 'cuerpo' || !f.capasArmadura) return total;
+  let m = taPorZona.get(f);
+  if (!m) taPorZona.set(f, (m = new Map()));
+  const clave = zona + t;
+  let v = m.get(clave);
+  if (v === undefined) {
+    const cuerpo = f.capasArmadura.filter((c) => cubre(c, 'cuerpo'));
+    const especial = Math.max(0, total - combinarTA(cuerpo, t));
+    v = combinarTA(f.capasArmadura.filter((c) => cubre(c, zona)), t) + especial;
+    m.set(clave, v);
+  }
+  return v;
+}
+
+/** Capas de armadura que protegen la zona. */
+export function capasDe(f: Ficha, zona: ZonaArmadura): CapaArmadura[] {
+  return (f.capasArmadura ?? []).filter((c) => cubre(c, zona));
 }
 
 /**
  * Hakyoukuken contra armaduras blandas: resta 2 a su TA (base) o la anula salvo el bono de calidad
  * (arcano) (Dominus p.43).
  */
-function reduccionHakyoukuken(def: Luchador, atk: Luchador, t: TipoAtaque): number {
+function reduccionHakyoukuken(def: Luchador, atk: Luchador, t: TipoAtaque, zona: ZonaArmadura): number {
   const grado = atk.cap.est.hakyoukuken;
   if (!grado || !def.ficha.capasArmadura) return 0;
   let blanda = 0;
   let calidad = 0;
-  for (const c of def.ficha.capasArmadura) {
+  for (const c of capasDe(def.ficha, zona)) {
     if (c.clase !== 'blanda') continue;
     blanda += c.ta[t] ?? 0;
     calidad += Math.floor(Math.max(0, c.calidad) / 5);

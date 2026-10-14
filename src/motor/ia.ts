@@ -4,10 +4,10 @@
 import type { Contexto, Luchador, Perfil } from './modelo';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, metrosTotales,
-  danoEsperado, pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
-import { MAX_CANSANCIO_ASALTO, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
+import { MAX_CANSANCIO_ASALTO, negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { Localizacion } from './reglas';
@@ -352,8 +352,8 @@ function preverSorpresa(l: Luchador, entrantes: { e: Luchador; peso: number }[])
   const elegidos: Luchador[] = [];
   for (const { e } of entrantes) {
     // P(iniciativa de e − la suya ≥ umbral): la diferencia de dos d100 abiertas, como un ataque, cada
-    // una con el umbral de pifia de su turno.
-    const t = tabla(umbralPifia(e.ficha.turno, e.cap.buenaSuerte), umbralPifia(l.ficha.turno, l.cap.buenaSuerte), false);
+    // una con el umbral de pifia del turno (aproximado: la tabla trata su pifia como la de defensa).
+    const t = tabla(umbralPifiaTurno(e), umbralPifiaTurno(l), false);
     const pSorpresa = t.pImpacto(turnoFinal(e) - turnoFinal(l) - e.cap.est.diferenciaSorpresa + 1);
     const atk = ataqueFinal(e, l);
     const def = defensaFinal(l, e);
@@ -672,7 +672,7 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
         ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)
         : (esContra ? e.controlPresaDerriboEnContra : e.controlPresaDerribo);
       const resiste = m === 'desarmar' ? def.cap.est.resisteDesarme : def.cap.est.resistePresaDerribo;
-      const pGana = p.pManiobra * pGanaControl(c.atk + bonoC + modificadorPorResultado(50), c.def + resiste);
+      const pGana = p.pManiobra * pGanaControl(c.atk + bonoC + modificadorPorResultado(50) + modControl(atk), c.def + resiste + modControl(def));
       // Derribado: −30 a su defensa y +20 de posición superior para quien le pegue; levantarse le
       // gasta la acción activa del asalto siguiente (−25 a lo que haga).
       if (m === 'derribo') v += pGana * (0.3 * amen + ganancia(50, golpesSiguientes, danoEste));
@@ -861,6 +861,7 @@ export function sacrificioHaima(def: Luchador, atk: Luchador, habAtk: number): n
  */
 export function quiereHuir(ctx: Contexto, l: Luchador): boolean {
   nuevaDecision(ctx);
-  if (perfil(l) === 'agresivo') return false;
+  // El Berserker no comprende cuándo debe retirarse (Dominus p.84).
+  if (perfil(l) === 'agresivo' || l.modo.berserker) return false;
   return l.pv < l.ficha.pv / 4 && ctx.ventaja[l.equipo] < 0.5;
 }

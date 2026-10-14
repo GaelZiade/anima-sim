@@ -96,10 +96,25 @@ export function haySorpresa(diferencia: number, umbral = DIFERENCIA_SORPRESA): b
   return diferencia >= umbral;
 }
 
+/** Maestría: "cuando un personaje llega a tener una habilidad final de 200" (Core p.17). */
+export function esMaestro(habilidad: number): boolean {
+  return habilidad >= 200;
+}
+
 /**
- * Mayor natural con que se pifia (Core p.10): 1-3; con maestría (más de 200) 1-2. La ventaja Buena
- * suerte lo baja uno más: 1-2, o sólo el 1 con maestría.
+ * Mayor natural con que se pifia (Core p.10): 1-3; con maestría (200 o más, Core p.17) 1-2. `ajuste` es el de
+ * las ventajas: Buena suerte −1, Mala suerte +2 (Core p.21, p.25). Un arma Compleja pifia con dos
+ * más salvo con maestría (Core p.76).
  */
-export function umbralPifia(habilidad: number, buenaSuerte = false): number {
-  return (habilidad > 200 ? 2 : 3) - (buenaSuerte ? 1 : 0);
+export function umbralPifia(habilidad: number, ajuste = 0, compleja = false): number {
+  const maestria = esMaestro(habilidad);
+  return Math.max(0, (maestria ? 2 : 3) + ajuste + (compleja && !maestria ? 2 : 0));
+}
+
+/**
+ * Tabla 52: penalizador al turno de quien pifia la iniciativa, sólo para calcular la sorpresa. La
+ * tabla llega a 3; con Mala suerte (pifia con 4 o 5) se toma −75 (interpretación).
+ */
+export function penPifiaTurno(natural: number): number {
+  return natural <= 1 ? -125 : natural === 2 ? -100 : -75;
 }

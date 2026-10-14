@@ -1,6 +1,6 @@
 import type { Rng } from './rng';
 import type { TamanoArma, TipoAtaque } from './reglas';
-import type { Capacidades, Ranura } from './rasgos';
+import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
 
 export type Perfil = 'agresivo' | 'equilibrado' | 'cauto' | 'bestia';
 
@@ -54,6 +54,11 @@ export interface Ficha {
 export interface CapaArmadura {
   nombre: string;
   clase: 'blanda' | 'dura';
+  /**
+   * Qué cubre (Core p.83): el peto sólo el torso, la camisola también los brazos, la completa todo
+   * menos la cabeza, y el yelmo sólo la cabeza. Sin dato se deduce del nombre (Tabla 37).
+   */
+  localizacion?: LocalizacionArmadura;
   ta: Partial<Record<TipoAtaque, number>>;
   calidad: number;
   entereza: number;
@@ -211,6 +216,8 @@ export interface Luchador {
   godhandPreparado: boolean;
   ataqueFinalUsado: boolean;
   maniobraEspecialUsada: boolean;
+  /** Kardad supremo: ya repitió este asalto un control fallado al defenderse (Dominus p.37). */
+  repitioControl: boolean;
   /** Ars Magnus Samiel: puntos acumulados contra cada enemigo. */
   samiel: Map<Luchador, number>;
   /** Sangre de Orochi despierta (1) o desencadenada (2). */
@@ -238,6 +245,11 @@ export interface OpcionesEscenario {
   faseLunar?: 'llena' | 'menguante' | 'creciente' | 'nueva' | 'eclipse';
   /** Permite huir del combate a quien va perdiendo (Core p.94). Por defecto se pelea hasta el final. */
   huida?: boolean;
+  /**
+   * Desequilibrio excesivo en los atributos (Dominus p.10): +10 a toda acción física enfrentada por
+   * cada punto por el que la Destreza + Agilidad supera en más de 7 a la del rival. Opcional.
+   */
+  desequilibrio?: boolean;
   /**
    * Para análisis: atacan normal, sin maniobras. `true` para los dos equipos, o el equipo ('A' o
    * 'B') al que se le quitan; para medir cuánto le aportan a uno, el rival no tiene que cambiar.

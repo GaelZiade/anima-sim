@@ -89,15 +89,22 @@ describe('tirada abierta y pifia', () => {
     expect(t.valor).toBe(90 + 91 + 92 + 100 + 5);
   });
 
-  it('pifia con 1-3; con maestría (más de 200) 1-2; Buena suerte uno menos', () => {
-    expect(umbralPifia(200)).toBe(3);
-    expect(umbralPifia(201)).toBe(2);
-    expect(umbralPifia(150, true)).toBe(2);
-    expect(umbralPifia(250, true)).toBe(1);
+  it('pifia con 1-3; con maestría (200 o más, Core p.17) 1-2; Buena suerte uno menos', () => {
+    expect(umbralPifia(199)).toBe(3);
+    expect(umbralPifia(200)).toBe(2);
+    expect(umbralPifia(150, -1)).toBe(2);
+    expect(umbralPifia(250, -1)).toBe(1);
     expect(tirarD100(dadosFijos(3, 40)).pifia).toBe(true);
-    expect(tirarD100(dadosFijos(3, 40), umbralPifia(201)).pifia).toBe(false);
-    expect(tirarD100(dadosFijos(2, 40), umbralPifia(250, true)).pifia).toBe(false);
-    expect(tirarD100(dadosFijos(1, 40), umbralPifia(250, true)).pifia).toBe(true);
+    expect(tirarD100(dadosFijos(3, 40), umbralPifia(200)).pifia).toBe(false);
+    expect(tirarD100(dadosFijos(2, 40), umbralPifia(250, -1)).pifia).toBe(false);
+    expect(tirarD100(dadosFijos(1, 40), umbralPifia(250, -1)).pifia).toBe(true);
+  });
+
+  it('Mala suerte pifia con 5 (4 con maestría); un arma Compleja también, salvo con maestría (Core p.25, p.76)', () => {
+    expect(umbralPifia(150, 2)).toBe(5);
+    expect(umbralPifia(250, 2)).toBe(4);
+    expect(umbralPifia(150, 0, true)).toBe(5);
+    expect(umbralPifia(250, 0, true)).toBe(2);
   });
 
   it('una pifia vale natural − nivel', () => {

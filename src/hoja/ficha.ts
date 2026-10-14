@@ -3,7 +3,7 @@
 import type { Atributo, Ficha, Perfil } from '../motor/modelo';
 import type { TamanoArma, TipoAtaque } from '../motor/reglas';
 import { Libro, normalizar } from './libro';
-import { esDesarmado, tamanoPorNombre } from '../motor/rasgos';
+import { esDesarmado, leerLocalizacion, localizacionArmadura, tamanoPorNombre } from '../motor/rasgos';
 import { hojaAJson, type ArmaJson, type HojaJson } from './hojaAJson';
 
 export interface OpcionesFicha {
@@ -30,6 +30,8 @@ function booleano(texto: string | undefined): boolean {
 export function claseArmadura(nombre: string): 'blanda' | 'dura' {
   const n = normalizar(nombre);
   if (n.includes('endurecid') || n.includes('tachonad')) return 'dura';
+  // Yelmos (Tabla 39): sólo las capuchas son blandas.
+  if (localizacionArmadura(nombre) === 'cabeza') return n.includes('capucha') ? 'blanda' : 'dura';
   return ['acolchad', 'cuero', 'gabardina', 'piel', 'malla', 'anilla'].some((x) => n.includes(x)) ? 'blanda' : 'dura';
 }
 
@@ -135,6 +137,7 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
     capasArmadura: json.Combate.armadura.armaduras.map((c) => ({
       nombre: c.nombre,
       clase: claseArmadura(c.nombre),
+      localizacion: leerLocalizacion(c.Localizacion, c.nombre),
       ta: Object.fromEntries(TIPOS.map((t) => [t, numero(c[t], 0)])) as Partial<Record<TipoAtaque, number>>,
       calidad: numero(c.calidad, 0),
       entereza: numero(c.Entereza, 10),

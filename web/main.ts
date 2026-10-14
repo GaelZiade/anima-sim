@@ -99,6 +99,7 @@ function escenarioActual() {
     huida: marcado('huida'),
     espacioReducido: marcado('espacioReducido'),
     armasEnfundadas: marcado('armasEnfundadas'),
+    desequilibrio: marcado('desequilibrio'),
     ...(fase ? { faseLunar: fase } : {}),
   };
   return {
@@ -170,7 +171,7 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
   estado.equipoB = integrantes(esc.equipoB ?? []);
   if (esc.distanciaInicial !== undefined) ($('distancia') as HTMLInputElement).value = String(esc.distanciaInicial);
   const o = esc.opciones ?? {};
-  for (const id of ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas'] as const) ($(id) as HTMLInputElement).checked = !!o[id];
+  for (const id of ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio'] as const) ($(id) as HTMLInputElement).checked = !!o[id];
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
   return errores;
 }
