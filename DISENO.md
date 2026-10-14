@@ -329,16 +329,21 @@ y en el CLI (`src/paralelo-node.ts`, `--hilos=N`).
 
 ## Mapa
 
-Sin grilla, con posiciones en metros (2D continuo). Alcance cuerpo a cuerpo 2 m. Trabarse con
-alguien lo agrega a una lista ordenada por llegada: el orden define frente/flanco/espalda.
+Grilla de celdas de 1 m (`motor/mapa.ts`), al estilo BattleCast, con celdas no transitables. Cada
+luchador ocupa una celda y está trabado con los de las 8 vecinas (en diagonal no, si un muro tapa la
+esquina). Se mueve en 8 direcciones (la diagonal mide √2 m) sin atravesar muros ni cuerpos: Dijkstra
+con corte al llegar, y un campo de distancias por celda de destino (sólo terreno) que la IA usa para
+medir cuánto le falta a cada uno y que queda guardado con el mapa para todos los combates. Sin mapa
+se arma uno abierto con los bandos a la distancia inicial. Trabarse con alguien lo agrega a una
+lista ordenada por llegada: el orden define frente/flanco/espalda (Core p.90).
 
 ## Fases
 
 1. **Motor físico + IA + Monte Carlo por consola** ← hecho (auditado contra los manuales, ver AUDITORIA.md)
-2. Interfaz web (Vite) + workers en paralelo ← versión base hecha
-3. **Ki** ← ahora (ver abajo)
-4. Magia (zeon, ACT, escudos) y psíquica
-5. Proyectiles y repetición animada
+2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
+3. **Ki** ← casi completo (ver "Pendiente del Ki")
+4. Magia (zeon, ACT, escudos) y psíquica ← siguiente
+5. Proyectiles y línea de visión
 
 ## Ki (fase 3)
 

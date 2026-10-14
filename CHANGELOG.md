@@ -1,10 +1,117 @@
 # Changelog
 
-Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026) y se trabaja desde la nube.
+Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
+retomar el trabajo, empezar por README.md.
+
+## 14/10/2026: auditoría, Ki, mapa y combate en vivo
+
+### Auditoría contra los manuales (`ef267d6`)
+
+Revisión línea por línea del motor contra Core, Dominus y Gaia I (detalle en AUDITORIA.md): 15
+correcciones y 9 decisiones respondidas por el usuario. Entre otras:
+
+- **Pifia en la iniciativa**: actúa último sin nivel; la Tabla 52 sólo cuenta para la sorpresa
+  (Core p.98). Esto da vuelta lo que se había hecho el 13/10 (ver abajo).
+- Afortunado no baja la pifia; Mala suerte y armas Complejas suman +2 al umbral.
+- La RF no sufre los negativos a toda acción; la iniciativa, la mitad (Core p.232).
+- Flanco y espalda al atacar los sufre quien ataca a alguien que tiene al costado (Core p.90).
+- Armadura por zona en los ataques apuntados (cada capa y el yelmo con su localización).
+- Arquetipos de Abel con TA y entereza exactas (Tablas 37 y 38).
+- Decisiones: maestría con 200 o más; Tabla 1 del Dominus para combinar situaciones; desequilibrio
+  de atributos como opción; Orochi desencadenada a 0 PV.
+
+### Ki (`10e3946`, `f3ab5a1`)
+
+- **Lectura** de la hoja Ki: reserva, acumulaciones y técnicas con efectos, coste, mantenimiento y
+  Combinable. La planilla Akuma Exxet corre las filas: se busca por etiqueta.
+- **Motor** (`motor/ki.ts`, Core p.102-106, Dominus cap. 5): acumulación (la mitad si hace otra
+  cosa, −1 por cada −20), técnicas de ataque, defensa y turno, efectos de Acción y de Asalto,
+  mantenidas que se pagan y se sueltan, técnicas en espera (1/2/3 por asalto), Defensa adicional
+  como +N defensas libres, y los efectos de daño, área, armadura, RF y apuntar.
+- **Límites** (Dominus p.28-29): Caelum, Terminus, Cenobus, Cruor, Agon, Mors.
+- **Leo** (Dominus p.101): Ataque combinado −20 y disparo a bocajarro (+30) si la hoja impacta.
+- **IA**: elige técnica junto con la maniobra, con un precio por punto de Ki; guarda Ki para una
+  mejor; suelta mantenidas que no rinden.
+- **Cansancio**: Uso de la energía necesaria permite gastar 5 por asalto; la defensa desesperada
+  gasta lo mínimo que alcanza.
+
+### Modificadores del combate (`3ab0911`, `6624ef9`)
+
+- **Sorpresa**: el −90 nunca llegaba a la defensa, porque se borraba al declarar el ataque. Ahora
+  dura toda la primera acción y se gasta antes de las contras (Core p.86). Era el error más grande
+  del motor: cambia mucho a los personajes rápidos (ver la tabla de Kael abajo).
+- **Acciones activas acumulables**: −25 por cada una (moverse, levantarse, zafarse) (Core p.87).
+- Las parálisis no se suman (vale la peor); acumulación sorprendida absorbe la mitad (Core p.99).
+- **Tabla 43 completa**: ceguera parcial y absoluta (cegado u oscuridad; Visión nocturna; Detección
+  del Ki), combinada con flanco y espalda por la Tabla 1 del Dominus; carga; levitar; vuelo;
+  enemigo pequeño y diminuto. Estados del cap. 14: miedo y dolor.
+- **Movimiento**: Tipo de movimiento máximo 10 sin Inhumanidad y 13 sin Zen (Core p.62); cada −20 a
+  toda acción resta 1 al TM (Core p.232).
+- **Verificado y sin cambios**: apuntar sin armas a la cabeza es −30, porque el combate desarmado es
+  Precisa (Core p.76-77). El usuario lo confirmó.
+
+### Kael antes y después de la sorpresa (metodología)
+
+Mismo script y misma semilla contra `f3ab5a1` (antes) y `3ab0911` (después), 4000 combates por
+cruce, con `git worktree` para tener las dos versiones a la vez:
+
+| Kael contra | Antes | Después |
+|---|---|---|
+| Teseo | 9,1% | 9,3% |
+| Kaito | 3,3% | 4,8% |
+| Kiran | 20,1% | 23,8% |
+| Isana | 7,8% | 9,7% |
+| 2 élites | 98,0% | 98,5% |
+| 4 élites | 86,8% | 91,3% |
+| 8 soldados | 43,5% | 53,3% |
+
+Contra 4 élites Kael sorprende a alguien en el 58% de los asaltos.
+
+### Narración (`962e26a`, `1b82ce6`)
+
+- Primero la iniciativa y después quién sorprende a quién (con la diferencia); primero la
+  acumulación de Ki y después la técnica.
+- Aclara lo que se pierde: "X queda a la defensiva."; "resistió el golpe: sigue pudiendo actuar";
+  la pifia "pierde el resto de sus acciones activas"; contras que no se pueden tomar y por qué
+  ("está a la defensiva", "ya usó todos sus ataques"…); "está a la defensiva: no puede actuar".
+- El disparo de Leo que pifia también niega el resto de las acciones (Core p.98).
+
+### Mapa (`1b82ce6`, `216a774`)
+
+- Grilla de celdas de 1 m con terreno no transitable (`motor/mapa.ts`). Trabado con las 8 celdas
+  vecinas; caminos con Dijkstra que esquivan muros y cuerpos; la IA mide por el camino. Sin mapa se
+  arma uno abierto. Mapa y posiciones viajan en `OpcionesEscenario` (`mapa`, `posiciones`).
+- Velocidad: el grupo de 5 contra 22 pasó de 58 a ~60 combates/s después de optimizar (cola de
+  prioridad con arreglos tipados, corte al llegar, campos de distancia guardados con el mapa).
+- Arreglo: el mapa preparado se guardaba por objeto y la página edita el suyo en el lugar; ahora se
+  vuelve a preparar si cambian tamaño o paredes.
+
+### Página (`1b82ce6`, `9e4b639`, `216a774`, `228d9ee`)
+
+- **Compendio** con dos pestañas: *Mis personajes* (planillas) y *Genéricos* (Abel y ejemplos).
+- **Editor de mapa**: tamaño, paredes con clic izquierdo y se sacan con el derecho, fichas que se
+  arrastran.
+- **Combate en vivo**: las fichas recorren el camino celda por celda con estela; marca de turno y
+  barra de iniciativa; flecha de quien ataca a quien defiende (roja impacta, gris falla, dorada
+  contra); daño flotando; barras de PV; controles con teclado.
+- **Barra fija arriba** con "Ver un combate en vivo", "Simular muchos…", progreso y resultado.
+  "Simular muchos…" abre un diálogo con las opciones y los últimos valores usados.
+
+### Infraestructura
+
+- **Manuales** en el repo privado `GaelZiade/anima-manuales` (copyright: este repo es público).
+- **README.md** con principios, metodología, estructura y próximos pasos, para retomar desde otra
+  máquina o desde la nube.
+- Tests: de 142 a 184 (`test/flujo.test.ts` lee el registro del combate real; `test/mapa.test.ts`;
+  `test/ki.test.ts`).
+
+
+## 13/10/2026: paso a GitHub y trabajo desde la nube
+
 El estado inicial es el commit `e937774` ("Estado actual de anima-sim"): cuerpo a cuerpo completo,
 maniobras, estilos, rotura opcional, CLI y 111 tests.
 
-## Infraestructura
+### Infraestructura
 
 - **Repositorio en GitHub** (`GaelZiade/anima-sim`), público. `fichas/` con las planillas reales
   de la mesa (`48bce09`).
@@ -19,7 +126,7 @@ maniobras, estilos, rotura opcional, CLI y 111 tests.
   después de una optimización; `npm run bench -- grupo` filtra escenarios; `BENCH_X=n` multiplica
   los combates (`e095d23`).
 
-## Página web (nueva)
+### Página web (nueva)
 
 Versión base al estilo BattleCast (`a4fd820`). Todo corre en el navegador de quien la usa: las
 planillas no se suben a ningún lado.
@@ -36,7 +143,7 @@ planillas no se suben a ningún lado.
 - **Narrar un combate** con la semilla elegida.
 - Corregido: al cargar varias planillas juntas sólo entraba la primera.
 
-## Narración
+### Narración
 
 - **Los dados de cada tirada** (`8535fe6`): `170+159 (abierta: 93+66)`, `abierta ×2: 95+99+26`,
   `150−72 (pifia: 2, nivel 74)`, `¡pifia! (sacó 2, nivel 26)`, iniciativa `[125+87]`, críticos
@@ -44,9 +151,10 @@ planillas no se suben a ningún lado.
   En la página, abiertas en verde y pifias en rojo. Los dados de una abierta sólo se guardan si
   abre, para no costar en Monte Carlo.
 
-## Reglas
+### Reglas
 
-- **Pifia en la iniciativa** (`6236d1d`, `8325caf`): antes, quien pifiaba actuaba siempre último y
+- **Pifia en la iniciativa** (`6236d1d`, `8325caf`), *revertido por la auditoría del 14/10*: el Core
+  dice que actúa último sin nivel (p.98). Lo que se había hecho: antes, quien pifiaba actuaba siempre último y
   la sorpresa usaba un penalizador fijo por dado (−125/−100/−75) que venía de `roll.dart` del
   toolkit, no del manual. Ahora tira nivel como cualquier tirada: vale natural − nivel, y se ordena
   con ese valor (igual para la sorpresa y la IA).
@@ -56,13 +164,13 @@ planillas no se suben a ningún lado.
 - **Pifia siempre natural − nivel** (`7e7f015`): corregido en las tiradas de la retirada
   (Acrobacias y ataques de respuesta), que sumaban el natural.
 
-## Contenido
+### Contenido
 
 - **Arquetipos genéricos de Abel** (`4d39909`) en `ejemplos/arquetipos-abel.json`: marinero,
   burgués, soldado imperial, soldado de élite, oficial imperial y noble. Turno con el arma; TA de
   cuero tachonado, peto y piezas aproximadas (a confirmar con la tabla).
 
-## IA
+### IA
 
 - **Valoración coherente** (`3c5eb11`). Todas las opciones se miden con las mismas piezas:
   - `valorGolpe`: daño + chance de dejarlo fuera por PV + crítico. La misma cuenta para lo que uno
@@ -87,7 +195,7 @@ planillas no se suben a ningún lado.
 - **Auditoría**: opción `sinManiobras` (`3c5eb11`), que acepta `'A'` o `'B'` para quitárselas a un
   solo equipo (`f9cbbde`). `test/decisiones.test.ts` fija comportamientos verificados.
 
-## Velocidad
+### Velocidad
 
 - **Optimización exacta** (`e095d23`): con la misma semilla, resultados idénticos. Memoria por
   decisión del golpe normal y la amenaza de cada par, crítico memorizado por clave exacta,
@@ -106,7 +214,7 @@ planillas no se suben a ningún lado.
   (`--hilos=N`, `--semilla=N`). El corte en tandas (`motor/tandas.ts`) es el mismo que en la página:
   con la misma semilla, el resultado es idéntico con 1 o N hilos, en el CLI y en la página.
 
-## Tests
+### Tests
 
 De 111 (8 salteados) a 128, todos corriendo: planillas reales, texto de las tiradas, pifia en la
 iniciativa, umbrales de pifia, Buena suerte, tabla de la IA con cada umbral contra dados, efecto
@@ -114,9 +222,5 @@ del crítico contra dados, área contra dados, combinar tandas y decisiones de l
 
 ## Pendiente
 
-- **La moneda del puntaje**: dejar a alguien fuera de combate vale sus PV; frenarlo, el daño que
-  iba a hacer. Contra 12 élites Kiran gana 41,8% con la IA y 54,5% forzando el área. Propuesta:
-  medir todo por el cambio en el intercambio de daño del resto del combate.
-- Mover con acción activa (−25) cuando conviene esperar.
-- Valores reales de TA de los arquetipos de Abel.
-- Ki, psíquicos y magia (Kael y los que dependen de eso no se pueden evaluar todavía).
+Ver README.md, "Estado y próximos pasos", y DISENO.md, "Pendiente del Ki" y "Pendiente: la moneda
+del puntaje".
