@@ -2,7 +2,7 @@
 
 import type { Luchador } from './modelo';
 import {
-  absorcion, BONO_CANSANCIO, esMaestro, MOD_POSICION, MOD_SORPRESA_DEFENSA,
+  absorcion, BONO_CANSANCIO, umbralPifia, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
   penDefensaAdicional, posicionPorOrden, type Posicion, type TipoAtaque,
 } from './reglas';
@@ -282,7 +282,7 @@ export function perfilDe(l: Luchador, ranura: Ranura): { ataque: number; danoBas
 }
 
 export function tablaPara(atk: Luchador, def: Luchador) {
-  return tabla(esMaestro(atk.ficha.ataque), esMaestro(def.ficha.defensa), !!def.ficha.acumulacion);
+  return tabla(umbralPifia(atk.ficha.ataque, atk.cap.buenaSuerte), umbralPifia(def.ficha.defensa, def.cap.buenaSuerte), !!def.ficha.acumulacion);
 }
 
 export interface Pronostico {

@@ -21,7 +21,7 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 | Iniciativa = turno + d100 abierta cada asalto; una pifia tira nivel y vale natural − nivel, como la defensa; se ordena con ese valor | Core p.10, p.86 |
 | Sorpresa: diferencia de iniciativa ≥150 → −90 a la defensa en la primera acción del que sorprende | Core p.86 |
 | Ataque y defensa: habilidad + d100 abierta (90+, luego 91+, 92+…; 100 siempre abre) | Core p.10 |
-| Pifia 1-3 (maestría >200: 1-2). Ataque pifiado: falla, contra con bono = nivel de pifia, pierde acciones | Core p.97 |
+| Pifia 1-3 (maestría >200: 1-2; Buena suerte, uno menos: 1-2, o sólo 1 con maestría). La maestría sale de la habilidad que se tira (ataque, defensa, turno, Acrobacias). Una pifia tira nivel (d100) y vale natural − nivel. Ataque pifiado: falla, contra con bono = nivel de pifia, pierde acciones | Core p.10, p.97 |
 | Defensa pifiada: resta el nivel de pifia | Core p.97 |
 | Impacto: resultado > 0. Daño % = (resultado − absorción) en grupos de 10. Absorción = 20 + 10×TA | Core p.88 |
 | Impactado (aunque sea sin daño) → a la defensiva: pierde acciones activas del asalto | Core p.89 |

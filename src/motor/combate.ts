@@ -2,10 +2,10 @@
 
 import type { Contexto, Equipo, Ficha, Luchador, OpcionesEscenario } from './modelo';
 import { crearRng, dado, type Rng } from './rng';
-import { textoTirada, tirarD100, tirarD100Cerrada, type TiradaD100 } from './dados';
+import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico,
+  bonoContraataque, danoFinal, esCritico, haySorpresa, localizar, nivelCritico, umbralPifia,
   porcentajeDano, type Localizacion, type TipoAtaque,
 } from './reglas';
 import {
@@ -59,6 +59,11 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {},
     },
   };
+}
+
+/** D100 abierta de un luchador con una habilidad: maestría y Buena suerte bajan el umbral de pifia. */
+function tirar(ctx: Contexto, l: Luchador, habilidad: number): TiradaD100 {
+  return tirarD100(ctx.rng, umbralPifia(habilidad, l.cap.buenaSuerte));
 }
 
 function log(ctx: Contexto, texto: string | (() => string)) {
@@ -156,11 +161,10 @@ function jugarAsalto(ctx: Contexto) {
   const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
-    const t = tirarD100(ctx.rng);
+    const t = tirar(ctx, l, l.ficha.turno);
     const turno = turnoFinal(l);
-    const valor = t.pifia ? t.natural - t.nivelPifia : t.valor;
-    l.iniciativa = turno + valor;
-    tiradas?.set(l, textoTirada(turno, t, valor));
+    l.iniciativa = turno + valorTirada(t);
+    tiradas?.set(l, textoTirada(turno, t));
   }
   const orden = [...vivos].sort(
     (a, b) => b.iniciativa - a.iniciativa || b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
@@ -240,9 +244,9 @@ function retirarse(ctx: Contexto, l: Luchador) {
   if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
   if (l.ficha.acrobacias !== undefined) {
     const base = l.ficha.acrobacias - penAccion(l);
-    const t = tirarD100(ctx.rng);
-    const acrobacias = base + t.valor;
-    const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + tirarD100(ctx.rng).valor) > 40);
+    const t = tirar(ctx, l, l.ficha.acrobacias);
+    const acrobacias = base + valorTirada(t);
+    const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e, e.ficha.ataque))) > 40);
     log(ctx, () => `${l.ficha.nombre} intenta escapar con Acrobacias (${textoTirada(base, t)} = ${acrobacias})${supera ? ' y lo logra' : ''}.`);
     if (supera) return huir(ctx, l);
   }
@@ -349,7 +353,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.sorprendeA.clear(); // la sorpresa sólo vale para su primera acción
   atk.previenePendiente.delete(def);
 
-  const tA = tirarD100(ctx.rng, esMaestro(atk.ficha.ataque));
+  const tA = tirar(ctx, atk, atk.ficha.ataque);
   const etiqueta = `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${def.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}`;
 
   if (tA.pifia) {
@@ -425,14 +429,14 @@ function resolverDefensa(
     resultado = habAtk + tA.valor;
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`);
   } else {
-    const tD = tirarD100(ctx.rng, esMaestro(quienDefiende.ficha.defensa));
-    const valorDef = tD.pifia ? tD.natural - tD.nivelPifia : tD.valor;
+    const tD = tirar(ctx, quienDefiende, quienDefiende.ficha.defensa);
+    const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
     // La defensa final nunca es negativa.
     const total = Math.max(0, habDef + valorDef);
     resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${textoTirada(habDef, tD, valorDef)}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${textoTirada(habDef, tD)}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`);
     if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 

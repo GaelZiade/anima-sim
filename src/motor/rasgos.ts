@@ -150,6 +150,8 @@ export interface Capacidades {
   dobleCansancio: boolean;
   mitadDolorCritico: boolean;
   sinDolorNiCansancio: boolean;
+  /** Ventaja Buena suerte: pifia con un número menos (Core p.10). */
+  buenaSuerte: boolean;
 }
 
 export function capacidades(f: Ficha): Capacidades {
@@ -233,5 +235,6 @@ export function capacidades(f: Ficha): Capacidades {
     // sólo la reduce con Eliminación de penalizadores.
     mitadDolorCritico: inmunidad || eliminacion,
     sinDolorNiCansancio: tiene(r.habilidadesKi, 'esencia de vacio'),
+    buenaSuerte: tiene(r.ventajas, 'buena suerte') || tiene(r.ventajas, 'afortunad'),
   };
 }

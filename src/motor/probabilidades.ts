@@ -22,10 +22,9 @@ function cadena(umbral: number, nivel: number): Float64Array {
 let cadenaDesde91: Float64Array | null = null;
 
 /** Tirada completa sin las pifias (masa total = 1 − P(pifia)). Índice = valor. */
-function tiradaSinPifia(maestria: boolean): { pmf: Float64Array; pPifia: number } {
+function tiradaSinPifia(umbralPifia: number): { pmf: Float64Array; pPifia: number } {
   cadenaDesde91 ??= cadena(91, 1);
   const pmf = new Float64Array(MAXV + 1);
-  const umbralPifia = maestria ? 2 : 3;
   for (let r = umbralPifia + 1; r <= 100; r++) {
     if (r >= 90) {
       for (let v = 0; v + r <= MAXV; v++) pmf[v + r] += 0.01 * cadenaDesde91[v];
@@ -39,11 +38,10 @@ function tiradaSinPifia(maestria: boolean): { pmf: Float64Array; pPifia: number 
 const OFF_DEF = 100;
 
 /** Tirada de defensa con pifias incluidas: una pifia vale natural − nivel. Índice = valor + 100. */
-function tiradaDefensa(maestria: boolean): Float64Array {
-  const { pmf } = tiradaSinPifia(maestria);
+function tiradaDefensa(umbralPifia: number): Float64Array {
+  const { pmf } = tiradaSinPifia(umbralPifia);
   const out = new Float64Array(MAXV + OFF_DEF + 1);
   for (let v = 0; v <= MAXV; v++) out[v + OFF_DEF] = pmf[v];
-  const umbralPifia = maestria ? 2 : 3;
   for (let r = 1; r <= umbralPifia; r++)
     for (let nivel = 1; nivel <= 100; nivel++) out[r - nivel + OFF_DEF] += 0.0001;
   return out;
@@ -58,8 +56,8 @@ export class TablaEnfrentamiento {
   readonly pPifiaAtaque: number;
   private readonly masa: number;
 
-  constructor(maestriaAtaque: boolean, maestriaDefensa: boolean, sinDefensa: boolean) {
-    const ataque = tiradaSinPifia(maestriaAtaque);
+  constructor(umbralAtaque: number, umbralDefensa: number, sinDefensa: boolean) {
+    const ataque = tiradaSinPifia(umbralAtaque);
     this.pPifiaAtaque = ataque.pPifia;
     this.masa = 1 - ataque.pPifia;
     const largo = 2 * MAXV + OFF_DEF + 1;
@@ -67,7 +65,7 @@ export class TablaEnfrentamiento {
     if (sinDefensa) {
       for (let a = 0; a <= MAXV; a++) this.pmf[a + this.OFF] = ataque.pmf[a];
     } else {
-      const def = tiradaDefensa(maestriaDefensa);
+      const def = tiradaDefensa(umbralDefensa);
       for (let a = 0; a <= MAXV; a++) {
         const pa = ataque.pmf[a];
         if (pa === 0) continue;
@@ -151,11 +149,13 @@ const OFF_S = 1000;
 
 const cache = new Map<number, TablaEnfrentamiento>();
 
-export function tabla(maestriaAtaque: boolean, maestriaDefensa: boolean, sinDefensa: boolean): TablaEnfrentamiento {
-  const clave = (maestriaAtaque ? 4 : 0) + (maestriaDefensa && !sinDefensa ? 2 : 0) + (sinDefensa ? 1 : 0);
+/** Tabla para un umbral de pifia del atacante y otro del defensor (1-3, ver `umbralPifia`). */
+export function tabla(umbralAtaque: number, umbralDefensa: number, sinDefensa: boolean): TablaEnfrentamiento {
+  // Sin defensa, el umbral del defensor no importa: comparten tabla.
+  const clave = umbralAtaque * 10 + (sinDefensa ? 0 : umbralDefensa);
   let t = cache.get(clave);
   if (!t) {
-    t = new TablaEnfrentamiento(maestriaAtaque, maestriaDefensa, sinDefensa);
+    t = new TablaEnfrentamiento(umbralAtaque, umbralDefensa, sinDefensa);
     cache.set(clave, t);
   }
   return t;

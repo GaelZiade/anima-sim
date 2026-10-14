@@ -7,7 +7,7 @@ import {
   pronostico, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA,
 } from './calculos';
 import { tabla } from './probabilidades';
-import { MAX_CANSANCIO_ASALTO, negativoCansancio, type TipoAtaque } from './reglas';
+import { MAX_CANSANCIO_ASALTO, negativoCansancio, umbralPifia, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
 import {
   caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, modificadorPorResultado,
@@ -221,10 +221,11 @@ export function declarar(ctx: Contexto, l: Luchador): Declaracion {
  */
 function preverSorpresa(l: Luchador, entrantes: { e: Luchador; peso: number }[]): Luchador[] {
   if (perfil(l) === 'bestia') return [];
-  const t = tabla(false, false, false);
   const elegidos: Luchador[] = [];
   for (const { e } of entrantes) {
-    // P(iniciativa de e − la suya ≥ umbral): la diferencia de dos d100 abiertas, como un ataque.
+    // P(iniciativa de e − la suya ≥ umbral): la diferencia de dos d100 abiertas, como un ataque, cada
+    // una con el umbral de pifia de su turno.
+    const t = tabla(umbralPifia(e.ficha.turno, e.cap.buenaSuerte), umbralPifia(l.ficha.turno, l.cap.buenaSuerte), false);
     const pSorpresa = t.pImpacto(turnoFinal(e) - turnoFinal(l) - e.cap.est.diferenciaSorpresa + 1);
     const atk = ataqueFinal(e, l);
     const def = defensaFinal(l, e);

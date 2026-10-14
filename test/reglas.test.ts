@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   absorcion, bonoContraataque, danoFinal, esCritico, haySorpresa, maxAtaques, negativoCansancio, nivelCritico,
-  PEN_ATAQUE_ADICIONAL, penDefensaAdicional, porcentajeDano,
+  PEN_ATAQUE_ADICIONAL, penDefensaAdicional, porcentajeDano, umbralPifia,
 } from '../src/motor/reglas';
-import { textoTirada, tirarD100 } from '../src/motor/dados';
+import { textoTirada, tirarD100, valorTirada } from '../src/motor/dados';
 import { crearLuchador } from '../src/motor/combate';
 import { penAccion } from '../src/motor/calculos';
 import type { Ficha, Rasgos } from '../src/motor/modelo';
@@ -89,9 +89,20 @@ describe('tirada abierta y pifia', () => {
     expect(t.valor).toBe(90 + 91 + 92 + 100 + 5);
   });
 
-  it('pifia con 1-3; con maestría el 3 no es pifia', () => {
+  it('pifia con 1-3; con maestría (más de 200) 1-2; Buena suerte uno menos', () => {
+    expect(umbralPifia(200)).toBe(3);
+    expect(umbralPifia(201)).toBe(2);
+    expect(umbralPifia(150, true)).toBe(2);
+    expect(umbralPifia(250, true)).toBe(1);
     expect(tirarD100(dadosFijos(3, 40)).pifia).toBe(true);
-    expect(tirarD100(dadosFijos(3, 40), true).pifia).toBe(false);
+    expect(tirarD100(dadosFijos(3, 40), umbralPifia(201)).pifia).toBe(false);
+    expect(tirarD100(dadosFijos(2, 40), umbralPifia(250, true)).pifia).toBe(false);
+    expect(tirarD100(dadosFijos(1, 40), umbralPifia(250, true)).pifia).toBe(true);
+  });
+
+  it('una pifia vale natural − nivel', () => {
+    expect(valorTirada(tirarD100(dadosFijos(2, 37)))).toBe(-35);
+    expect(valorTirada(tirarD100(dadosFijos(47)))).toBe(47);
   });
 });
 

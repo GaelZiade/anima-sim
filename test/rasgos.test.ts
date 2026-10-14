@@ -175,3 +175,10 @@ describe('defensas sin penalizador', () => {
     expect([0, 1, 2].map((previas) => defensaFinal(def, atk, { defensasPrevias: previas }))).toEqual([100, 100, 70]);
   });
 });
+
+describe('Buena suerte', () => {
+  it('se lee de las ventajas', () => {
+    expect(capacidades(ficha('Espada', 150, { ventajas: ['Buena suerte'] })).buenaSuerte).toBe(true);
+    expect(capacidades(ficha('Espada', 150, { ventajas: ['Ambidestria'] })).buenaSuerte).toBe(false);
+  });
+});

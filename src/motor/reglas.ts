@@ -96,6 +96,10 @@ export function haySorpresa(diferencia: number, umbral = DIFERENCIA_SORPRESA): b
   return diferencia >= umbral;
 }
 
-export function esMaestro(habilidad: number): boolean {
-  return habilidad > 200;
+/**
+ * Mayor natural con que se pifia (Core p.10): 1-3; con maestría (más de 200) 1-2. La ventaja Buena
+ * suerte lo baja uno más: 1-2, o sólo el 1 con maestría.
+ */
+export function umbralPifia(habilidad: number, buenaSuerte = false): number {
+  return (habilidad > 200 ? 2 : 3) - (buenaSuerte ? 1 : 0);
 }
