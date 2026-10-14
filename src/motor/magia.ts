@@ -154,7 +154,8 @@ export function danoAlAcumular(l: Luchador, dano: number, rng: Rng): { tirada: n
   const tirada = habilidad + t.valor;
   if (!t.pifia && tirada >= 2 * dano) return { tirada, resultado: 'conserva' };
   if (!t.pifia && tirada >= dano) {
-    e.acumulado = 0;
+    // Vuelve a la reserva, con los 10 que se pierden al interrumpir la acumulación (Core p.117).
+    soltar(e);
     return { tirada, resultado: 'vuelve' };
   }
   e.reserva -= e.acumulado;

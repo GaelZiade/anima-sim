@@ -113,6 +113,7 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
   return {
     zeon,
     act: numero(m.act as string, 0),
+    turno: numero(p?.turno, numero(json.Combate.armas.find((a) => a.tipo === 'desarmado')?.turno, 0)),
     proyeccion: numero(p?.ataque, 0),
     proyeccionDefensa: numero(p?.defensa, numero(p?.ataque, 0)),
     vias,

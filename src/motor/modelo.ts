@@ -111,6 +111,8 @@ export interface MagiaFicha {
   zeon: number;
   /** Acumulación por turno final. */
   act: number;
+  /** Turno al usar magia: el de las acciones desarmadas (Core p.117). */
+  turno?: number;
   /** Proyección Mágica final para atacar y para defenderse (con el desequilibrio ofensivo, Core p.118). */
   proyeccion: number;
   proyeccionDefensa?: number;

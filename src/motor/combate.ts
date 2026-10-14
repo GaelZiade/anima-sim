@@ -1797,7 +1797,7 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
 function limitePorDano(ctx: Contexto, l: Luchador, dano: number) {
   // Perder PV mientras acumula magia: Resistir el dolor para no perder la concentración (Core p.118).
   const conc = l.magia?.acumulado ? danoAlAcumular(l, dano, ctx.rng) : null;
-  if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
+  if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva (menos 10)' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
   const limite = alPerderPv(l, dano);
   if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);
 }

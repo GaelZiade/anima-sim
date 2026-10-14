@@ -79,6 +79,10 @@ describe('acumular y lanzar (Core p.117)', () => {
     const flojo = crearLuchador(mago({ resistirDolor: 0 }), 'A', 0, 0);
     empezarAsaltoMagia(flojo, true);
     expect(danoAlAcumular(flojo, 100, siempre50)?.resultado).toBe('pierde');
+    const medio = crearLuchador(mago({ resistirDolor: 120 }), 'A', 0, 0);
+    empezarAsaltoMagia(medio, true);
+    expect(danoAlAcumular(medio, 100, siempre50)?.resultado).toBe('vuelve');
+    expect([medio.magia!.acumulado, medio.magia!.reserva]).toEqual([0, 590]);
     expect(flojo.magia!.reserva).toBe(550);
   });
 });

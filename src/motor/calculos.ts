@@ -124,7 +124,9 @@ export function umbralPifiaTurno(l: Luchador): number {
 
 /** Turno para la iniciativa, sin el dado. El negativo a toda acción cuenta la mitad (Core p.232). */
 export function turnoFinal(l: Luchador): number {
-  return l.ficha.turno - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
+  // Quien pelea con magia usa el turno de las acciones desarmadas (Core p.117).
+  const base = l.magia ? l.ficha.magia?.turno ?? l.ficha.sinArmas?.turno ?? l.ficha.turno : l.ficha.turno;
+  return base - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
     (l.ki?.activo.turno ?? 0) +
     (l.amenazadoPor ? AMENAZADO.turno : 0);
 }

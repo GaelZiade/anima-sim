@@ -387,18 +387,22 @@ resta a los aliados), descontando el zeon a un precio por punto como el del Ki; 
 acumulando (salvo trabado). Levanta el escudo cuando lo atacan si lo que ahorra en ese golpe y los
 siguientes del asalto vale más que su zeon, y se defiende con él si su Proyección rinde más.
 
-**Interpretaciones a confirmar:**
+**Interpretaciones confirmadas** (14/10/2026):
 
-1. El alcance de los conjuros es el del Recuadro X según su Proyección Mágica, sin tirada (140: 250 m).
+1. El alcance de los conjuros es el del Recuadro X según su Proyección Mágica, sin tirada (140: 250 m),
+   salvo que el conjuro diga otro.
 2. Los conjuros de ataque no sufren la cobertura (es de la Tabla 47, que no usan).
 3. "Otra acción" que baja el ACT: atacar, defenderse sin el escudo o moverse con acción activa;
    defenderse con el escudo, no.
-4. Si pierde la concentración pero la tirada llega al daño, el zeon vuelve a la reserva sin perder 10.
-5. El mantenimiento del Escudo de Luz está cortado en la copia del manual: se toma el del Escudo de
-   Oscuridad (5 / 15 / 20 / 25).
-6. El turno es el de la ficha (como con las armas a distancia); el manual dice que la magia usa el
-   turno de las acciones desarmadas (+20).
+4. Si pierde la concentración pero la tirada llega al daño, el zeon vuelve a la reserva menos los 10
+   de interrumpir la acumulación.
+5. El mantenimiento del Escudo de Luz es el de su espejo, el Escudo de Oscuridad (5 / 15 / 20 / 25).
+6. Quien pelea con magia usa el turno de las acciones desarmadas (el de la Proyección en la planilla).
 7. La Absorción de energía (Ki) también absorbe el daño de los conjuros de ataque.
+
+**Tabla 57 (choque de descargas)**, dada por el usuario (la copia del manual está cortada): diferencia
+1-50, se anulan; 51-100, la ganadora pasa con la mitad del daño base; 101 o más, pasa con el daño
+entero. Se implementa en la parte 3.
 
 ## Proyectiles (fase 4)
 
