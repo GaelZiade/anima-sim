@@ -1,0 +1,257 @@
+{
+ "fuente": "Arquetipos genéricos del Sacro Santo Imperio de Abel. Turno con el arma; TA aproximadas de la Tabla de armaduras.",
+ "fichas": [
+  {
+   "id": "marinero",
+   "nombre": "Marinero",
+   "pv": 85,
+   "turno": 55,
+   "ataque": 30,
+   "defensa": 45,
+   "tipoDefensa": "esquiva",
+   "danoBase": 35,
+   "tipoAtaque": "PEN",
+   "tamanoArma": "P",
+   "arma": {
+    "nombre": "Daga"
+   },
+   "ta": {},
+   "rf": 25,
+   "constitucion": 6,
+   "tipoMovimiento": 8,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 8,
+    "DES": 7,
+    "CON": 6,
+    "FUE": 7,
+    "PER": 7,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "acrobacias": 40
+  },
+  {
+   "id": "burgues",
+   "nombre": "Burgués",
+   "pv": 95,
+   "turno": 40,
+   "ataque": 50,
+   "defensa": 50,
+   "tipoDefensa": "esquiva",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {},
+   "rf": 40,
+   "constitucion": 6,
+   "tipoMovimiento": 6,
+   "inteligencia": 7,
+   "perfil": "cauto",
+   "atributos": {
+    "AGI": 6,
+    "DES": 6,
+    "CON": 6,
+    "FUE": 6,
+    "PER": 6,
+    "INT": 7,
+    "VOL": 7,
+    "POD": 7
+   }
+  },
+  {
+   "id": "soldado",
+   "nombre": "Soldado imperial",
+   "pv": 110,
+   "turno": 25,
+   "ataque": 65,
+   "defensa": 65,
+   "tipoDefensa": "parada",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 2,
+    "CON": 1,
+    "PEN": 2,
+    "CAL": 1,
+    "FRI": 1
+   },
+   "rf": 35,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 7,
+    "PER": 5,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Cuero tachonado",
+     "clase": "dura",
+     "ta": {
+      "FIL": 2,
+      "CON": 1,
+      "PEN": 2,
+      "CAL": 1,
+      "FRI": 1
+     },
+     "calidad": 0,
+     "entereza": 0
+    }
+   ]
+  },
+  {
+   "id": "elite",
+   "nombre": "Soldado de élite",
+   "pv": 140,
+   "turno": 35,
+   "ataque": 100,
+   "defensa": 100,
+   "tipoDefensa": "parada",
+   "danoBase": 60,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 3,
+    "CON": 3,
+    "PEN": 3,
+    "CAL": 1,
+    "FRI": 1
+   },
+   "rf": 45,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 5,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 8,
+    "PER": 5,
+    "INT": 5,
+    "VOL": 5,
+    "POD": 5
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Peto",
+     "clase": "dura",
+     "ta": {
+      "FIL": 3,
+      "CON": 3,
+      "PEN": 3,
+      "CAL": 1,
+      "FRI": 1
+     },
+     "calidad": 0,
+     "entereza": 0
+    }
+   ]
+  },
+  {
+   "id": "oficial",
+   "nombre": "Oficial imperial",
+   "pv": 155,
+   "turno": 30,
+   "ataque": 110,
+   "defensa": 110,
+   "tipoDefensa": "parada",
+   "danoBase": 55,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Espada larga"
+   },
+   "ta": {
+    "FIL": 4,
+    "CON": 4,
+    "PEN": 4,
+    "CAL": 2,
+    "ELE": 1,
+    "FRI": 2
+   },
+   "rf": 50,
+   "constitucion": 7,
+   "tipoMovimiento": 6,
+   "inteligencia": 7,
+   "perfil": "equilibrado",
+   "atributos": {
+    "AGI": 6,
+    "DES": 7,
+    "CON": 7,
+    "FUE": 8,
+    "PER": 7,
+    "INT": 7,
+    "VOL": 7,
+    "POD": 8
+   },
+   "capasArmadura": [
+    {
+     "nombre": "Piezas",
+     "clase": "dura",
+     "ta": {
+      "FIL": 4,
+      "CON": 4,
+      "PEN": 4,
+      "CAL": 2,
+      "ELE": 1,
+      "FRI": 2
+     },
+     "calidad": 0,
+     "entereza": 0
+    }
+   ]
+  },
+  {
+   "id": "noble",
+   "nombre": "Noble",
+   "pv": 95,
+   "turno": 50,
+   "ataque": 70,
+   "defensa": 70,
+   "tipoDefensa": "esquiva",
+   "danoBase": 50,
+   "tipoAtaque": "FIL",
+   "tamanoArma": "M",
+   "arma": {
+    "nombre": "Sable"
+   },
+   "ta": {},
+   "rf": 40,
+   "constitucion": 6,
+   "tipoMovimiento": 6,
+   "inteligencia": 7,
+   "perfil": "cauto",
+   "atributos": {
+    "AGI": 6,
+    "DES": 6,
+    "CON": 6,
+    "FUE": 6,
+    "PER": 6,
+    "INT": 7,
+    "VOL": 7,
+    "POD": 7
+   }
+  }
+ ]
+}

@@ -131,7 +131,10 @@ async function cargarArchivos(archivos: File[]) {
   for (const archivo of archivos) {
     try {
       if (archivo.name.toLowerCase().endsWith('.json')) {
-        escenarios.push(JSON.parse(await archivo.text()) as EscenarioJson);
+        const json = JSON.parse(await archivo.text()) as EscenarioJson | { fichas: Ficha[] };
+        // Una lista de fichas (p. ej. ejemplos/arquetipos-abel.json) sólo se suma a la biblioteca.
+        if ('fichas' in json) for (const f of json.fichas) agregarALaBiblioteca({ clave: `ficha:${f.id}`, nombre: f.nombre, tipo: 'ficha', ficha: f });
+        else escenarios.push(json);
         continue;
       }
       const json = leerHoja(new Uint8Array(await archivo.arrayBuffer()));
