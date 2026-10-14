@@ -117,6 +117,8 @@ export interface Estilos {
   paraEnergia: boolean;
   /** Ve los ataques de energía invisibles: Detección del Ki o Ver lo sobrenatural. */
   veEnergia: boolean;
+  /** Tipo de movimiento máximo: 10, 13 con Inhumanidad, 20 con Zen (Core p.62). */
+  topeMovimiento: number;
   /** Detección del Ki: localiza a quien no ve, con ceguera parcial en vez de absoluta (Dominus p.11). */
   deteccionKi: boolean;
   /** Visión nocturna: 1 la ventaja (Core p.20), 2 completa (Core p.318). */
@@ -284,6 +286,8 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     paraEnergia: tiene(r.habilidadesKi, 'extrusion de presencia') || tiene(r.habilidadesKi, 'extension del aura'),
     veEnergia: tiene(r.habilidadesKi, 'deteccion del ki') || tiene(v, 'ver lo sobrenatural'),
     deteccionKi: tiene(r.habilidadesKi, 'deteccion del ki'),
+    topeMovimiento: tiene(r.habilidadesKi, 'zen') || tiene(v, 'zen') ? 20
+      : tiene(r.habilidadesKi, 'inhumanidad') || tiene(v, 'inhumanidad') ? 13 : 10,
     visionNocturna: tiene(v, 'vision nocturna completa') ? 2 : tiene(v, 'vision nocturna') ? 1 : 0,
     bonoVariable,
     seraphite: seraphite >= 3 ? 3 : seraphite >= 1 ? 1 : 0,

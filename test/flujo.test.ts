@@ -201,3 +201,21 @@ describe('la narración aclara las acciones perdidas (Core p.89, p.98)', () => {
     expect(asalto1).toContain('Teseo Heracles está a la defensiva: no puede actuar este asalto.');
   });
 });
+
+describe('tipo de movimiento (Tabla 25)', () => {
+  it('sin Inhumanidad no pasa de 10; con Inhumanidad hasta 13 (Core p.62)', async () => {
+    const { metrosTotales } = await import('../src/motor/calculos');
+    const comun = crearLuchador(ficha('Rápido', { tipoMovimiento: 12 }), 'A', 0, 0);
+    expect(metrosTotales(comun)).toBe(35);
+    const inhumano = crearLuchador(ficha('Inhumano', { tipoMovimiento: 12, rasgos: { habilidadesKi: ['Inhumanidad'] } }), 'A', 0, 0);
+    expect(metrosTotales(inhumano)).toBe(50);
+  });
+
+  it('cada −20 a toda acción le resta 1 al tipo de movimiento (Core p.232)', async () => {
+    const { metrosTotales } = await import('../src/motor/calculos');
+    const l = crearLuchador(ficha('Herido', { tipoMovimiento: 8 }), 'A', 0, 0);
+    expect(metrosTotales(l)).toBe(28);
+    l.penDolor = 45;
+    expect(metrosTotales(l)).toBe(22);
+  });
+});

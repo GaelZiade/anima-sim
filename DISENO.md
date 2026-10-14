@@ -27,6 +27,7 @@ combates con IA por heurística (sin LLM) y da estadísticas: % de victoria, da�
 | Impactado (aunque sea sin daño) → a la defensiva: pierde acciones activas del asalto | Core p.89 |
 | Contraataque: resultado < 0. Bono = mitad redondeada a 5, máx +150. Consume un ataque declarado | Core p.89 |
 | Ataques adicionales: 1 extra por cada 100 de ataque; −20/−30/−40 (arma P/M/G) a todos | Core p.90 |
+| Movimiento: metros por asalto según el Tipo de movimiento de la planilla (Tabla 25). Hasta ¼ es pasivo; pasarlo es una acción activa, −25 a lo que haga después. TM máximo 10 sin Inhumanidad y 13 sin Zen; cada −20 a toda acción resta 1 al TM (los bonos no lo suben) | Core p.62, p.87, p.232 |
 | Mapa en celdas de 1 m: cada luchador ocupa una; está trabado con los de las 8 vecinas (no en diagonal si un muro tapa la esquina). Se mueve en 8 direcciones (diagonal √2 m) esquivando muros y cuerpos; la IA mide la distancia por el camino. Sin mapa, uno abierto con la distancia inicial entre bandos | Diseño (como BattleCast); metros del Tipo de movimiento, Core p.87 |
 | Defensas adicionales: −30, −50, −70, −90 | Core Tabla 44 |
 | Flanco/espalda por cantidad de enemigos trabados: 1-3 frente, 4-5 flanco, 6+ espalda | Core p.90, Tabla 43 |

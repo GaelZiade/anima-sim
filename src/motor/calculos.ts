@@ -125,8 +125,13 @@ export function turnoFinal(l: Luchador): number {
     (l.amenazadoPor ? AMENAZADO.turno : 0);
 }
 
+/**
+ * Metros por asalto (Tabla 25). Sin Inhumanidad no pasa de Tipo de movimiento 10, y sin Zen de 13
+ * (Core p.62); cada 20 de negativo a toda acción le resta 1 (Core p.232), y los bonos no lo suben.
+ */
 export function metrosTotales(l: Luchador): number {
-  return metrosPorAsalto(l.ficha.tipoMovimiento);
+  const tope = Math.min(l.ficha.tipoMovimiento, l.cap.est.topeMovimiento);
+  return metrosPorAsalto(Math.max(0, tope - Math.max(0, Math.trunc(penAccion(l) / 20))));
 }
 
 /** Dónde está `atacante` respecto de `defensor`, según el orden en que se trabó con él. */
