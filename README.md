@@ -144,7 +144,7 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 **Próximos pasos, en orden:**
 
 1. **Magia**, por partes (DISENO.md, "Magia"): hechas la 1 (núcleo) y la 2 (los conjuros de Stéphan,
-   con 15 interpretaciones a confirmar); siguen las reglas avanzadas (conjuro preparado, magia
+   interpretaciones confirmadas); siguen las reglas avanzadas (conjuro preparado, magia
    innata, choque de descargas, el resto de la metamagia), catalogar el resto de las vías caso por
    caso, y la psíquica (CV, potencial; Rita).
 2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con

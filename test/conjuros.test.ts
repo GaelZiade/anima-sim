@@ -6,7 +6,7 @@ import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, cegueraContra, defensaFinal, inmuneAlGolpe, turnoFinal } from '../src/motor/calculos';
 import { CATALOGO, conjurosDe, gradosPosibles } from '../src/motor/conjuros';
-import { bendecir, costeConjuro, danoLlamas, estadoLlamas, quitarBendicion, rmDe } from '../src/motor/magia';
+import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
 import { blancosConjuro, golpeDeConjuro } from '../src/motor/ia';
 
 const conjuro = (n: string) => CATALOGO.find((c) => c.nombre === n)!;
@@ -73,6 +73,21 @@ describe('beneficios de Guerra y de Fuego', () => {
     quitarBendicion(l, m2, conjuro('Campeón'));
     quitarBendicion(l, m1, conjuro('Ira Ancestral'));
     expect([ataqueFinal(l, rival), turnoFinal(l), l.bono]).toEqual([at, tu, null]);
+  });
+
+  it('un ejemplar por blanco: Arma Ígnea a dos aliados; muerto el blanco, no se paga más', () => {
+    const m = crearLuchador(mago({ libres: ['Arma Ígnea', 'Campeón'] }), 'A', 0, 0);
+    const [k1, k2] = [crearLuchador(soldado, 'A', 1, 0), crearLuchador(soldado, 'A', 2, 0)];
+    m.magia!.acumulado = 1000;
+    const arma = conjuro('Arma Ígnea');
+    expect(puedeLanzar(m, arma, 0)).toBe(true);
+    lanzar(m, arma, 0, { blancos: [k1] });
+    expect(puedeLanzar(m, arma, 0)).toBe(true);
+    lanzar(m, arma, 0, { blancos: [k2] });
+    expect([k1.bono?.tipoArma, k2.bono?.tipoArma, m.magia!.mantenidos.length]).toEqual(['CAL', 'CAL', 2]);
+    k1.estado = 'muerto';
+    empezarAsaltoMagia(m, false);
+    expect(m.magia!.mantenidos.map((x) => x.blancos![0])).toEqual([k2]);
   });
 
   it('Cuerpo a Fuego: inmune a lo que no es energía, frío o agua; un conjuro de calor no lo daña', () => {

@@ -1959,17 +1959,32 @@ function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: 
   return ASALTOS_EFECTO * (despues.hace - antes.hace + lambda(l) * (antes.recibe - despues.recibe) + turno);
 }
 
-/** Aliados (él incluido) dentro del radio de un beneficio que todavía no lo tienen de él. */
-function aliadosEnRadio(ctx: Contexto, l: Luchador, c: Conjuro, radio: number): Luchador[] {
+/**
+ * Aliados (él incluido) dentro del radio de un beneficio que todavía no lo tienen de él (un ejemplar
+ * por blanco), sin los que ya va a recibir este turno.
+ */
+function aliadosEnRadio(ctx: Contexto, l: Luchador, c: Conjuro, radio: number, ya: readonly Lanzamiento[] = []): Luchador[] {
   return ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x) && distancia(l, x) <= radio &&
-    !x.bendiciones.some((b) => b.fuente === l && b.conjuro === c));
+    !x.bendiciones.some((b) => b.fuente === l && b.conjuro === c) &&
+    !ya.some((y) => y.conjuro === c && y.blancos?.includes(x)));
+}
+
+/**
+ * Campeón: sólo uno de cada 10 del grupo de batalla (al menos uno, Arcana p.35). Los demás beneficios a
+ * un aliado, uno por blanco.
+ */
+function cupoAgotado(ctx: Contexto, l: Luchador, c: Conjuro, ya: readonly Lanzamiento[]): boolean {
+  if (c.nombre !== 'Campeón') return false;
+  const grupo = ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x)).length;
+  const usados = (l.magia?.mantenidos.filter((x) => x.conjuro === c).length ?? 0) + ya.filter((x) => x.conjuro === c).length;
+  return usados >= Math.max(1, Math.floor(grupo / 10));
 }
 
 /**
  * El mejor uso de un conjuro en un grado: a quién, y cuánto vale en PV (sin restar su zeon). Cada
  * conjuro se valora a su manera, como se resuelve en el motor.
  */
-function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: number): { l: Lanzamiento; valor: number; extra: number } | null {
+function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: number, ya: readonly Lanzamiento[]): { l: Lanzamiento; valor: number; extra: number } | null {
   const g = c.grados[i];
   const e = l.magia!;
   let mejor: { l: Lanzamiento; valor: number; extra: number } | null = null;
@@ -2065,7 +2080,8 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
         for (const a of blancos) v += valorBendicion(ctx, l, a, c, g);
         if (blancos.length) probar({ conjuro: c, grado: i, objetivo: null, blancos }, v);
       } else {
-        for (const a of aliadosEnRadio(ctx, l, c, alcance)) probar({ conjuro: c, grado: i, objetivo: null, blancos: [a] }, valorBendicion(ctx, l, a, c, g));
+        if (cupoAgotado(ctx, l, c, ya)) return null;
+        for (const a of aliadosEnRadio(ctx, l, c, alcance, ya)) probar({ conjuro: c, grado: i, objetivo: null, blancos: [a] }, valorBendicion(ctx, l, a, c, g));
       }
       return mejor;
     }
@@ -2096,11 +2112,14 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   for (;;) {
     let mejor: { l: Lanzamiento; valor: number; zeon: number } | null = null;
     for (const c of e.conjuros) {
-      if (c.accion !== 'activa' || e.mantenidos.some((x) => x.conjuro === c) || res.some((x) => x.conjuro === c && !c.tipos.includes('ataque'))) continue;
+      // Un ejemplar de cada conjuro mantenido; de los beneficios a un aliado, uno por blanco.
+      const porBlanco = c.blanco === 'aliado';
+      if (c.accion !== 'activa' || (!porBlanco && e.mantenidos.some((x) => x.conjuro === c)) ||
+        (!porBlanco && res.some((x) => x.conjuro === c && !c.tipos.includes('ataque')))) continue;
       for (const i of gradosPosibles(c, inteligencia, l.ficha.magia)) {
         const g = c.grados[i];
         if (g.zeon > disponible) continue;
-        const uso = mejorUso(ctx, l, c, i, alcance);
+        const uso = mejorUso(ctx, l, c, i, alcance, res);
         if (!uso) continue;
         const zeon = costeConjuro(c, g, uso.l.control);
         if (zeon > disponible) continue;

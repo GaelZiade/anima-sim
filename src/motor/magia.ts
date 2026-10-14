@@ -77,6 +77,11 @@ export function empezarAsaltoMagia(l: Luchador, acumula: boolean) {
   e.ganado = 0;
   e.otraAccion = false;
   e.mantenidos = e.mantenidos.filter((x) => {
+    // Un beneficio cuyos blancos ya cayeron no se sigue pagando.
+    if (x.blancos?.length && !x.blancos.some((b) => b.estado === 'activo')) {
+      quitarEfecto(e, x, l);
+      return false;
+    }
     const coste = x.conjuro.grados[x.grado].mantenimiento ?? 0;
     if (e.reserva - e.acumulado < coste) {
       quitarEfecto(e, x, l);
@@ -115,8 +120,12 @@ export function puedeLanzar(l: Luchador, c: Conjuro, grado: number): boolean {
   return !!e && e.acumulado >= g.zeon && gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia).includes(grado) && !estaMantenido(e, c);
 }
 
+/**
+ * Ya lo mantiene: un solo ejemplar de cada conjuro, salvo los que benefician a un aliado, de los que
+ * mantiene uno por blanco (se elige a quién al lanzarlo).
+ */
 function estaMantenido(e: EstadoMagia, c: Conjuro): boolean {
-  return e.mantenidos.some((x) => x.conjuro === c);
+  return c.blanco !== 'aliado' && e.mantenidos.some((x) => x.conjuro === c);
 }
 
 /** Zeon extra por elegir los blancos de un conjuro de área con Control del Espacio (Arcana p.27). */

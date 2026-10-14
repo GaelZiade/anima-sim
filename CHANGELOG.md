@@ -20,6 +20,9 @@ retomar el trabajo, empezar por README.md.
   (Cuerpo a Fuego: Teseo no daña energía); Kaito 2,6 → 1,8; Kiran 0 → 0; cuatro soldados 100 → 100.
   Stéphan, Kael y Kaito contra Teseo, Kiran y cuatro soldados (100 combates): 51 → 58.
 - Huella del bench sin cambios.
+- **Interpretaciones confirmadas** (las 15 de DISENO.md). Nombres y mantenimientos, del grimorio de la
+  planilla. Un ejemplar de cada beneficio por blanco (Campeón: uno cada 10 del grupo); el grupo de la
+  medición queda en 55.
 
 ## 14/10/2026 (noche): magia, parte 1 (núcleo)
 

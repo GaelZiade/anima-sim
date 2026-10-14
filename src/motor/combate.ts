@@ -833,7 +833,8 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
   const etiqueta = (b: Luchador) => `${l.ficha.nombre} lanza ${nombre} contra ${b.ficha.nombre}${enAlcance(l, b) ? '' : ` desde ${distancia(l, b).toFixed(0)} m`} ${zeon}`;
   const t = tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion));
   if (t.pifia) {
-    const m = mantenidoCon(l, c);
+    // El ejemplar recién agregado (de un beneficio a un aliado puede haber uno por blanco).
+    const m = [...l.magia!.mantenidos].reverse().find((x) => x.conjuro === c);
     if (m) dejarDeMantener(l, m);
     log(ctx, () => `${obj && (c.tipos.includes('ataque') || c.tipos.includes('animico')) ? etiqueta(obj) : `${l.ficha.nombre} lanza ${nombre}${sobre} ${zeon}`}: ¡pifia! (sacó ${t.natural}, nivel ${t.nivelPifia}): el conjuro falla.`,
       () => (obj ? { ataque: { de: nro(ctx, l), a: nro(ctx, obj), contra: false, resultado: null } } : {}));

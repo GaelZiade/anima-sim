@@ -353,8 +353,7 @@ celda con otro luchador da **cobertura** (−40, Tabla 47).
 
 ## Magia (fase 5)
 
-Por partes: **1. núcleo** (hecho), **2. catálogo de combate de las vías de Stéphan** (hecho, a
-confirmar las interpretaciones), 3. reglas avanzadas (conjuro preparado, magia innata, choque de
+Por partes: **1. núcleo** (hecho), **2. catálogo de combate de las vías de Stéphan** (hecho), 3. reglas avanzadas (conjuro preparado, magia innata, choque de
 descargas, el resto de la metamagia), 4. psíquica. Los conjuros no tienen una forma genérica: cada
 uno se cataloga y se resuelve caso por caso (`Conjuro.efecto`).
 
@@ -453,7 +452,7 @@ Espacio sólo si hay un aliado en el área. Aumentar el Crítico, si sube el val
 zeon. En llamas, se apaga si ya lo quema o está por hacerlo. Los demás saben que un Cuerpo a Fuego no
 recibe sus golpes (el daño esperado es 0).
 
-**Interpretaciones nuevas, a confirmar:**
+**Interpretaciones confirmadas** (14/10/2026; las dos primeras, con el grimorio de la planilla):
 
 1. ~~Nombres cortados~~ **Resuelto con el grimorio de la planilla**: Arma Ígnea (26) y Cuerpo a
    Fuego (52).
@@ -462,7 +461,8 @@ recibe sus golpes (el daño esperado es 0).
 3. Los beneficios de Guerra "a los aliados del radio" incluyen al lanzador; alcanzan a los que están
    en el radio al lanzarlo y lo conservan aunque se alejen.
 4. El mismo conjuro de dos lanzadores no se acumula (vale el mayor); conjuros distintos, sí. Cada
-   lanzador mantiene una sola copia de cada conjuro a la vez.
+   lanzador mantiene un solo ejemplar de cada conjuro **por blanco** (Arma Ígnea a dos aliados, sí;
+   Campeón, además, uno cada 10 del grupo, al menos uno). Si el blanco cae, deja de pagarlo.
 5. Un anímico que alcanza no deja al blanco a la defensiva (no lo golpea).
 6. Secar es en un área elegida (como la Bola de Fuego); el blanco resiste con la mejor de RM y RF.
    Consumir Esencia pide Proyección y defensa a cada uno del radio (es anímico de área).
@@ -488,6 +488,8 @@ recibe sus golpes (el daño esperado es 0).
 salvo tres Inteligencias de grado avanzado: Cuerpo a Fuego (manual 13, planilla 12), Incinerar (14
 contra 12) y Consumir Esencia (12 contra 14). Manda el manual. Incinerar trae mantenimiento en los dos
 (10 / 15 / 15 / 20), pero ninguno dice qué mantiene: sigue sin mantenerse en la simulación.
+
+Las Inteligencias en que la planilla y el manual no coinciden quedan con el manual.
 
 **Pendiente de la parte 2:** Barrera de Fuego (un muro en el mapa), Lazos de Luz (Presa con los
 lazos), Invisibilidad (hace falta leer Advertir y Buscar de la planilla), Éxtasis, Moral (Frialdad),
