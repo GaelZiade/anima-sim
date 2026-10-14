@@ -5,7 +5,7 @@ import { crearRng, dado, type Rng } from './rng';
 import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  absorcion, bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
+  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
   porcentajeDano, type Localizacion, type TipoAtaque,
 } from './reglas';
 import {
@@ -388,6 +388,12 @@ function turno(ctx: Contexto, l: Luchador) {
         continue;
       }
       const obj = ia.elegirObjetivo(ctx, l);
+      // Lejos de su objetivo (o sin ninguno al que llegar): una técnica a distancia en vez de acercarse.
+      const lejos = !obj || !enAlcance(l, obj) ? ia.ataqueADistancia(ctx, l) : null;
+      if (lejos) {
+        atacar(ctx, l, lejos.objetivo, { esContra: false, bono: 0, tecnica: lejos.tecnica });
+        continue;
+      }
       if (!obj) break;
       if (!enAlcance(l, obj)) {
         mover(ctx, l, obj);
@@ -571,6 +577,8 @@ function gastarCansancio(l: Luchador, puntos: number) {
 export interface Ataque {
   esContra: boolean;
   bono: number;
+  /** Técnica de Ki ya elegida (un ataque a distancia, que la IA decidió antes de moverse). */
+  tecnica?: Tecnica | null;
 }
 
 const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
@@ -589,7 +597,9 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // Selene: dobla el bono del contraataque peleando sin armas (Dominus p.39).
   const bono = a.esContra && atk.cap.est.doblaBonoContra ? a.bono * 2 : a.bono;
   // Declaraciones antes de tirar: maniobra, cansancio, Samiel, y del lado del defensor lo mismo.
-  const plan = ia.elegirManiobra(ctx, atk, def, a.esContra, bono);
+  const plan = ia.elegirManiobra(ctx, atk, def, a.esContra, bono, a.tecnica);
+  // Fuera del cuerpo a cuerpo sólo se ataca con una técnica a distancia (Dominus p.57).
+  const aDistancia = !enAlcance(atk, def);
   const m = plan.maniobra;
   atk.stats.maniobras[m] = (atk.stats.maniobras[m] ?? 0) + 1;
   if (plan.especial) atk.maniobraEspecialUsada = true;
@@ -612,6 +622,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const opcionesAtk = {
     bono, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: ki?.elemento || plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
     estadoMushin: plan.estadoMushin ?? null, ki, kiDestruccion: plan.kiDestruccion, costeTecnica: plan.tecnica ? costeKi(plan.tecnica) : 0,
+    aDistancia,
   };
   // Ataque Predeterminado: la habilidad final es un valor fijo y no se tiran dados (Dominus p.51).
   const fijo = ki?.ataqueFijo ?? 0;
@@ -624,7 +635,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.godhandListo = false;
   atk.previenePendiente.delete(def);
 
-  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
+  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${distancia(atk, b).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
 
   // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55). Si
   // una contra lo pone a la defensiva, no sigue.
@@ -640,6 +651,15 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       avisarPifia(ctx, atk);
       ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
+    }
+    // Un disparo tiene que llegar: su ataque final debe superar la dificultad por distancia (Tabla 48).
+    if (aDistancia) {
+      const metros = distancia(atk, def);
+      const dif = dificultadDisparo(metros);
+      if (habAtk + tA.valor < dif) {
+        log(ctx, () => `${etiquetaPara(def)}: ${textoTirada(habAtk, tA)} no llega a la dificultad ${dif} (Tabla 48).`);
+        continue;
+      }
     }
 
     // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92). Un
@@ -732,6 +752,8 @@ interface Golpe {
   costeTecnica?: number;
   /** Es un ataque reflectado: no se vuelve a reflectar (Dominus p.71). */
   reflejado?: boolean;
+  /** Ataque a distancia: cuenta como proyectil disparado para la defensa (Dominus p.57, Tabla 49). */
+  aDistancia?: boolean;
 }
 
 function resolverDefensa(
@@ -768,7 +790,7 @@ function resolverDefensa(
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki }) - (proteccion?.pen ?? 0);
+  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia }) - (proteccion?.pen ?? 0);
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).

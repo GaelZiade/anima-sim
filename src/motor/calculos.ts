@@ -4,7 +4,7 @@ import type { CapaArmadura, Ficha, Luchador } from './modelo';
 import {
   absorcion, BONO_CANSANCIO, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
-  penDefensaAdicional, posicionPorOrden, type Posicion, type TipoAtaque,
+  esMaestro, penDefensaAdicional, penDefensaProyectil, posicionPorOrden, type Posicion, type TipoAtaque,
 } from './reglas';
 import { tabla } from './probabilidades';
 import {
@@ -325,6 +325,8 @@ export interface OpcionesDefensa {
   defensasPrevias?: number;
   /** Efectos de Ki del ataque (un Ataque sobrenatural no se puede parar). */
   kiAtk?: ModKi;
+  /** Es un proyectil disparado (una técnica a distancia, Dominus p.57): Tabla 49. */
+  proyectil?: boolean;
   /** Suponer que lo atacan desde esta posición (la IA, para quien todavía no se trabó). */
   posicion?: Posicion;
   cansancio?: number;
@@ -408,6 +410,8 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
+  // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
+  if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa));
   if (paradaAnulada(def, atk, o.kiAtk)) h = Math.min(h, 0);
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
@@ -523,7 +527,7 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     // Presencia base más el bono de Poder (Dominus p.55, p.58). El multiplicador va antes de sumar
     // cualquier otro bono (p.55).
     if (ki.danoFijo) arma = ki.danoFijo;
-    if (ki.area) arma = Math.max(arma, 2 * (atk.ficha.presencia ?? 0) + bonoCaracteristica(atributo(atk, 'POD')));
+    if (ki.area || ki.distancia) arma = Math.max(arma, 2 * (atk.ficha.presencia ?? 0) + bonoCaracteristica(atributo(atk, 'POD')));
     arma = arma * ki.multDano + ki.dano;
   }
   let d = arma + bonoVariable(atk, 'dano');

@@ -143,3 +143,27 @@ describe('Desventajas (Dominus p.71-74)', () => {
     expect(l.cansancio).toBe(7);
   });
 });
+
+describe('Técnicas a distancia (Dominus p.57, Core p.96)', () => {
+  it('Tabla 48 y Tabla 49', async () => {
+    const { dificultadDisparo, penDefensaProyectil } = await import('../src/motor/reglas');
+    expect([dificultadDisparo(0.5), dificultadDisparo(8), dificultadDisparo(30), dificultadDisparo(100), dificultadDisparo(300)]).toEqual([40, 80, 120, 140, 180]);
+    expect([penDefensaProyectil('parada', false), penDefensaProyectil('parada', true), penDefensaProyectil('esquiva', false), penDefensaProyectil('esquiva', true)]).toEqual([80, 20, 30, 0]);
+  });
+
+  it('el defensor sufre la Tabla 49, salvo con un escudo de energía', () => {
+    const l = crearLuchador(maestro([]), 'A', 0, 0);
+    const e = crearLuchador(rival(), 'B', 20, 0);
+    expect(defensaFinal(e, l) - defensaFinal(e, l, { proyectil: true })).toBe(80);
+    e.escudoKi = 100;
+    expect(defensaFinal(e, l) - defensaFinal(e, l, { proyectil: true })).toBe(0);
+  });
+
+  it('la IA ataca de lejos en vez de acercarse, y no le pueden contraatacar', () => {
+    const rayo = tecnica('Rayo de luz', 'Habilidad de Ataque (+40), Ataque a distancia (50 metros)', { POD: 3 });
+    const r = simularCombate([maestro([rayo], { tipoMovimiento: 4 })], [rival({ tipoMovimiento: 4 })], { semilla: 2, registrar: true, distanciaInicial: 30 });
+    const t = r.registro!.map((x) => x.texto);
+    expect(t.some((x) => x.startsWith('Maestro ataca a Rival con Rayo de luz'))).toBe(true);
+    expect(t.some((x) => x.includes('no tiene a Maestro a su alcance'))).toBe(t.some((x) => /Maestro ataca a Rival con Rayo.*→ -/.test(x)));
+  });
+});

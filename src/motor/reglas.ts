@@ -52,6 +52,23 @@ export function localizar(d100: number): Localizacion {
   return 'cabeza';
 }
 
+/**
+ * Tabla 48 (Core p.96): dificultad que el ataque final de un disparo debe superar para llegar al
+ * blanco, por distancia (Media 80, Difícil 120, Muy difícil 140, Absurdo 180, Casi imposible 240,
+ * Imposible 280; Tabla 7). A bocajarro (menos de 1 m), Fácil 40.
+ */
+export function dificultadDisparo(metros: number): number {
+  return metros < 1 ? 40 : metros <= 10 ? 80 : metros <= 50 ? 120 : metros <= 150 ? 140 : metros <= 500 ? 180 : metros <= 1000 ? 240 : 280;
+}
+
+/**
+ * Tabla 49 (Core p.96): penalizador a la defensa contra un proyectil disparado. Parada −80 (con
+ * maestría −20), esquiva −30 (con maestría, nada).
+ */
+export function penDefensaProyectil(campo: 'parada' | 'esquiva', maestro: boolean): number {
+  return campo === 'parada' ? (maestro ? 20 : 80) : maestro ? 0 : 30;
+}
+
 /** Tabla 27. Sólo aplica si gastó cansancio y le quedan 4 o menos. */
 export function negativoCansancio(actual: number, maximo: number): number {
   if (actual >= maximo || actual > 4) return 0;

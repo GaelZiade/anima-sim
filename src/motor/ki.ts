@@ -28,6 +28,8 @@ export interface ModKi {
   sinArmadura: boolean;
   /** Maniobras de combate y apuntar: cuánto reduce el penalizador de la maniobra. */
   precision: number;
+  /** Ataque a distancia: alcance en metros (0 si no hay, Dominus p.57). */
+  distancia: number;
   /** Ataque con área: radio en metros (0 si no hay) y si elige a quién alcanza. */
   area: number;
   eleccionBlanco: boolean;
@@ -99,7 +101,7 @@ export interface EstadoSobrenatural {
 
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
-  dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, area: 0,
+  dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
@@ -116,7 +118,7 @@ export function combinar(a: Readonly<ModKi>, b: Readonly<ModKi>): ModKi {
     ataqueFijo: Math.max(a.ataqueFijo, b.ataqueFijo), defensaFija: Math.max(a.defensaFija, b.defensaFija),
     dano: Math.max(a.dano, b.dano), multDano: Math.max(a.multDano, b.multDano), danoFijo: Math.max(a.danoFijo, b.danoFijo),
     reduccionTA: Math.max(a.reduccionTA, b.reduccionTA), sinArmadura: a.sinArmadura || b.sinArmadura,
-    precision: Math.max(a.precision, b.precision), area: Math.max(a.area, b.area),
+    precision: Math.max(a.precision, b.precision), distancia: Math.max(a.distancia, b.distancia), area: Math.max(a.area, b.area),
     eleccionBlanco: a.eleccionBlanco || b.eleccionBlanco,
     ataquesAdicionales: Math.max(a.ataquesAdicionales, b.ataquesAdicionales),
     defensasAdicionales: Math.max(a.defensasAdicionales, b.defensasAdicionales),
@@ -204,9 +206,8 @@ const CATALOGO: Record<string, DefEfecto> = {
   'ningun dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = 1; } },
   'mitad de dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = Math.max(m.danoReducido, 0.5); } },
   'ataque especializado': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.soloContra = hay(o, /esquiva/) ? 'esquiva' : 'parada'; } },
-  // Sin efecto en el cuerpo a cuerpo que se simula (alcance), pero atan la técnica a un ataque.
-  'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: () => {} },
-  'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: () => {} },
+  'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('distancia') },
+  'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('distancia') },
 };
 
 function hay(opciones: string[], re: RegExp): boolean {

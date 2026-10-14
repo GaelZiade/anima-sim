@@ -635,10 +635,17 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  * técnica que puede ejecutar se prueba con cada maniobra (Disparo Vital rinde más apuntando a la
  * cabeza) y se descuenta lo que vale el Ki que gasta.
  */
-export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number): PlanAtaque {
+export function elegirManiobra(
+  ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, tecnica?: Tecnica | null,
+): PlanAtaque {
   nuevaDecision(ctx);
   const sin = ctx.opciones.sinManiobras;
   const soloNormal = perfil(atk) === 'bestia' || sin === true || sin === atk.equipo;
+  // A distancia: con la técnica que eligió al decidir atacar de lejos, o con una a distancia activa.
+  if (!enAlcance(atk, def)) {
+    if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal, true).plan, tecnica };
+    return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal, true).plan;
+  }
   const base = mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal);
   if (!atk.ki) return base.plan;
   let mejor = base;
@@ -663,10 +670,11 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
 /** La mejor maniobra con estos efectos de Ki, y lo que vale en PV. */
 function mejorManiobra(
   ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, ki: ModKi | undefined, soloNormal: boolean,
+  aDistancia = false,
 ): { plan: PlanAtaque; valor: number } {
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
-  const habDef = ki?.sobrenatural ? defensaFinal(def, atk, { kiAtk: ki }) : defensaFinal(def, atk);
+  const habDef = ki?.sobrenatural || aDistancia ? defensaFinal(def, atk, { kiAtk: ki, proyectil: aDistancia }) : defensaFinal(def, atk);
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
   // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa, sin pasar de los
   // PV que le quedarían después de este golpe y de esos mismos golpes sin la ventaja.
@@ -688,8 +696,8 @@ function mejorManiobra(
     const danoEste = sinDano ? 0 : real.dano;
     let v = danoEste + (sinDano || m === 'inconsciencia' ? 0 : real.pBaja * amen * 2);
     if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
-    // Ataque indirecto (Ki): no se le puede contraatacar (Dominus p.52).
-    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+    // Ataque indirecto (Ki) o desde lejos: no se le puede contraatacar (Dominus p.52).
+    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !aDistancia) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
     if (ki && ki !== SIN_KI) v += valorEfectosKi(atk, def, ki, p, m, golpesSiguientes);
 
     // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
@@ -762,7 +770,10 @@ function mejorManiobra(
   if (!tipo && sec && sec !== atk.ficha.tipoAtaque && valor('normal', sec) > valor('normal')) tipo = sec;
 
   const opciones: Maniobra[] = ['normal'];
-  if (!def.ficha.acumulacion && !soloNormal) {
+  // A distancia sólo se puede apuntar (Core p.91); el resto de maniobras pide contacto.
+  if (aDistancia) {
+    if (!def.ficha.acumulacion && !soloNormal && !def.cap.est.sangreEterna) opciones.push('cabeza', 'corazon', 'inutilizar');
+  } else if (!def.ficha.acumulacion && !soloNormal) {
     if (!def.derribado) opciones.push('derribo');
     if ((e.puedePresar || ki?.apresamiento) && !def.apresadoPor && !atk.apresando) opciones.push('presa');
     if (!def.cap.desarmado) opciones.push('desarmar');
@@ -770,13 +781,13 @@ function mejorManiobra(
     opciones.push('inconsciencia', 'engatillar');
     if (e.mushin) opciones.push('puntosPresion');
   }
-  if (e.leo && atk.balas > 0) opciones.push('combinado');
+  if (e.leo && atk.balas > 0 && !aDistancia) opciones.push('combinado');
   // Destrucción por Ki es un ataque propio: no se combina con una técnica que mejore el golpe.
   const golpeConTecnica = !!ki && (ki.ataque > 0 || ki.dano > 0 || ki.multDano > 1 || ki.danoFijo > 0 || ki.area > 0 || ki.ataqueFijo > 0);
-  if (!soloNormal && !golpeConTecnica && habilidadesKi(atk.ficha).destruccion && (atk.ki?.reserva ?? 0) >= 1) opciones.push('destruccionKi');
+  if (!soloNormal && !aDistancia && !golpeConTecnica && habilidadesKi(atk.ficha).destruccion && (atk.ki?.reserva ?? 0) >= 1) opciones.push('destruccionKi');
   // No se puede aprovechar una contra para un ataque en área (Core p.89). Con un área de Ki la
   // maniobra sobra: la técnica ya alcanza a todos los del radio.
-  const area = esContra || soloNormal || ki?.area ? [] : blancosArea(ctx, atk, def);
+  const area = esContra || soloNormal || aDistancia || ki?.area ? [] : blancosArea(ctx, atk, def);
   if (area.length >= 2) opciones.push('area');
 
   let mejor: PlanAtaque = { maniobra: 'normal', tipo, especial: false };
@@ -1192,6 +1203,36 @@ function costoDesventajas(l: Luchador, rival: Luchador | null, t: Tecnica): numb
 }
 
 /**
+ * Ataque a distancia con Ki (Dominus p.57): al enemigo fuera del cuerpo a cuerpo que más rinda con
+ * una técnica que lo alcance (o con una a distancia ya activa), si rinde más que acercarse a pegarle.
+ * Sin la dificultad de la Tabla 48 en la cuenta: a estas habilidades casi nunca falla.
+ */
+export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchador; tecnica: Tecnica | null } | null {
+  if (!l.ki || perfil(l) === 'bestia' || l.apresadoPor || l.apresando) return null;
+  const activo0 = modDeAccion(l, 'ataque', false);
+  const opciones: [Tecnica | null, ModKi][] = [];
+  if (activo0?.distancia) opciones.push([null, activo0]);
+  for (const t of tecnicasPara(l, 'ataque')) {
+    const k = vistaPrevia(l, t);
+    if (k.distancia) opciones.push([t, k]);
+  }
+  if (!opciones.length) return null;
+  nuevaDecision(ctx);
+  let mejor: { objetivo: Luchador; tecnica: Tecnica | null; valor: number } | null = null;
+  for (const e of enemigos(ctx, l)) {
+    if (enAlcance(l, e)) continue;
+    const d = distancia(l, e);
+    const cuerpo = alcanzable(l, e) ? valorAtaque(l, e, {}) : 0;
+    for (const [t, k] of opciones) {
+      if (k.distancia + 1e-6 < d) continue;
+      const v = mejorManiobra(ctx, l, e, false, 0, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, e, t) : 0);
+      if (v > cuerpo && (!mejor || v > mejor.valor)) mejor = { objetivo: e, tecnica: t, valor: v };
+    }
+  }
+  return mejor && mejor.valor > 0 ? { objetivo: mejor.objetivo, tecnica: mejor.tecnica } : null;
+}
+
+/**
  * Técnica de Estados de condición automática (Dominus p.67-68) a usar en lugar de un ataque: sobre el
  * enemigo que más rinda a su distancia o, si alcanza a varios, sobre todos los que estén a esa
  * distancia (aliados incluidos, que cuentan en contra). Conviene si supera su mejor ataque.
@@ -1238,7 +1279,7 @@ export function estadosAutomaticos(ctx: Contexto, l: Luchador): { tecnica: Tecni
  */
 export function elegirTecnicaDefensa(
   ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number,
-  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean; costeTecnica?: number },
+  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean; costeTecnica?: number; aDistancia?: boolean },
 ): Tecnica | null {
   if (!def.ki || perfil(def) === 'bestia') return null;
   const candidatas = tecnicasPara(def, 'defensa');
@@ -1246,7 +1287,7 @@ export function elegirTecnicaDefensa(
   nuevaDecision(ctx);
   const costo = (mod: ModKi | undefined) => {
     // Defensa Predeterminada: equivale a una habilidad unos 50 por debajo (lo que suma el d100 medio).
-    const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod });
+    const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod, kiAtk: g.ki, proyectil: g.aDistancia });
     const p = pronostico(atk, def, habAtk, hab, { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, kiDef: mod, esContra: g.esContra });
     const contra = !mod?.sinContra && !g.ki?.indirecto && def.ataquesRestantes > 0 && puedeActuar(def) ? p.pContra * golpeDe(def, atk) : 0;
     let extra = 0;
