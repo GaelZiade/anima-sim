@@ -217,6 +217,8 @@ export interface Luchador {
   penDolor: number;
   /** Negativo físico de críticos graves: dura todo el combate. */
   penFisico: number;
+  /** Penalizador a toda Acción de una técnica (desventaja): baja 10 por asalto (Dominus p.74). */
+  penTecnica: number;
   estado: Estado;
   /** Enemigos trabados con él, en orden de llegada (define frente/flanco/espalda). */
   trabados: Luchador[];
@@ -274,6 +276,14 @@ export interface Luchador {
   /** PV recuperados con Curación por Ki (no pasan de la mitad del daño sufrido, Core p.104). */
   curado: number;
   aura: { fuente: Luchador; estado: 'resistio' | 'afectado' | 'miedo' | 'paralizado'; asalto: number } | null;
+  /** Marcas de Ki que le pusieron: bono al ataque de quien lo marcó (Dominus p.70). */
+  marcas: Map<Luchador, number>;
+  /** Escudo de energía activo: resistencia que le queda (0 sin escudo, Dominus p.66). */
+  escudoKi: number;
+  /** Acumulación (Ki): PV de pantalla que pierde antes que los suyos (Dominus p.65). */
+  pantallaKi: number;
+  /** Fascinación sobrenatural: sin acciones activas hasta superar la RF al verse en peligro (Dominus p.67). */
+  fascinado: number;
   /** Engatillar: quién lo tiene amenazado (Core p.92). */
   amenazadoPor: Luchador | null;
   /** Arma todavía enfundada (escenario con armas enfundadas, Core p.91). */

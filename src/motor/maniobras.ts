@@ -135,9 +135,11 @@ export function pGanaControl(a: number, b: number): number {
 }
 
 /** Mejor característica del atacante y del defensor para cada maniobra (Core p.91-92). */
-export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador) {
+export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador, apresamiento = 0) {
   const mejor = (l: Luchador, as: Atributo[]) => Math.max(...as.map((x) => atributo(l, x)));
   if (m === 'desarmar') return { atk: mejor(atk, ['FUE', 'DES']), def: mejor(def, ['FUE', 'DES']) };
+  // Apresamiento (Ki): usa el valor de la técnica en lugar de su Fuerza o Destreza (Dominus p.64).
+  if (m === 'presa' && apresamiento) return { atk: apresamiento, def: mejor(def, ['FUE', 'AGI']) };
   // Presa Inusual: con armas sin regla de Presa se usa la Destreza con −3 (Dominus p.28).
   const presaInusual = m === 'presa' && !atk.cap.desarmado;
   return {

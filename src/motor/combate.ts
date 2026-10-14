@@ -1,11 +1,11 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
-import type { Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario } from './modelo';
+import type { Atributo, Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario, Tecnica } from './modelo';
 import { crearRng, dado, type Rng } from './rng';
 import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
+  absorcion, bonoContraataque, danoFinal, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
   porcentajeDano, type Localizacion, type TipoAtaque,
 } from './reglas';
 import {
@@ -24,7 +24,7 @@ import {
 } from './mapa';
 import {
   ajusteTaEnergia, alMatar, curable, dificultadDestruccion, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, presenciaBase, radioAura, sensibleAlAura, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
-  textoKi, type ModKi,
+  textoKi, costeKi, recuperarKi, SIN_KI, type EstadoSobrenatural, type ModKi,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -51,7 +51,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     ficha, equipo, pos: { x, y }, mapa: null, cap: capacidades(ficha), entorno: {},
     pv: ficha.pv,
     cansancio: ficha.cansancio ?? ficha.constitucion,
-    penDolor: 0, penFisico: 0,
+    penDolor: 0, penFisico: 0, penTecnica: 0, marcas: new Map(), escudoKi: 0, pantallaKi: 0, fascinado: 0,
     estado: 'activo',
     trabados: [],
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
@@ -340,6 +340,7 @@ function jugarAsalto(ctx: Contexto) {
     // Quien está apresado y no pudo actuar puede intentar zafarse igual (Core p.92).
     if (l.apresadoPor && !l.haActuado) zafarse(ctx, l);
     l.penDolor = Math.max(0, l.penDolor - 5);
+    l.penTecnica = Math.max(0, l.penTecnica - 10);
     if (l.paralisisTurnos > 0 && --l.paralisisTurnos === 0) l.paralisisInducida = 0;
     sangreDeOrochi(ctx, l);
     // Si junta la técnica que declaró al empezar a acumular y no la usó, la deja en espera para no
@@ -376,6 +377,13 @@ function turno(ctx: Contexto, l: Luchador) {
       const cura = ia.curacionKi(ctx, l);
       if (cura) {
         curar(ctx, l, cura.quien, cura.ki);
+        l.ataquesRestantes--;
+        continue;
+      }
+      // Estados de condición automática: una acción activa sin tirada de ataque (Dominus p.67).
+      const auto = ia.estadosAutomaticos(ctx, l);
+      if (auto) {
+        estadosAutomaticos(ctx, l, auto.tecnica, auto.blancos);
         l.ataquesRestantes--;
         continue;
       }
@@ -592,6 +600,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     ki = ejecutar(atk, plan.tecnica);
     atk.stats.tecnicas[plan.tecnica.nombre] = (atk.stats.tecnicas[plan.tecnica.nombre] ?? 0) + 1;
   } else ki = modDeAccion(atk, 'ataque', true);
+  // Ataque especializado: contra otra clase de defensa la técnica no tiene ningún efecto (Dominus p.72).
+  if (ki?.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) ki = atk.ki?.activo;
   // Destrucción por Ki: se paga al usarla (1 de Ki más los extra), alcance o no (Core p.104).
   if (m === 'destruccionKi') atk.ki!.reserva -= 1 + (plan.kiDestruccion ?? 0);
   const cAtk = ia.cansancioAtaque(ctx, atk, def, bono, plan);
@@ -600,8 +610,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // La ranura (qué ataque del asalto es) se fija antes de gastarlo: decide arma o patada.
   const ranura = proximaRanura(atk);
   const opcionesAtk = {
-    bono, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
-    estadoMushin: plan.estadoMushin ?? null, ki, kiDestruccion: plan.kiDestruccion,
+    bono, cansancio: cAtk, maniobra: m, esContra: a.esContra, tipo: ki?.elemento || plan.tipo, especial: plan.especial, samiel: samielAtk, ranura,
+    estadoMushin: plan.estadoMushin ?? null, ki, kiDestruccion: plan.kiDestruccion, costeTecnica: plan.tecnica ? costeKi(plan.tecnica) : 0,
   };
   // Ataque Predeterminado: la habilidad final es un valor fijo y no se tiran dados (Dominus p.51).
   const fijo = ki?.ataqueFijo ?? 0;
@@ -718,6 +728,10 @@ interface Golpe {
   esContra: boolean;
   tipo?: TipoAtaque;
   ranura: Ranura;
+  /** Ki que costó la técnica del ataque (Absorción de Ki del defensor). */
+  costeTecnica?: number;
+  /** Es un ataque reflectado: no se vuelve a reflectar (Dominus p.71). */
+  reflejado?: boolean;
 }
 
 function resolverDefensa(
@@ -727,6 +741,14 @@ function resolverDefensa(
   // Apartar (esquiva −30, Guardaespaldas −10; acción activa reservada, Core p.93).
   const proteccion = ia.protectorPara(ctx, def, atk);
   const quienDefiende = proteccion?.quien ?? def;
+  // Fascinación: al verse en peligro repite la RF (Dominus p.67).
+  if (def.fascinado) repetirFascinacion(ctx, def);
+  // Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69).
+  const tipoGolpe = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
+  if (!proteccion && def.ki?.activo.intangible && tipoGolpe !== 'ENE' && !atk.cap.danaEnergia && !o.ki?.danaEnergia) {
+    log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
+    return { defensor: def, contra: null, impacto: false };
+  }
   if (proteccion?.apartar) quienDefiende.ataquesRestantes--;
   const resiste = !proteccion && !def.ficha.acumulacion && ia.resistir(ctx, def, atk);
   // Haima: sacrifica PV para crear una sombra de sangre que recibe el golpe (Dominus p.88).
@@ -746,7 +768,7 @@ function resolverDefensa(
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef }) - (proteccion?.pen ?? 0);
+  const habDef = defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki }) - (proteccion?.pen ?? 0);
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
@@ -773,7 +795,37 @@ function resolverDefensa(
     if (para && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
+  // Escudo de energía (Ki): si detiene el golpe recibe su daño base (+10 por punto de TA que reste),
+  // salvo que no pase su barrera de daño 40; si lo rompe, el resto alcanza al defensor sin defensa
+  // (Core p.100, Dominus p.11, p.66).
+  let baseTrasEscudo = -1;
+  if (resultado <= 0 && quienDefiende.escudoKi > 0 && !quienDefiende.ficha.acumulacion) {
+    const golpe = danoBase(atk, quienDefiende, o.esContra, o.ranura, o.ki) + 10 * (o.ki?.reduccionTA ?? 0);
+    if (golpe >= 40) {
+      if (golpe < quienDefiende.escudoKi) {
+        quienDefiende.escudoKi -= golpe;
+        log(ctx, () => `  El escudo de energía de ${quienDefiende.ficha.nombre} aguanta (le quedan ${quienDefiende.escudoKi}).`);
+      } else {
+        baseTrasEscudo = golpe - quienDefiende.escudoKi;
+        quienDefiende.escudoKi = 0;
+        resultado = habAtk + tA.valor;
+        log(ctx, () => `  ¡El golpe rompe el escudo de energía de ${quienDefiende.ficha.nombre}! Pasa con daño ${baseTrasEscudo} → ${resultado}.`);
+      }
+    }
+  }
+
   if (resultado <= 0) {
+    // Absorción de Ki: con una defensa que permita contraatacar absorbe Ki de la técnica (Dominus p.64).
+    if (kiDef?.absorcionKi && resultado < 0 && o.costeTecnica && quienDefiende.ki) {
+      const absorbe = recuperarKi(quienDefiende, Math.min(kiDef.absorcionKi, o.costeTecnica));
+      if (absorbe) log(ctx, () => `  ${quienDefiende.ficha.nombre} absorbe ${absorbe} de Ki de la técnica [reserva ${quienDefiende.ki!.reserva}].`);
+    }
+    // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
+    // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
+    if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
+      reflectar(ctx, quienDefiende, atk, habAtk + tA.valor + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
+      return { defensor: quienDefiende, contra: null, impacto: false };
+    }
     // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
     if (quienDefiende.cap.est.desarmaAlDefender && !atk.cap.desarmado && activo(atk)) {
       const c = caracteristicasControl('desarmar', quienDefiende, atk);
@@ -781,7 +833,8 @@ function resolverDefensa(
       if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
     }
     // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
-    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra ? bonoContraataque(resultado) : null, impacto: false };
+    // Ataque indirecto (Ki): no se puede contraatacar (Dominus p.52).
+    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra && !o.ki?.indirecto ? bonoContraataque(resultado) : null, impacto: false };
   }
 
   // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
@@ -812,7 +865,7 @@ function resolverDefensa(
   const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
 
   if (esManiobraDeControl(m)) {
-    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra);
+    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0);
     else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
     if (m === 'desarmar') {
       avisar();
@@ -821,7 +874,7 @@ function resolverDefensa(
   }
 
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
-  let base = danoBase(atk, def, o.esContra, o.ranura, o.ki);
+  let base = baseTrasEscudo >= 0 ? baseTrasEscudo : danoBase(atk, def, o.esContra, o.ranura, o.ki);
   if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
   // apuntado, la de la zona.
@@ -831,6 +884,19 @@ function resolverDefensa(
   let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
   // Sangre de Aeon: daño de su elemento a la mitad.
   if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
+  // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
+  // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
+  const ki = o.ki;
+  if (ki && (ki.impacto || ki.marca || ki.interrumpe || ki.estados.length || ki.danoReducido) && !esManiobraDeControl(m)) {
+    const habriaDanado = dano;
+    if (ki.danoReducido) dano = Math.floor(dano * (1 - ki.danoReducido));
+    const porcentajeContacto = porcentajeDano(resultado, absorcion(0));
+    efectosAlImpactar(ctx, atk, def, ki, habriaDanado, porcentajeContacto);
+    if (!activo(def)) {
+      avisar();
+      return { defensor: def, contra: null, impacto: true };
+    }
+  }
 
   // Engatillar: si el ataque habría dañado, no daña y deja al rival amenazado (Core p.92).
   if (m === 'engatillar') {
@@ -866,7 +932,7 @@ function resolverDefensa(
       log(ctx, () => `  ${def.ficha.nombre} absorbe ${antes - dano} de daño con ${ki} de Ki (Absorción de energía) [reserva ${def.ki!.reserva}].`);
     }
   }
-  if (dano > 0) aplicarDano(ctx, atk, def, dano, resiste, m);
+  if (dano > 0) aplicarDano(ctx, atk, def, dano, resiste, m, o.ki);
   else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
   else if (!esManiobraDeControl(m) && !absorbido) {
     log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
@@ -894,6 +960,303 @@ function destruccionPorKi(ctx: Contexto, atk: Luchador, def: Luchador, extra: nu
   }
   log(ctx, () => `  ${def.ficha.nombre} falla la RF contra la Destrucción por Ki (${tirada}) por ${fracaso}.`);
   aplicarDano(ctx, atk, def, fracaso, resistia, 'normal');
+}
+
+// --------------------------------------------------------------------------- efectos sobrenaturales (Ki)
+
+/**
+ * Lo que una técnica hace al alcanzar (Dominus cap. 5): Impacto con sólo superar la defensa; Marca,
+ * Interrupción y los Estados de condición Ataque o Beso si el golpe dañaría; los de Contacto físico
+ * con que alcance contra TA 0 (Dominus p.68).
+ */
+function efectosAlImpactar(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, dano: number, porcentajeContacto: number) {
+  if (ki.marca && dano > 0 && (def.marcas.get(atk) ?? 0) < ki.marca) {
+    def.marcas.set(atk, ki.marca);
+    log(ctx, () => `  ${def.ficha.nombre} queda marcado por ${atk.ficha.nombre} (+${ki.marca} a sus ataques contra él).`);
+  }
+  if (ki.interrumpe && dano > 0) interrupcion(ctx, atk, def, dano + ki.interrupcion);
+  for (const est of ki.estados) {
+    if (!activo(def)) return;
+    const alcanza = est.condicion === 'contacto' ? porcentajeContacto > 0 : est.condicion !== 'automatico' && dano > 0;
+    if (alcanza) estadoSobrenatural(ctx, atk, def, est);
+  }
+  if (ki.impacto && activo(def)) impacto(ctx, atk, def, ki.impacto, ki.atraer);
+}
+
+/** RF del defensor contra una dificultad (las Resistencias no sufren negativos, Core p.232). Devuelve el fracaso (0 si resiste). */
+function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string): number {
+  const dadoRf = tirarD100Cerrada(ctx.rng);
+  const baseRf = l.ficha.rf + l.cap.est.bonoRfDano + (l.ki?.activo.rf ?? 0);
+  const fracaso = dadoRf === 100 ? 0 : dificultad - (baseRf + dadoRf);
+  const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dificultad}`;
+  if (fracaso <= 0) log(ctx, () => `  ${l.ficha.nombre} resiste ${que} (${tirada}).`);
+  else log(ctx, () => `  ${l.ficha.nombre} falla la RF contra ${que} (${tirada}) por ${fracaso}.`);
+  return Math.max(0, fracaso);
+}
+
+const NOMBRE_ESTADO: Record<EstadoSobrenatural['estado'], string> = {
+  ceguera: 'la Ceguera', coma: 'el Coma', control: 'el Control', dano: 'el Daño', dobleDano: 'el Doble daño',
+  dolor: 'el Dolor', dolorExtremo: 'el Dolor extremo', drenajeVida: 'el Drenaje de vida', drenajeKi: 'el Drenaje de Ki',
+  fascinacion: 'la Fascinación', inconsciencia: 'la Inconsciencia', miedo: 'el Miedo', terror: 'el Terror',
+  muerte: 'la Muerte', paralisisParcial: 'la Paralización parcial', paralisisTotal: 'la Paralización total',
+  penalizacionMenor: 'la Penalización a toda acción', penalizacionMayor: 'la Penalización a toda acción mayor',
+  reduccionCaracteristicas: 'la Reducción de características', reduccionCaracteristica: 'la Reducción de una característica',
+  reduccionRf: 'la Reducción de RF', ilusion: 'la Ilusión',
+};
+
+/**
+ * Estado sobrenatural (Dominus p.67): RF contra su Resistencia; el fracaso decide la intensidad. Los
+ * que duran minutos u horas duran todo el combate. Ilusión no se simula; Control lo deja fuera del
+ * combate y Terror lo hace huir (interpretaciones).
+ */
+function estadoSobrenatural(ctx: Contexto, atk: Luchador, def: Luchador, est: EstadoSobrenatural) {
+  if (est.estado === 'ilusion') return;
+  const fracaso = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado]);
+  if (!fracaso) return;
+  const f = def.ficha;
+  switch (est.estado) {
+    case 'dano':
+    case 'dobleDano':
+    case 'drenajeVida': {
+      const pv = est.estado === 'dobleDano' ? 2 * fracaso : fracaso;
+      perderPv(ctx, atk, def, pv);
+      if (est.estado === 'drenajeVida' && activo(atk)) {
+        const cura = Math.min(pv, atk.ficha.pv - atk.pv);
+        if (cura > 0) {
+          atk.pv += cura;
+          log(ctx, () => `  ${atk.ficha.nombre} absorbe ${cura} PV (${atk.pv}/${atk.ficha.pv}).`);
+        }
+      }
+      return;
+    }
+    case 'drenajeKi': {
+      const quita = Math.min(fracaso, def.ki?.reserva ?? 0);
+      if (def.ki) def.ki.reserva -= quita;
+      const gana = recuperarKi(atk, quita);
+      log(ctx, () => `  ${def.ficha.nombre} pierde ${quita} de Ki${gana ? ` y ${atk.ficha.nombre} recupera ${gana}` : ''}.`);
+      return;
+    }
+    case 'dolor':
+    case 'dolorExtremo': {
+      const dolor = est.estado === 'dolor' ? 'normal' : 'extremo';
+      if (f.estados?.dolor !== 'extremo') cambiarFicha(def, { ...f, estados: { ...f.estados, dolor } });
+      log(ctx, () => `  ${def.ficha.nombre} sufre ${dolor === 'normal' ? 'Dolor (−40' : 'Dolor extremo (−80'} a toda acción).`);
+      return;
+    }
+    case 'miedo':
+      if (!f.estados?.miedo) cambiarFicha(def, { ...f, estados: { ...f.estados, miedo: true } });
+      log(ctx, () => `  ${def.ficha.nombre} queda con Miedo (−60 a toda acción).`);
+      return;
+    case 'ceguera':
+      cambiarFicha(def, { ...f, estados: { ...f.estados, ceguera: 'absoluta' } });
+      log(ctx, () => `  ${def.ficha.nombre} queda ciego.`);
+      return;
+    case 'paralisisParcial':
+    case 'paralisisTotal': {
+      const grado = est.estado === 'paralisisParcial' ? 2 : 3;
+      if (def.paralisisTurnos <= 0 || def.paralisisInducida <= grado) {
+        def.paralisisInducida = grado;
+        def.paralisisTurnos = Math.max(def.paralisisTurnos, fracaso);
+      }
+      log(ctx, () => `  ${def.ficha.nombre} queda en ${grado === 2 ? 'parálisis parcial' : 'parálisis completa'} ${fracaso} asaltos.`);
+      return;
+    }
+    case 'penalizacionMenor':
+      def.penDolor += fracaso;
+      log(ctx, () => `  ${def.ficha.nombre} sufre −${fracaso} a toda acción (baja 5 por asalto).`);
+      return;
+    case 'penalizacionMayor':
+      def.penFisico += fracaso;
+      log(ctx, () => `  ${def.ficha.nombre} sufre −${fracaso} a toda acción.`);
+      return;
+    case 'reduccionRf':
+      cambiarFicha(def, { ...f, rf: f.rf - fracaso });
+      log(ctx, () => `  ${def.ficha.nombre} pierde ${fracaso} de RF.`);
+      return;
+    case 'reduccionCaracteristica':
+    case 'reduccionCaracteristicas': {
+      const puntos = Math.floor(fracaso / 10);
+      if (!puntos) return;
+      const cuales: Atributo[] = est.estado === 'reduccionCaracteristicas' ? ['AGI', 'CON', 'DES', 'FUE', 'INT', 'PER', 'POD', 'VOL'] : [est.atributo ?? 'FUE'];
+      let g = f;
+      for (const a of cuales) {
+        const v = g.atributos?.[a] ?? 5;
+        g = a === 'AGI' || a === 'CON' || a === 'DES' || a === 'FUE'
+          ? fichaConAumento(g, a, v, Math.max(1, v - puntos))
+          : { ...g, atributos: { ...g.atributos, [a]: Math.max(1, v - puntos) } };
+      }
+      cambiarFicha(def, g);
+      log(ctx, () => `  ${def.ficha.nombre} pierde ${puntos} en ${cuales.join(', ')}.`);
+      return;
+    }
+    case 'fascinacion':
+      def.fascinado = est.rf;
+      log(ctx, () => `  ${def.ficha.nombre} queda fascinado: no puede hacer acciones activas.`);
+      return;
+    case 'inconsciencia':
+    case 'coma':
+      log(ctx, () => `  ${def.ficha.nombre} queda inconsciente.`);
+      caer(ctx, atk, def, 'inconsciente');
+      return;
+    case 'muerte':
+      log(ctx, () => `  ${def.ficha.nombre} muere.`);
+      caer(ctx, atk, def, 'muerto');
+      return;
+    case 'control':
+      log(ctx, () => `  ${def.ficha.nombre} queda bajo el control de ${atk.ficha.nombre}: deja de pelear.`);
+      huir(ctx, def);
+      return;
+    case 'terror':
+      log(ctx, () => `  ${def.ficha.nombre} queda aterrorizado.`);
+      huir(ctx, def);
+      return;
+  }
+}
+
+/** Ficha nueva por un estado que dura el combate: las capacidades se derivan de la ficha. */
+function cambiarFicha(l: Luchador, f: Ficha) {
+  l.ficha = f;
+  l.cap = capacidades(f);
+}
+
+/** Pérdida directa de PV, sin armadura ni crítico (Daño de un Estado, Destrucción por Ki). */
+function perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number) {
+  def.pv -= pv;
+  atk.stats.danoCausado += pv;
+  def.stats.danoRecibido += pv;
+  log(ctx, () => `  ${def.ficha.nombre} pierde ${pv} PV (${def.pv}/${def.ficha.pv}).`, () => ({ dano: { quien: nro(ctx, def), cantidad: pv } }));
+  limitePorDano(ctx, def, pv);
+  verificarCaida(ctx, atk, def);
+}
+
+/** Fascinación: cada vez que lo atacan repite la RF; si la supera, se libera (Dominus p.67). */
+function repetirFascinacion(ctx: Contexto, l: Luchador) {
+  if (!tirarRf(ctx, l, l.fascinado, 'la Fascinación')) l.fascinado = 0;
+}
+
+/**
+ * Interrupción del Ki (Dominus p.69): RF contra el daño más el valor de la técnica (entre cinco
+ * contra acumulación); si falla, pierde lo acumulado, las mantenidas y las que tenía en espera.
+ */
+function interrupcion(ctx: Contexto, atk: Luchador, def: Luchador, dificultad: number) {
+  const e = def.ki;
+  if (!e) return;
+  const dif = def.ficha.acumulacion ? Math.floor(dificultad / 5) : dificultad;
+  if (!tirarRf(ctx, def, dif, 'la Interrupción')) return;
+  e.acumulado = {};
+  e.ganado = {};
+  e.mantenidas.clear();
+  e.enEspera.clear();
+  e.objetivo = null;
+  e.activo = { ...SIN_KI };
+  def.escudoKi = 0;
+  log(ctx, () => `  ${def.ficha.nombre} pierde su Ki acumulado y sus técnicas activas.`);
+}
+
+/** Tabla 2 del Dominus (p.12): metros (el mínimo de cada rango) y Grado, por Fuerza y fracaso. */
+const IMPACTO: [number, number][][] = [
+  // Fue 6-9, 10-12, 13-14, 15-16, 17-18, 19-20; filas por fracaso 1, 2, 3-4, 5-6, 7-8, 9+.
+  [[1, 1], [5, 1], [10, 2], [15, 2], [30, 3], [50, 4]],
+  [[2, 1], [7, 1], [15, 2], [30, 3], [50, 3], [100, 4]],
+  [[3, 1], [10, 2], [30, 3], [50, 3], [150, 4], [500, 4]],
+  [[5, 1], [15, 2], [50, 3], [100, 4], [500, 4], [1000, 5]],
+  [[7, 1], [20, 2], [80, 3], [200, 4], [1000, 5], [5000, 5]],
+  [[10, 2], [30, 2], [120, 4], [500, 4], [5000, 5], [25000, 5]],
+];
+/** Tabla 3: daño medio de cada Grado (G1 va incluido en el del ataque). */
+const DANO_GRADO = [0, 0, 8, 30, 75, 175];
+
+/**
+ * Impacto (Dominus p.68, p.12): control enfrentado de su Fuerza contra la del Impacto; si lo pierde,
+ * sale despedido según la Tabla 2 y sufre el daño del Grado (−10 por punto de TA contundente; desde
+ * G4 crítico con el doble del daño). Con Atraer, en cambio, lo trae al cuerpo a cuerpo. Lejos del
+ * combate, queda fuera del alcance de todos.
+ */
+function impacto(ctx: Contexto, atk: Luchador, def: Luchador, fuerza: number, atraer: boolean) {
+  const dif = controlEnfrentado(ctx.rng, fuerza, atributo(def, 'FUE') + modControl(def));
+  if (dif <= 0) {
+    log(ctx, () => `  ${def.ficha.nombre} aguanta el Impacto (control ${dif}).`);
+    return;
+  }
+  if (atraer) {
+    if (!enAlcance(atk, def)) moverHacia(ctx, def, atk, Infinity);
+    log(ctx, () => `  El Impacto atrae a ${def.ficha.nombre} hasta ${atk.ficha.nombre}.`);
+    return;
+  }
+  const columna = fuerza >= 19 ? 5 : fuerza >= 17 ? 4 : fuerza >= 15 ? 3 : fuerza >= 13 ? 2 : fuerza >= 10 ? 1 : 0;
+  const fila = dif >= 9 ? 5 : dif >= 7 ? 4 : dif >= 5 ? 3 : dif >= 3 ? 2 : dif - 1;
+  const [metros, grado] = IMPACTO[fila][columna];
+  const recorrido = despedir(ctx, atk, def, metros);
+  log(ctx, () => `  El Impacto lanza a ${def.ficha.nombre} ${recorrido < metros ? `contra un obstáculo a ${recorrido.toFixed(0)} m` : `a ${metros} m`} (Grado ${grado}).`);
+  const dano = Math.max(0, DANO_GRADO[grado] - 10 * (def.ficha.ta.CON ?? 0));
+  if (dano > 0) {
+    perderPv(ctx, atk, def, dano);
+    if (grado >= 4 && activo(def)) critico(ctx, atk, def, 2 * dano, false, 'normal');
+  }
+}
+
+/** Lo aleja en línea recta de `desde`; en el mapa, celda a celda hasta un muro u otro luchador. */
+function despedir(ctx: Contexto, desde: Luchador, l: Luchador, metros: number): number {
+  soltar(l);
+  if (l.apresando) soltar(l.apresando);
+  const dx = l.pos.x - desde.pos.x, dy = l.pos.y - desde.pos.y;
+  const d = Math.hypot(dx, dy) || 1;
+  let recorrido = metros;
+  if (l.mapa) {
+    const m = l.mapa;
+    const paso = { x: Math.round(dx / d), y: Math.round(dy / d) };
+    if (!paso.x && !paso.y) paso.x = 1;
+    const ocupadas = new Set(ctx.luchadores.filter((x) => x !== l && activo(x)).map((x) => indice(m, x.pos)));
+    let n = 0;
+    while (n < metros) {
+      const sig = { x: l.pos.x + paso.x, y: l.pos.y + paso.y };
+      if (!transitable(m, sig) || ocupadas.has(indice(m, sig))) break;
+      l.pos = sig;
+      n++;
+    }
+    recorrido = n * (paso.x && paso.y ? Math.SQRT2 : 1);
+  } else l.pos = { x: l.pos.x + (dx / d) * metros, y: l.pos.y + (dy / d) * metros };
+  for (const x of ctx.luchadores) if (!enAlcance(x, l)) x.trabados = x.trabados.filter((e) => e !== l);
+  l.trabados = l.trabados.filter((e) => enAlcance(l, e));
+  return recorrido;
+}
+
+/** Lo acerca hasta trabarse con `obj` sin gastar su movimiento (Atraer). */
+function moverHacia(ctx: Contexto, l: Luchador, obj: Luchador, metros: number) {
+  if (l.mapa) {
+    const m = l.mapa;
+    const ocupadas = new Set(ctx.luchadores.filter((x) => x !== l && activo(x)).map((x) => indice(m, x.pos)));
+    const libre = celdaLibreCerca(m, obj.pos, ocupadas);
+    if (libre) l.pos = libre;
+  } else moverEnLinea(l, obj, metros);
+  for (const e of ctx.luchadores) {
+    if (e.equipo === l.equipo || !activo(e) || !enAlcance(l, e)) continue;
+    if (!e.trabados.includes(l)) e.trabados.push(l);
+    if (!l.trabados.includes(e)) l.trabados.push(e);
+  }
+}
+
+/**
+ * Reflectar el ataque (Dominus p.71): lo devuelve contra quien lo lanzó con su misma habilidad final
+ * (más el bono de contra), con el daño del ataque pero sin sus efectos esotéricos.
+ */
+function reflectar(ctx: Contexto, quien: Luchador, atk: Luchador, total: number, o: Golpe) {
+  const dano = danoBase(atk, quien, o.esContra, o.ranura, o.ki);
+  const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
+  const golpe: Golpe = { maniobra: 'normal', esContra: true, tipo, ranura: o.ranura, ki: { ...SIN_KI, danoFijo: dano }, reflejado: true };
+  resolverDefensa(ctx, quien, atk, total, DADO_FIJO, golpe, `${quien.ficha.nombre} refleja el ataque contra ${atk.ficha.nombre}`);
+}
+
+/**
+ * Técnica de Estados de condición automática (Dominus p.67-68): una acción activa sin tirada de
+ * ataque. Un blanco (o todos los que estén a su distancia si alcanza a varios) hace la RF.
+ */
+function estadosAutomaticos(ctx: Contexto, l: Luchador, tecnica: Tecnica, blancos: Luchador[]) {
+  const ki = ejecutar(l, tecnica);
+  l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+  log(ctx, () => `${l.ficha.nombre} usa ${tecnica.nombre} [Ki ${textoKi(l)}] sobre ${blancos.map((b) => b.ficha.nombre).join(', ')}.`);
+  for (const b of blancos)
+    for (const est of ki.estados) if (est.condicion === 'automatico' && activo(b)) estadoSobrenatural(ctx, l, b, est);
 }
 
 /**
@@ -1030,8 +1393,8 @@ function roturaDeArmadura(ctx: Contexto, atk: Luchador, def: Luchador, ranura: R
 }
 
 /** Derribo, Presa o Desarmar: control enfrentado de características (Core p.91-92). */
-function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean) {
-  const c = caracteristicasControl(m, atk, def);
+function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento = 0) {
+  const c = caracteristicasControl(m, atk, def, apresamiento);
   const e = atk.cap.est;
   const bonoAtk = m === 'desarmar'
     ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)
@@ -1133,7 +1496,16 @@ function ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number
   atacar(ctx, def, atk, { esContra: true, bono });
 }
 
-function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: number, resistia: boolean, m: Maniobra) {
+function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: number, resistia: boolean, m: Maniobra, ki?: ModKi) {
+  let danoPleno = danoPlenoIn;
+  // Acumulación (Ki): la pantalla de energía pierde los PV antes que él (Dominus p.65).
+  if (def.pantallaKi > 0) {
+    const tapa = Math.min(def.pantallaKi, danoPleno);
+    def.pantallaKi -= tapa;
+    danoPleno -= tapa;
+    log(ctx, () => `  La pantalla de energía de ${def.ficha.nombre} recibe ${tapa} (le quedan ${def.pantallaKi}).`);
+    if (danoPleno <= 0) return;
+  }
   // Inutilizar e Inconsciencia: mitad de daño, pero el crítico se calcula con el pleno (Core p.91-92).
   const dano = esNoLetal(m) ? Math.floor(danoPleno / 2) : danoPleno;
   const pvAntes = def.pv;
@@ -1148,13 +1520,14 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPleno: num
   // critica con 1/10 de los PV actuales (Core p.91, p.97). Inutilizar no funciona con acumulación.
   // Ojos de la Muerte: todo golpe que daña es crítico; contra acumulación, en cambio, todo su cuerpo
   // cuenta como punto vulnerable (Dominus p.78).
-  const ojos = atk.cap.est.criticoAutomatico;
+  // Crítico automático (Ki) funciona igual (Dominus p.71).
+  const ojos = atk.cap.est.criticoAutomatico || !!ki?.criticoAuto;
   const acumula = !!def.ficha.acumulacion;
   const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
   const critica =
     (ojos && !acumula) || esCritico(danoPleno, pvAntes) || (vulnerable && pvAntes > 0 && danoPleno * 10 >= pvAntes);
   const enuthArcano = atk.cap.est.enuth >= 3;
-  if (critica) critico(ctx, atk, def, danoPleno, resistia, m);
+  if (critica) critico(ctx, atk, def, danoPleno, resistia, m, ki?.critico ?? 0);
   // Enuth arcano: todo ataque que dañe obliga a un control de inconsciencia (Dominus p.43).
   else if (enuthArcano && activo(def)) critico(ctx, atk, def, danoPleno, resistia, 'inconsciencia');
   verificarCaida(ctx, atk, def);
@@ -1178,7 +1551,7 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
   caer(ctx, atk, def, muere ? 'muerto' : 'caido');
 }
 
-function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra) {
+function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, bonoKi = 0) {
   atk.stats.criticosCausados++;
   if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
   const e = atk.cap.est;
@@ -1186,7 +1559,8 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const vital = m === 'cabeza' || m === 'corazon';
   // Enuth: +20 al crítico para dejar inconsciente; arcano +50 (Dominus p.43).
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-  const bono = atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth;
+  // Potenciar Crítico (Ki) suma a la tirada del crítico (Dominus p.70).
+  const bono = atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
   const dadoCritico = tirarD100Cerrada(ctx.rng);
   const nivel = nivelCritico(dano + bono, dadoCritico, !!def.ficha.acumulacion);
   const dadoRf = tirarD100Cerrada(ctx.rng);

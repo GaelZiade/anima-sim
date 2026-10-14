@@ -2,8 +2,9 @@
 // Dominus cap. 5). Las Habilidades del Ki con bonos fijos (Velocidad y Daño incrementado, Extensión
 // del aura, Armadura de energía) ya vienen sumadas en los valores de la planilla.
 
-import { CARACTERISTICAS_KI, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
-import { normalizarRasgo, tiene } from './rasgos';
+import { CARACTERISTICAS_KI, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
+import type { TipoAtaque } from './reglas';
+import { capacidades, normalizarRasgo, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
 /** Lo que las técnicas le suman a una acción o a todo el asalto. Los efectos iguales no se suman. */
@@ -37,13 +38,73 @@ export interface ModKi {
   ta: number;
   rf: number;
   danaEnergia: boolean;
+  /** Potenciar Crítico: bono a la tirada del crítico; con Crítico automático, critica si daña (Dominus p.70). */
+  critico: number;
+  criticoAuto: boolean;
+  /** Ataque sobrenatural: ataca en ENE y sólo lo para quien para energía (Dominus p.64). */
+  sobrenatural: boolean;
+  /** Ataque elemental: TA en la que ataca ('' si no la cambia, Dominus p.63). */
+  elemento: TipoAtaque | '';
+  /** Marca: bono a todo ataque contra quien dañe (Dominus p.70). */
+  marca: number;
+  /** Impacto: Fuerza del control que lanza lejos al blanco, o lo atrae (Dominus p.68). */
+  impacto: number;
+  atraer: boolean;
+  /** Apresamiento: Presa sin penalizador con este valor de característica (Dominus p.64). */
+  apresamiento: number;
+  /** Estados sobrenaturales (Dominus p.66): cada uno con su RF. */
+  estados: readonly EstadoSobrenatural[];
+  /** Interrupción del Ki: RF contra el daño más este valor (Dominus p.69). */
+  interrumpe: boolean;
+  interrupcion: number;
+  /** Escudo de energía: resistencia del escudo (Dominus p.66). */
+  escudo: number;
+  /** Acumulación: PV de pantalla y TA natural 4 (Dominus p.65). */
+  pantalla: number;
+  /** Intangibilidad: los ataques que no son de energía lo atraviesan (Dominus p.69). */
+  intangible: boolean;
+  /** Reflectar el ataque: una defensa con éxito lo devuelve (Dominus p.71). */
+  reflectar: boolean;
+  /** Absorción de Ki: Ki de la técnica rival que absorbe al defenderse con contra (Dominus p.64). */
+  absorcionKi: number;
+  /** Ataque indirecto: no se puede contraatacar (Dominus p.52). */
+  indirecto: boolean;
+  /** Daño reducido (desventaja, Dominus p.73): 0.5 mitad de daño, 1 ningún daño. */
+  danoReducido: number;
+  /** Ataque especializado (desventaja, Dominus p.72): sólo funciona contra esa defensa. */
+  soloContra: '' | 'parada' | 'esquiva';
+}
+
+/** Estados de la ventaja Estado añadido (Dominus p.67). */
+export type NombreEstado =
+  | 'ceguera' | 'coma' | 'control' | 'dano' | 'dobleDano' | 'dolor' | 'dolorExtremo' | 'drenajeVida'
+  | 'drenajeKi' | 'fascinacion' | 'inconsciencia' | 'miedo' | 'terror' | 'muerte' | 'paralisisParcial'
+  | 'paralisisTotal' | 'penalizacionMenor' | 'penalizacionMayor' | 'reduccionCaracteristicas'
+  | 'reduccionCaracteristica' | 'reduccionRf' | 'ilusion';
+
+/**
+ * Condición predeterminada (Dominus p.67-68): Ataque (por defecto) y Contacto físico exigen
+ * alcanzarlo; Beso, además, −120 al ataque. Las demás son automáticas, sin tirada de ataque, hasta la
+ * Distancia del Efecto; las de varios blancos (o por el aire o la superficie) alcanzan a todos.
+ */
+export interface EstadoSobrenatural {
+  estado: NombreEstado;
+  rf: number;
+  condicion: 'ataque' | 'contacto' | 'beso' | 'automatico';
+  distancia: number;
+  varios: boolean;
+  /** Reducción de una Característica: cuál. */
+  atributo?: Atributo;
 }
 
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
   dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
-  danaEnergia: false,
+  danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
+  atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
+  interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
+  danoReducido: 0, soloContra: '',
 });
 
 /** Dos conjuntos de efectos sobre una misma acción: de cada efecto vale el mayor (Core p.106). */
@@ -61,6 +122,17 @@ export function combinar(a: Readonly<ModKi>, b: Readonly<ModKi>): ModKi {
     defensasAdicionales: Math.max(a.defensasAdicionales, b.defensasAdicionales),
     turno: Math.max(a.turno, b.turno), ta: Math.max(a.ta, b.ta), rf: Math.max(a.rf, b.rf),
     danaEnergia: a.danaEnergia || b.danaEnergia,
+    critico: Math.max(a.critico, b.critico), criticoAuto: a.criticoAuto || b.criticoAuto,
+    sobrenatural: a.sobrenatural || b.sobrenatural, elemento: a.elemento || b.elemento,
+    marca: Math.max(a.marca, b.marca), impacto: Math.max(a.impacto, b.impacto), atraer: a.atraer || b.atraer,
+    apresamiento: Math.max(a.apresamiento, b.apresamiento),
+    // Cada Estado añadido se tira por separado (Dominus p.66).
+    estados: !b.estados.length ? a.estados : !a.estados.length ? b.estados : [...a.estados, ...b.estados],
+    interrumpe: a.interrumpe || b.interrumpe, interrupcion: Math.max(a.interrupcion, b.interrupcion),
+    escudo: Math.max(a.escudo, b.escudo), pantalla: Math.max(a.pantalla, b.pantalla),
+    intangible: a.intangible || b.intangible, reflectar: a.reflectar || b.reflectar,
+    absorcionKi: Math.max(a.absorcionKi, b.absorcionKi), indirecto: a.indirecto || b.indirecto,
+    danoReducido: Math.max(a.danoReducido, b.danoReducido), soloContra: a.soloContra || b.soloContra,
   };
 }
 
@@ -110,14 +182,104 @@ const CATALOGO: Record<string, DefEfecto> = {
   'incremento de resistencia fisica': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('rf') },
   'ataque capaz de danar energia': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danaEnergia = true; } },
   'danar energia': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danaEnergia = true; } },
+  'potenciar critico': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.critico = Math.max(m.critico, v); if (hay(o, /automatico/)) m.criticoAuto = true; } },
+  'potenciar critico real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, v, o) => { m.critico = Math.max(m.critico, v); if (hay(o, /automatico/)) m.criticoAuto = true; } },
+  'ataque sobrenatural': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.sobrenatural = true; m.elemento = 'ENE'; } },
+  'ataque elemental': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.elemento = elementoDe(o) || m.elemento; } },
+  'marca': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.marca = Math.max(m.marca, v || (hay(o, /mayor/) ? 50 : 20)); } },
+  'marca menor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 20); } },
+  'marca mayor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 50); } },
+  'impacto': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.impacto = Math.max(m.impacto, v); if (hay(o, /atraer/)) m.atraer = true; } },
+  'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('apresamiento') },
+  'estados sobrenaturales': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.estados = [...m.estados, ...leerEstados(o)]; } },
+  'interrupcion': { tipo: 'accion', clase: 'ataque', aplicar: (m, v) => { m.interrumpe = true; m.interrupcion = Math.max(m.interrupcion, v); } },
+  'escudo de energia': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('escudo') },
+  'acumulacion': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v) => { m.pantalla = Math.max(m.pantalla, v); m.ta = Math.max(m.ta, 4); } },
+  'intangibilidad': { tipo: 'asalto', clase: 'variable', aplicar: (m) => { m.intangible = true; } },
+  'reflectar el ataque': { tipo: 'accion', clase: 'defensa', aplicar: (m) => { m.reflectar = true; } },
+  'absorcion de ki': { tipo: 'accion', clase: 'defensa', aplicar: (m, v) => { m.absorcionKi = Math.max(m.absorcionKi, v || Infinity); } },
+  'ataque indirecto': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.indirecto = true; } },
+  // Desventajas que cambian el efecto (Dominus p.72-73).
+  'dano reducido': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.danoReducido = Math.max(m.danoReducido, hay(o, /ningun/) ? 1 : 0.5); } },
+  'ningun dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = 1; } },
+  'mitad de dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = Math.max(m.danoReducido, 0.5); } },
+  'ataque especializado': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.soloContra = hay(o, /esquiva/) ? 'esquiva' : 'parada'; } },
   // Sin efecto en el cuerpo a cuerpo que se simula (alcance), pero atan la técnica a un ataque.
   'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: () => {} },
   'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: () => {} },
 };
 
+function hay(opciones: string[], re: RegExp): boolean {
+  return opciones.some((x) => re.test(normalizarRasgo(x)));
+}
+
+/** Ataque elemental (Dominus p.63): Fuego CAL, Aire ELE, Agua FRI; Tierra elige FIL, CON o PEN; Luz y Oscuridad, ENE. */
+function elementoDe(opciones: string[]): TipoAtaque | '' {
+  for (const x of opciones) {
+    const n = normalizarRasgo(x);
+    const tipo = /\b(fil|con|pen|cal|ele|fri|ene)\b/.exec(n);
+    if (tipo) return tipo[1].toUpperCase() as TipoAtaque;
+    if (/fuego/.test(n)) return 'CAL';
+    if (/aire/.test(n)) return 'ELE';
+    if (/agua/.test(n)) return 'FRI';
+    if (/tierra/.test(n)) return 'CON';
+    if (/luz|oscuridad/.test(n)) return 'ENE';
+  }
+  return '';
+}
+
+/** Nombres de los Estados añadidos, de más largo a más corto para que "dolor extremo" no sea "dolor". */
+const NOMBRES_ESTADO: [RegExp, NombreEstado][] = [
+  [/doble dano/, 'dobleDano'], [/drenaje de vida/, 'drenajeVida'], [/drenaje de ki/, 'drenajeKi'],
+  [/dolor extremo/, 'dolorExtremo'], [/dolor/, 'dolor'], [/paraliza\w* (total|completa)/, 'paralisisTotal'],
+  [/paraliza\w* parcial/, 'paralisisParcial'], [/penaliza\w* .*mayor/, 'penalizacionMayor'],
+  [/penaliza\w*/, 'penalizacionMenor'], [/reduccion de caracteristicas/, 'reduccionCaracteristicas'],
+  [/reduccion de (una )?caracteristica/, 'reduccionCaracteristica'], [/reduccion de rf/, 'reduccionRf'],
+  [/ceguera/, 'ceguera'], [/coma/, 'coma'], [/control/, 'control'], [/fascinacion/, 'fascinacion'],
+  [/ilusion/, 'ilusion'], [/inconsciencia/, 'inconsciencia'], [/terror/, 'terror'], [/miedo/, 'miedo'],
+  [/muerte/, 'muerte'], [/^dano\b/, 'dano'],
+];
+
+/**
+ * Estados sobrenaturales (Dominus p.66-68) a partir de sus opciones: la Resistencia ("RF 120" o un
+ * número), los Estados añadidos, la Condición predeterminada y la Distancia del Efecto ("25 metros").
+ */
+function leerEstados(opciones: string[]): EstadoSobrenatural[] {
+  let rf = 0;
+  let condicion: EstadoSobrenatural['condicion'] = 'ataque';
+  let distancia = 0;
+  let varios = false;
+  const estados: { estado: NombreEstado; atributo?: Atributo }[] = [];
+  for (const x of opciones) {
+    const n = normalizarRasgo(x);
+    const metros = /(\d+)\s*(m\b|metro)/.exec(n);
+    if (metros) {
+      distancia = Number(metros[1]);
+      continue;
+    }
+    if (/contacto fisico/.test(n)) condicion = 'contacto';
+    else if (/beso/.test(n)) condicion = 'beso';
+    else if (/visual|sonido|aire|superficie/.test(n)) {
+      condicion = 'automatico';
+      if (/varios|aire|superficie/.test(n)) varios = true;
+    } else if (/^(condicion: )?ataque$/.test(n)) condicion = 'ataque';
+    else {
+      const nombre = NOMBRES_ESTADO.find(([re]) => re.test(n))?.[1];
+      const num = /(\d+)/.exec(n);
+      if (nombre) {
+        const atributo = /\b(agi|con|des|fue|int|per|pod|vol)\b/.exec(n)?.[1].toUpperCase() as Atributo | undefined;
+        estados.push({ estado: nombre, atributo });
+      } else if (num && (/^rf\b|resistencia/.test(n) || /^\d+$/.test(n))) rf = Number(num[1]);
+    }
+  }
+  return estados.map((e) => ({ ...e, rf, condicion, distancia, varios }));
+}
+
 /** "+50" → 50, "x3" → 3, "-4 TA" → 4, "TA 4" → 4, "5 metros de radio" → 5, "Absurdo (180)" → 180. */
 function valorDe(opciones: string[]): number {
-  for (const o of opciones) {
+  for (const crudo of opciones) {
+    // "1.000" es mil.
+    const o = crudo.replace(/(\d)\.(\d{3})/g, '$1$2');
     const entre = /\((\d+)\)/.exec(o);
     if (entre) return Number(entre[1]);
     const n = /(\d+)/.exec(o);
@@ -135,6 +297,35 @@ export interface EfectosTecnica {
   clase: Clase;
   /** Efectos que el simulador no conoce (se registran y se ignoran). */
   desconocidos: string[];
+  /** Tiene Estados de condición automática: se usa como acción propia, sin tirada de ataque. */
+  automatico: boolean;
+  desventajas: Desventajas;
+}
+
+/** Desventajas que importan en combate (Dominus p.71-74); las demás son de ambientación. */
+export interface Desventajas {
+  /** Agotamiento: cansancio que gasta al ejecutarla, sin bono. */
+  agotamiento: number;
+  /** Exceso de energía: pierde otra vez su coste al ejecutarla. */
+  exceso: boolean;
+  /** Penalizador a toda Acción al terminarla: baja 10 por asalto. */
+  penalizador: number;
+  /** Circunstancia límite: sólo con la mitad de PV, un cuarto, PV negativos o tras recibir daño. */
+  circunstancia: '' | 'mitad' | 'cuarto' | 'negativos' | 'dano';
+}
+
+const SIN_DESVENTAJAS: Desventajas = Object.freeze({ agotamiento: 0, exceso: false, penalizador: 0, circunstancia: '' });
+
+/** Lee una desventaja de combate, o false si el nombre no es una. */
+function leerDesventaja(d: Desventajas, nombre: string, opciones: string[]): boolean {
+  const todo = [nombre, ...opciones.map(normalizarRasgo)].join(' ');
+  if (nombre.startsWith('agotamiento')) d.agotamiento = valorDe(opciones) || valorDe([nombre]) || 1;
+  else if (nombre.startsWith('exceso de energia')) d.exceso = true;
+  else if (nombre.startsWith('penalizador a toda accion')) d.penalizador = valorDe(opciones) || valorDe([nombre]);
+  else if (/circunstancia limite|mitad de pv|cuarta parte de pv|pv negativos|recibir dano/.test(nombre)) {
+    d.circunstancia = /cuarta/.test(todo) ? 'cuarto' : /negativos/.test(todo) ? 'negativos' : /recibir/.test(todo) ? 'dano' : 'mitad';
+  } else return false;
+  return true;
 }
 
 const efectosCache = new WeakMap<Tecnica, EfectosTecnica>();
@@ -147,10 +338,14 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
   const asalto: ModKi = { ...SIN_KI };
   const clases = new Set<Clase>();
   const desconocidos: string[] = [];
+  let desventajas = SIN_DESVENTAJAS;
   for (const e of t.efectos) {
-    const def = CATALOGO[normalizarRasgo(e.nombre)];
+    const nombre = normalizarRasgo(e.nombre);
+    const def = CATALOGO[nombre];
     if (!def) {
-      desconocidos.push(e.nombre);
+      const d = { ...desventajas };
+      if (leerDesventaja(d, nombre, e.opciones)) desventajas = d;
+      else desconocidos.push(e.nombre);
       continue;
     }
     def.aplicar(def.tipo === 'accion' ? accion : asalto, valorDe(e.opciones), e.opciones);
@@ -159,7 +354,8 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
   // Una técnica con efectos de Ataque es ofensiva aunque tenga otros (Dominus p.48: Variable se ata
   // a la acción de los demás efectos).
   const clase: Clase = clases.has('ataque') ? 'ataque' : clases.has('contra') ? 'contra' : clases.has('defensa') ? 'defensa' : 'variable';
-  r = { accion, asalto, clase, desconocidos };
+  const automatico = accion.estados.some((x) => x.condicion === 'automatico');
+  r = { accion, asalto, clase, desconocidos, automatico, desventajas };
   efectosCache.set(t, r);
   return r;
 }
@@ -207,9 +403,12 @@ function escalar(m: ModKi): ModKi {
   const r: ModKi = { ...m };
   for (const k of Object.keys(r) as (keyof ModKi)[]) {
     const v = r[k];
-    if (typeof v !== 'number' || v <= 0) continue;
+    if (typeof v !== 'number' || v <= 0 || k === 'danoReducido' || k === 'interrupcion' || v === Infinity) continue;
     (r[k] as number) = k === 'multDano' ? (v > 1 ? v + 1 : v) : v + Math.floor(v / 2);
   }
+  // Las dificultades de Resistencia suben 40 (la de Interrupción también, aunque no tenga valor fijo).
+  if (r.interrumpe) r.interrupcion += 40;
+  if (r.estados.length) r.estados = r.estados.map((x) => ({ ...x, rf: x.rf + 40 }));
   return r;
 }
 
@@ -447,6 +646,11 @@ export interface EstadoKi {
   /** Aura de combate encendida, y asaltos desde el último pago (1 de Ki cada 5, Dominus p.21). */
   auraActiva: boolean;
   asaltosAura: number;
+  /** La Acumulación (Ki) lo convirtió en un ser con acumulación de daño este asalto. */
+  pantallaConvirtio: boolean;
+  /** Daño recibido este asalto y el anterior (Circunstancia límite: Recibir daño, Dominus p.72). */
+  danoAsalto: number;
+  danoPrevio: number;
   /** Aumento de características activo: qué característica, desde y hasta qué valor, y asaltos sin pagar. */
   aumento: { atributo: AtributoAumento; desde: number; hasta: number; asaltos: number } | null;
 }
@@ -459,6 +663,7 @@ export function crearEstadoKi(l: Luchador): EstadoKi | null {
     activo: { ...SIN_KI }, mantenidas: new Map(), enEspera: new Map(), defensasLibres: 0, asalto: 0, objetivo: null,
     reservaMax: ki.reserva, limitesUsados: new Set(), danoCenobus: 0, recuperadoCenobus: 0, matadosAsalto: 0,
     armaduraActiva: false, asaltosArmadura: 0, auraActiva: false, asaltosAura: 0, aumento: null,
+    danoAsalto: 0, danoPrevio: 0, pantallaConvirtio: false,
   };
 }
 
@@ -510,6 +715,8 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
   if (!e) return;
   e.asalto = asalto;
   e.matadosAsalto = 0;
+  e.danoPrevio = e.danoAsalto;
+  e.danoAsalto = 0;
   // Agon: recupera un punto de Ki por asalto de combate (Dominus p.29).
   if (tieneLimite(l, 'agon')) recuperarKi(l, 1);
   e.ejecuto = false;
@@ -548,6 +755,12 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
       e.mantenidas.set(t, false);
       e.activo = combinar(e.activo, efectosDe(t).asalto);
     } else e.mantenidas.delete(t);
+  }
+  // Escudo y Acumulación duran el asalto; si se mantienen, conservan el daño sufrido (Dominus p.65-66).
+  if (!e.activo.escudo) l.escudoKi = 0;
+  if (!e.activo.pantalla && e.pantallaConvirtio) {
+    l.pantallaKi = 0;
+    acumulacionKi(l, e, false);
   }
   for (const [t, desde] of [...e.enEspera]) {
     if (desde >= asalto) continue;
@@ -600,8 +813,36 @@ export function terminarAsalto(l: Luchador, hizoOtraCosa: boolean) {
 export function puedeEjecutar(l: Luchador, t: Tecnica): boolean {
   const e = l.ki;
   if (!e) return false;
+  if (!cumpleDesventajas(l, t)) return false;
   if (e.enEspera.has(t)) return costeKi(t) <= e.reserva;
   return alcanzaLoAcumulado(e, t) && costeKi(t) <= e.reserva;
+}
+
+/**
+ * Acumulación (Dominus p.65): durante el asalto actúa como un ser con Acumulación de daño, con una
+ * ficha nueva (las capacidades se derivan de la ficha).
+ */
+function acumulacionKi(l: Luchador, e: EstadoKi, activar: boolean) {
+  if (activar === e.pantallaConvirtio || (activar && l.ficha.acumulacion)) return;
+  e.pantallaConvirtio = activar;
+  l.ficha = { ...l.ficha, acumulacion: activar || undefined };
+  l.cap = capacidades(l.ficha);
+}
+
+/** Circunstancia límite, Agotamiento y Exceso de energía se pueden cumplir y pagar (Dominus p.71-74). */
+function cumpleDesventajas(l: Luchador, t: Tecnica): boolean {
+  const d = efectosDe(t).desventajas;
+  if (d === SIN_DESVENTAJAS) return true;
+  const pvMax = l.ficha.pv;
+  switch (d.circunstancia) {
+    case 'mitad': if (l.pv > pvMax / 2) return false; break;
+    case 'cuarto': if (l.pv >= pvMax / 4) return false; break;
+    case 'negativos': if (l.pv >= 0) return false; break;
+    case 'dano': if ((l.ki?.danoPrevio ?? 0) <= 10) return false; break;
+  }
+  if (d.agotamiento && l.cansancio < d.agotamiento) return false;
+  if (d.exceso && (l.ki?.reserva ?? 0) < 2 * costeKi(t)) return false;
+  return true;
 }
 
 function alcanzaLoAcumulado(e: EstadoKi, t: Tecnica): boolean {
@@ -651,6 +892,16 @@ export function ejecutar(l: Luchador, t: Tecnica): ModKi {
   }
   e.reserva -= costeKi(t);
   const ef = efectosDe(t);
+  const d = ef.desventajas;
+  if (d.exceso) e.reserva = Math.max(0, e.reserva - costeKi(t));
+  if (d.agotamiento) l.cansancio = Math.max(0, l.cansancio - d.agotamiento);
+  if (d.penalizador) l.penTecnica += d.penalizador;
+  // Escudo de energía y Acumulación: se levantan al ejecutarla (Dominus p.65-66).
+  if (ef.asalto.escudo && !l.escudoKi) l.escudoKi = ef.asalto.escudo;
+  if (ef.asalto.pantalla && !l.pantallaKi) {
+    l.pantallaKi = ef.asalto.pantalla;
+    acumulacionKi(l, e, true);
+  }
   e.activo = combinar(e.activo, ef.asalto);
   e.defensasLibres = Math.max(e.defensasLibres, ef.accion.defensasAdicionales);
   for (const p of partesDe(t)) if (p.mantenimiento > 0) e.mantenidas.set(p, true);
@@ -675,12 +926,14 @@ export function modDeAccion(l: Luchador, clase: 'ataque' | 'defensa', consumir: 
 }
 
 /** Técnicas que se pueden ejecutar ahora atadas a esta clase de acción. */
-export function tecnicasPara(l: Luchador, clase: Clase, esContra = false): Tecnica[] {
+export function tecnicasPara(l: Luchador, clase: Clase, esContra = false, automaticas = false): Tecnica[] {
   if (!l.ki) return [];
   return repertorio(l.ficha).filter((t) => {
-    const c = efectosDe(t).clase;
+    const ef = efectosDe(t);
+    const c = ef.clase;
     const encaja = c === clase || (clase === 'ataque' && esContra && c === 'contra');
-    return encaja && !enUso(l.ki!, t) && puedeEjecutar(l, t);
+    // Las de Estados automáticos no van atadas a un golpe: son una acción aparte.
+    return encaja && ef.automatico === automaticas && !enUso(l.ki!, t) && puedeEjecutar(l, t);
   });
 }
 
@@ -706,6 +959,7 @@ export function recuperarKi(l: Luchador, n: number): number {
 export function alPerderPv(l: Luchador, dano: number): string | null {
   const e = l.ki;
   if (!e || dano <= 0) return null;
+  e.danoAsalto += dano;
   let activado: string | null = null;
   if (tieneLimite(l, 'cenobus') && e.recuperadoCenobus < 60) {
     e.danoCenobus += dano;

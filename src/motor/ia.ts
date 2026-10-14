@@ -3,7 +3,7 @@
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import {
-  absorcionContra, activo, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  absorcionContra, activo, ALCANCE, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoEsperado, modControl, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
@@ -12,11 +12,11 @@ import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import {
   asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
-  enUso, repertorio, vistaPrevia, type DecisionKi, type ModKi,
+  enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
 import {
-  caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
+  atributo, caracteristicasControl, dificultadPuntosPresion, esApuntado, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
   pGanaControl, type EstadoMushin, type Maniobra,
 } from './maniobras';
 
@@ -148,13 +148,13 @@ function valorNegativo(atk: Luchador, def: Luchador, pen: number, golpes: number
  */
 function valorCritico(
   atk: Luchador, def: Luchador, pCritica: number, danoPleno: number, loc: Localizacion | null, m: Maniobra,
-  golpes: number, danoPrevio: number,
+  golpes: number, danoPrevio: number, bonoKi = 0,
 ): number {
   if (pCritica <= 0) return 0;
   const e = atk.cap.est;
   const vital = m === 'cabeza' || m === 'corazon';
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-  const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth;
+  const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
   const ef = efectoCritico(base, def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano, loc, {
     inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
   });
@@ -645,8 +645,11 @@ export function elegirManiobra(ctx: Contexto, atk: Luchador, def: Luchador, esCo
   let mejorNeto = base.valor;
   let elegida: Tecnica | undefined;
   for (const tec of tecnicasPara(atk, 'ataque', esContra)) {
-    const r = mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tec), soloNormal);
-    const neto = r.valor - precioKi(atk) * costeKi(tec);
+    const ki = vistaPrevia(atk, tec);
+    // Ataque especializado contra otra defensa: no tendría ningún efecto (Dominus p.72).
+    if (ki.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) continue;
+    const r = mejorManiobra(ctx, atk, def, esContra, bono, ki, soloNormal);
+    const neto = r.valor - precioKi(atk) * costeKi(tec) - costoDesventajas(atk, def, tec);
     if (neto > mejorNeto) {
       mejor = r;
       mejorNeto = neto;
@@ -663,7 +666,7 @@ function mejorManiobra(
 ): { plan: PlanAtaque; valor: number } {
   const e = atk.cap.est;
   const amen = amenaza(def, atk);
-  const habDef = defensaFinal(def, atk);
+  const habDef = ki?.sobrenatural ? defensaFinal(def, atk, { kiAtk: ki }) : defensaFinal(def, atk);
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
   // Cuánto más pegan los golpes que siguen si el rival queda con −pen a su defensa, sin pasar de los
   // PV que le quedarían después de este golpe y de esos mismos golpes sin la ventaja.
@@ -675,15 +678,19 @@ function mejorManiobra(
 
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
     const hab = ki?.ataqueFijo || ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo, estadoMushin, ki });
-    const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, ki });
+    // Daño reducido (desventaja): ese golpe hace la mitad o nada, pero sus efectos funcionan.
+    const reducido = ki?.danoReducido ? 1 - ki.danoReducido : undefined;
+    const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, ki, factorDano: reducido });
     // Inutilizar e Inconsciencia: la mitad de daño (y de chance de tumbarlo por PV); el crítico, pleno.
-    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5, ki }) : p;
+    const real = esNoLetal(m) ? pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo, factorDano: 0.5 * (reducido ?? 1), ki }) : p;
     // Los ataques que no dañan (engatillar, puntos de presión) se valoran sólo por su efecto.
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
     const danoEste = sinDano ? 0 : real.dano;
     let v = danoEste + (sinDano || m === 'inconsciencia' ? 0 : real.pBaja * amen * 2);
     if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
-    if (def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+    // Ataque indirecto (Ki): no se le puede contraatacar (Dominus p.52).
+    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+    if (ki && ki !== SIN_KI) v += valorEfectosKi(atk, def, ki, p, m, golpesSiguientes);
 
     // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
     // cualquier otro golpe, con la mitad de los PV y en un lugar al azar.
@@ -694,13 +701,13 @@ function mejorManiobra(
       const base = Math.max(1, danoBase(atk, def, esContra, undefined, ki));
       const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
       const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo, undefined, ki), pct);
-      v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste);
+      v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste, ki?.critico);
     } else if (!sinDano) {
-      v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste);
+      v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste, ki?.critico);
     }
 
     if (m === 'derribo' || m === 'presa' || m === 'desarmar') {
-      const c = caracteristicasControl(m, atk, def);
+      const c = caracteristicasControl(m, atk, def, ki?.apresamiento);
       const bonoC = m === 'desarmar'
         ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)
         : (esContra ? e.controlPresaDerriboEnContra : e.controlPresaDerribo);
@@ -712,7 +719,7 @@ function mejorManiobra(
       if (m === 'presa') {
         // Una presa suele durar más de un asalto y deja al rival en parálisis parcial (−80).
         v += pGana * (1.5 * 0.8 * amen + ganancia(80, golpesSiguientes, danoEste));
-        if (!e.sinPenalizadorApresando) v -= 0.2 * lambda(atk) * amen;
+        if (!e.sinPenalizadorApresando && !ki?.apresamiento) v -= 0.2 * lambda(atk) * amen;
       }
       if (m === 'desarmar') {
         const s = def.ficha.sinArmas;
@@ -750,14 +757,14 @@ function mejorManiobra(
   };
 
   // Tipo de crítico: el principal o el secundario, el que más rinda (Tabla de Ataque Inusual).
-  let tipo: TipoAtaque | undefined;
+  let tipo: TipoAtaque | undefined = ki?.elemento || undefined;
   const sec = atk.ficha.arma?.critSecundario;
-  if (sec && sec !== atk.ficha.tipoAtaque && valor('normal', sec) > valor('normal')) tipo = sec;
+  if (!tipo && sec && sec !== atk.ficha.tipoAtaque && valor('normal', sec) > valor('normal')) tipo = sec;
 
   const opciones: Maniobra[] = ['normal'];
   if (!def.ficha.acumulacion && !soloNormal) {
     if (!def.derribado) opciones.push('derribo');
-    if (e.puedePresar && !def.apresadoPor && !atk.apresando) opciones.push('presa');
+    if ((e.puedePresar || ki?.apresamiento) && !def.apresadoPor && !atk.apresando) opciones.push('presa');
     if (!def.cap.desarmado) opciones.push('desarmar');
     if (!def.cap.est.sangreEterna) opciones.push('cabeza', 'corazon', 'inutilizar');
     opciones.push('inconsciencia', 'engatillar');
@@ -1100,13 +1107,138 @@ function valorAreaKi(
 }
 
 /**
+ * RF contra una dificultad: P(fallarla) y el fracaso medio si la falla. El d100 no es abierto y el
+ * 100 natural siempre resiste.
+ */
+function fracasoRf(def: Luchador, dificultad: number): { p: number; medio: number } {
+  const margen = dificultad - (def.ficha.rf + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0));
+  const tope = Math.min(99, margen - 1);
+  if (tope < 1) return { p: 0, medio: 0 };
+  return { p: tope / 100, medio: margen - (tope + 1) / 2 };
+}
+
+/** Lo que vale para `atk`, en PV, que `def` sufra este Estado sobrenatural (Dominus p.67) si falla la RF. */
+function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golpes: number): number {
+  const { p, medio } = fracasoRf(def, est.rf);
+  if (!p) return 0;
+  const pv = Math.max(0, def.pv);
+  const fuera = pv + 2 * amenaza(def, atk);
+  switch (est.estado) {
+    case 'dano': return p * Math.min(medio, pv);
+    case 'dobleDano': return p * Math.min(2 * medio, pv);
+    case 'drenajeVida': return p * (Math.min(medio, pv) + lambda(atk) * Math.min(medio, atk.ficha.pv - atk.pv));
+    case 'drenajeKi': return p * Math.min(medio, def.ki?.reserva ?? 0) * (def.ki ? precioKi(def) + precioKi(atk) : 0);
+    case 'dolor': return def.ficha.estados?.dolor ? 0 : p * valorNegativo(atk, def, 40, golpes, 0) * 2;
+    case 'dolorExtremo': return def.ficha.estados?.dolor === 'extremo' ? 0 : p * valorNegativo(atk, def, 80, golpes, 0) * 2;
+    case 'miedo': return def.ficha.estados?.miedo ? 0 : p * valorNegativo(atk, def, 60, golpes, 0) * 2;
+    case 'ceguera': return def.ficha.estados?.ceguera === 'absoluta' ? 0 : p * valorNegativo(atk, def, 90, golpes, 0) * 2;
+    case 'penalizacionMenor': return p * valorNegativo(atk, def, medio, golpes, 0);
+    case 'penalizacionMayor': return p * valorNegativo(atk, def, medio, golpes, 0) * 2;
+    case 'paralisisParcial': return p * valorNegativo(atk, def, 80, golpes, 0) * Math.min(2, medio / 2);
+    case 'fascinacion': return p * amenaza(def, atk);
+    case 'reduccionRf': return p * medio * 0.1;
+    case 'reduccionCaracteristica': return p * Math.floor(medio / 10) * 0.1 * amenaza(def, atk);
+    case 'reduccionCaracteristicas': return p * Math.floor(medio / 10) * 0.3 * amenaza(def, atk);
+    case 'ilusion': return 0;
+    // Paralización total, inconsciencia, coma, muerte, control y terror: lo sacan de la pelea.
+    default: return p * fuera;
+  }
+}
+
+/**
+ * Efectos sobrenaturales de un golpe con técnica, en PV (Dominus cap. 5): Estados si daña (o si toca,
+ * con Contacto físico), Impacto si supera la defensa, Marca para los golpes que sigan, Interrupción
+ * del Ki que tenga concentrado.
+ */
+function valorEfectosKi(atk: Luchador, def: Luchador, ki: ModKi, p: Pronostico, m: Maniobra, golpes: number): number {
+  if (!ki.estados.length && !ki.impacto && !ki.marca && !ki.interrumpe) return 0;
+  let v = 0;
+  for (const est of ki.estados) {
+    if (est.condicion === 'automatico') continue;
+    v += (est.condicion === 'contacto' ? p.pManiobra : p.pImpacto) * valorEstado(atk, def, est, golpes);
+  }
+  if (ki.impacto) {
+    // Lanzado lejos pierde lo que le queda del asalto; atraído, queda a su alcance.
+    const pGana = pGanaControl(ki.impacto, atributo(def, 'FUE') + modControl(def));
+    v += p.pImpacto * pGana * (ki.atraer ? 0.2 * amenaza(def, atk) : amenaza(def, atk));
+  }
+  if (ki.marca && !def.marcas.has(atk)) {
+    const b = base(atk, def);
+    v += p.pImpacto * Math.max(1, golpes) * (danoEsperado(atk, def, b.hab + ki.marca, b.def) - b.golpe);
+  }
+  if (ki.interrumpe && def.ki) {
+    let concentrado = 0;
+    for (const c of CARACTERISTICAS_KI) concentrado += def.ki.acumulado[c] ?? 0;
+    for (const t of def.ki.enEspera.keys()) concentrado += costeKi(t);
+    for (const t of def.ki.mantenidas.keys()) concentrado += costeKi(t);
+    const danoMedio = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
+    v += p.pImpacto * fracasoRf(def, danoMedio + ki.interrupcion).p * concentrado * precioKi(def);
+  }
+  return m === 'desarmar' ? 0 : v;
+}
+
+/**
+ * Lo que cuestan sus desventajas al ejecutarla (Dominus p.71-74): Exceso de energía otra vez su Ki,
+ * Agotamiento unos 5 PV por punto de cansancio y el Penalizador a toda Acción lo que le hace perder
+ * contra su rival principal.
+ */
+function costoDesventajas(l: Luchador, rival: Luchador | null, t: Tecnica): number {
+  const d = efectosDe(t).desventajas;
+  let c = 0;
+  if (d.exceso) c += precioKi(l) * costeKi(t);
+  if (d.agotamiento) c += 5 * d.agotamiento;
+  if (d.penalizador && rival) c += valorNegativo(rival, l, d.penalizador, 0, 0) * Math.max(1, d.penalizador / 20);
+  return c;
+}
+
+/**
+ * Técnica de Estados de condición automática (Dominus p.67-68) a usar en lugar de un ataque: sobre el
+ * enemigo que más rinda a su distancia o, si alcanza a varios, sobre todos los que estén a esa
+ * distancia (aliados incluidos, que cuentan en contra). Conviene si supera su mejor ataque.
+ */
+export function estadosAutomaticos(ctx: Contexto, l: Luchador): { tecnica: Tecnica; blancos: Luchador[] } | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  const candidatas = tecnicasPara(l, 'ataque', false, true);
+  if (!candidatas.length) return null;
+  nuevaDecision(ctx);
+  let mejor: { tecnica: Tecnica; blancos: Luchador[]; valor: number } | null = null;
+  for (const t of candidatas) {
+    const autos = vistaPrevia(l, t).estados.filter((x) => x.condicion === 'automatico');
+    const alcance = Math.max(ALCANCE, ...autos.map((x) => x.distancia));
+    const valorDe = (b: Luchador) => autos.reduce((s, est) => s + valorEstado(l, b, est, 1), 0);
+    const enRango = ctx.luchadores.filter((x) => x !== l && activo(x) && distancia(l, x) <= alcance + 1e-6);
+    let blancos: Luchador[] = [];
+    let valor = 0;
+    if (autos.some((x) => x.varios)) {
+      blancos = enRango;
+      for (const b of enRango) valor += b.equipo === l.equipo ? -lambda(l) * valorDe(b) : valorDe(b);
+    } else
+      for (const b of enRango) {
+        if (b.equipo === l.equipo) continue;
+        const vb = valorDe(b);
+        if (vb > valor) {
+          valor = vb;
+          blancos = [b];
+        }
+      }
+    if (!blancos.length) continue;
+    const neto = valor - precioKi(l) * costeKi(t) - costoDesventajas(l, blancos[0], t);
+    if (!mejor || neto > mejor.valor) mejor = { tecnica: t, blancos, valor: neto };
+  }
+  if (!mejor || mejor.valor <= 0) return null;
+  let ataque = 0;
+  for (const e of enemigos(ctx, l)) if (alcanzable(l, e)) ataque = Math.max(ataque, valorAtaque(l, e, {}));
+  return mejor.valor > ataque ? { tecnica: mejor.tecnica, blancos: mejor.blancos } : null;
+}
+
+/**
  * Técnica de defensa a ejecutar contra este golpe, o null. Se compara lo que le cuesta el golpe
  * (daño, baja, crítico, menos la contra que pueda devolver) con y sin ella. Sus efectos de Asalto
  * (Armadura, parada completa) protegen también de los demás golpes del asalto.
  */
 export function elegirTecnicaDefensa(
   ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number,
-  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean },
+  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean; costeTecnica?: number },
 ): Tecnica | null {
   if (!def.ki || perfil(def) === 'bestia') return null;
   const candidatas = tecnicasPara(def, 'defensa');
@@ -1116,8 +1248,18 @@ export function elegirTecnicaDefensa(
     // Defensa Predeterminada: equivale a una habilidad unos 50 por debajo (lo que suma el d100 medio).
     const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod });
     const p = pronostico(atk, def, habAtk, hab, { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, kiDef: mod, esContra: g.esContra });
-    const contra = !mod?.sinContra && def.ataquesRestantes > 0 && puedeActuar(def) ? p.pContra * golpeDe(def, atk) : 0;
-    return valorGolpe(atk, def, p, 0) - contra;
+    const contra = !mod?.sinContra && !g.ki?.indirecto && def.ataquesRestantes > 0 && puedeActuar(def) ? p.pContra * golpeDe(def, atk) : 0;
+    let extra = 0;
+    // Reflectar: si lo detiene, el golpe vuelve contra el atacante con su habilidad (Dominus p.71).
+    if (mod?.reflectar) {
+      const vuelta = pronostico(def, atk, habAtk + 50, defensaFinal(atk, def), { ki: { ...SIN_KI, danoFijo: danoBase(atk, def, g.esContra, undefined, g.ki) } });
+      extra += (1 - p.pImpacto) * valorGolpe(def, atk, vuelta, 0);
+    }
+    // Absorción de Ki: con una defensa que deja contraatacar se queda con Ki de la técnica.
+    if (mod?.absorcionKi && g.costeTecnica) extra += p.pContra * Math.min(mod.absorcionKi, g.costeTecnica) * precioKi(def);
+    // Acumulación: la pantalla se come el daño antes que sus PV.
+    if (mod?.pantalla) extra += Math.min(mod.pantalla, p.dano);
+    return valorGolpe(atk, def, p, 0) - contra - extra;
   };
   const sinTecnica = costo(modDeAccion(def, 'defensa', false));
   // Ataques que probablemente reciba después en el asalto (para los efectos de Asalto).
@@ -1128,8 +1270,8 @@ export function elegirTecnicaDefensa(
   for (const t of candidatas) {
     const ef = efectosDe(t);
     const ganancia = sinTecnica - costo(vistaPrevia(def, t));
-    const deAsalto = ef.asalto.ta || ef.asalto.parada || ef.asalto.esquiva ? otros : 0;
-    const neto = ganancia * (1 + deAsalto) - precioKi(def) * costeKi(t);
+    const deAsalto = ef.asalto.ta || ef.asalto.parada || ef.asalto.esquiva || ef.asalto.escudo || ef.asalto.pantalla ? otros : 0;
+    const neto = ganancia * (1 + deAsalto) - precioKi(def) * costeKi(t) - costoDesventajas(def, atk, t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
@@ -1149,9 +1291,14 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
   let mejor: Tecnica | null = null;
   let mejorNeto = 0;
   for (const t of repertorio(l.ficha)) {
-    const bono = efectosDe(t).asalto.turno;
-    if (!bono || efectosDe(t).clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
-    const neto = valorTurno(ctx, l, bono) - precioKi(l) * costeKi(t);
+    const ef = efectosDe(t);
+    const bono = ef.asalto.turno;
+    if ((!bono && !ef.asalto.intangible) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
+    // Intangibilidad (Dominus p.69): le ahorra lo que le pegarían este asalto quienes no dañan energía.
+    let intangible = 0;
+    if (ef.asalto.intangible)
+      for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) intangible += lambda(l) * amenaza(e, l);
+    const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible - precioKi(l) * costeKi(t) - costoDesventajas(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;

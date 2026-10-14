@@ -47,7 +47,7 @@ export function activo(l: Luchador): boolean {
 }
 
 export function puedeActuar(l: Luchador): boolean {
-  return l.estado === 'activo' && !l.aLaDefensiva && !l.defensaTotal;
+  return l.estado === 'activo' && !l.aLaDefensiva && !l.defensaTotal && !l.fascinado;
 }
 
 /**
@@ -69,13 +69,14 @@ export function penAccion(l: Luchador): number {
   // Miedo: −60 a toda acción que no sea huir (Core p.232); pelear no lo es.
   // El Aura de combate de un rival puede dar miedo o −10 a toda acción (Dominus p.22, Tabla 9).
   const miedo = (l.ficha.estados?.miedo || l.aura?.estado === 'miedo' ? PEN_MIEDO : 0) + (l.aura?.estado === 'afectado' ? 10 : 0);
-  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + negativos + miedo - luna;
+  // El penalizador de una técnica (desventaja) no lo quita nada sobrenatural (Dominus p.74).
+  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + l.penTecnica + negativos + miedo - luna;
   // Dolor como estado (Core p.233): no baja con los asaltos como el de los críticos.
   const estadoDolor = l.ficha.estados?.dolor ? PEN_DOLOR[l.ficha.estados.dolor] : 0;
   let cansancio = negativoCansancio(l.cansancio, max) * (c.dobleCansancio ? 2 : 1);
   if (c.mitadCansancio) cansancio = Math.trunc(cansancio / 2);
   const dolor = c.mitadDolorCritico ? Math.trunc(l.penDolor / 2) : l.penDolor;
-  return dolor + estadoDolor + l.penFisico + cansancio + negativos + miedo - luna;
+  return dolor + estadoDolor + l.penFisico + l.penTecnica + cansancio + negativos + miedo - luna;
 }
 
 /**
@@ -287,14 +288,16 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   // Enemigo pequeño −10, diminuto −20; desaparece con un Ataque en área (Core p.91).
   const chico = o.maniobra === 'area' || ki?.area ? 0 : [0, 10, 20][rivalChico(atk, def)];
   const tipo = o.tipo ?? perfil.tipoAtaque;
-  const secundario = tipo !== perfil.tipoAtaque && !e.criticoSecundarioLibre ? PEN_CRITICO_SECUNDARIO : 0;
+  // Ataque elemental o sobrenatural (Ki): ataca en esa TA sin el penalizador del crítico secundario.
+  const secundario = tipo !== perfil.tipoAtaque && tipo !== ki?.elemento && !e.criticoSecundarioLibre ? PEN_CRITICO_SECUNDARIO : 0;
   // Ataque Final: +20, y cada punto de cansancio da +20 en vez de +15 (Dominus p.86).
   const porCansancio = atk.modo.ataqueFinal ? 20 : BONO_CANSANCIO;
   return (
     perfil.ataque - pen - activa - penAccion(atk) - secundario - penEspacio(atk, 'ataque') -
     (ranura.sinArmas ? 0 : penDesenfundar(atk, 'ataque')) -
     // Maniobras de combate y apuntar (Ki) reduce el penalizador de la maniobra, hasta 0.
-    Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) - (ki?.precision ?? 0)) +
+    // Apresamiento (Ki): la Presa no tiene penalizador (Dominus p.64).
+    (o.maniobra === 'presa' && ki?.apresamiento ? 0 : Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) - (ki?.precision ?? 0))) +
     (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
     (atk.paralisis === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
@@ -311,12 +314,17 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (o.especial && puedeManiobraEspecial(atk, def) ? 20 : 0) + Math.min(150, o.samiel ?? 0) -
     (o.estadoMushin ? ESTADOS_MUSHIN[o.estadoMushin] : 0) +
     // Amenazado: −20 al atacar a quien lo amenaza (Tabla 43).
-    (atk.amenazadoPor === def ? AMENAZADO.ataque : 0)
+    (atk.amenazadoPor === def ? AMENAZADO.ataque : 0) +
+    // Marca (Ki): bono contra quien marcó (Dominus p.70); Beso: −120 al ataque (Dominus p.68).
+    (def.marcas.size ? def.marcas.get(atk) ?? 0 : 0) -
+    (ki && ki.estados.length && ki.estados.some((x) => x.condicion === 'beso') ? 120 : 0)
   );
 }
 
 export interface OpcionesDefensa {
   defensasPrevias?: number;
+  /** Efectos de Ki del ataque (un Ataque sobrenatural no se puede parar). */
+  kiAtk?: ModKi;
   /** Suponer que lo atacan desde esta posición (la IA, para quien todavía no se trabó). */
   posicion?: Posicion;
   cansancio?: number;
@@ -328,8 +336,13 @@ export interface OpcionesDefensa {
 }
 
 /** Ataques intangibles (Velez arcano): sólo se paran si se puede parar energía. */
-function paradaAnulada(def: Luchador, atk: Luchador): boolean {
-  return atk.cap.est.intangible && (def.ficha.tipoDefensa ?? 'parada') === 'parada' && !def.cap.est.paraEnergia;
+/**
+ * Velez arcano o un Ataque sobrenatural de Ki (Dominus p.64): sólo lo para quien para energía; con un
+ * escudo de energía sí se puede.
+ */
+function paradaAnulada(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
+  return (atk.cap.est.intangible || !!kiAtk?.sobrenatural) && (def.ficha.tipoDefensa ?? 'parada') === 'parada' &&
+    !def.cap.est.paraEnergia && !(def.escudoKi > 0);
 }
 
 /** Los ataques de Velez arcano son invisibles para quien no detecta la energía (ceguera absoluta). */
@@ -368,7 +381,9 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   // adicional (Ki) también (Dominus p.56).
   const libres = def.cap.defensasLibres + (def.estiloDefensivo ? 1 : 0) +
     Math.max(ki?.defensasAdicionales ?? 0, def.ki?.defensasLibres ?? 0);
-  const previas = Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
+  // Un escudo de energía no sufre los penalizadores por defensas adicionales (Core p.100, Dominus p.66).
+  const escudo = def.escudoKi > 0 || (ki?.escudo ?? 0) > 0;
+  const previas = escudo ? 0 : Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
   const total = o.defensaTotal ?? def.defensaTotal;
   // Al retirarse, quien lo ataca lo tiene de flanco, salvo Uroboros (Core p.94, Dominus p.79).
   const pos = def.huyendo && !e.retiradaSinFlanco ? 'flanco' : o.posicion ?? posicionDe(atk, def);
@@ -393,7 +408,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
-  if (paradaAnulada(def, atk)) h = Math.min(h, 0);
+  if (paradaAnulada(def, atk, o.kiAtk)) h = Math.min(h, 0);
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
 }
@@ -602,7 +617,8 @@ export function pronostico(
     pContra,
     bonoContra: pContra > 0 ? t.bonoContraEsperado(s) / pContra : 0,
     pBaja: nulo ? 0 : def.pv > 0 ? t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv, base)) : 1,
-    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv / 2, base)),
+    // Crítico automático (Ki): critica en cuanto daña (Dominus p.71).
+    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, o.ki?.criticoAuto ? 10 : porcentajePara(def.pv / 2, base)),
     pManiobra: t.pPorcentajeAlMenos(s, abs, 10),
   };
 }
