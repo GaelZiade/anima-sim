@@ -26,9 +26,9 @@ const arte = (...artesMarciales: string[]) => ({ artesMarciales });
 describe('maniobras que faltaban (Core p.91-92)', () => {
   const pen = (f: Ficha, m: Parameters<typeof penManiobra>[1]) => penManiobra(luchador(f), m, false);
 
-  it('Inutilizar: apuntado al brazo −20; con un arma Precisa −10', () => {
-    expect(pen(ficha('Espada'), 'inutilizar')).toBe(20);
-    expect(pen(ficha('Estoque', {}, { arma: { nombre: 'Estoque', precisa: true } }), 'inutilizar')).toBe(10);
+  it('Inutilizar: apuntado a la pantorrilla −10 (Tabla 45); con un arma Precisa, la mitad', () => {
+    expect(pen(ficha('Espada'), 'inutilizar')).toBe(10);
+    expect(pen(ficha('Estoque', {}, { arma: { nombre: 'Estoque', precisa: true } }), 'inutilizar')).toBe(5);
   });
 
   it('Inconsciencia: cabeza −60; sin crítico Contundente, −40 más', () => {

@@ -22,8 +22,11 @@ export type Maniobra =
   /** Destrucción por Ki (Core p.104): un toque que obliga a una RF contra la Presencia; daña el fracaso. */
   | 'destruccionKi';
 
-/** Tabla 45: ataques apuntados que interesan en combate. Brazo y pierna (muslo) −20. */
-export const PEN_APUNTADO = { cabeza: 60, corazon: 60, inutilizar: 20, inconsciencia: 60 } as const;
+/**
+ * Tabla 45: ataques apuntados que interesan en combate. Inutilizar apunta a la pantorrilla (−10): es
+ * pierna, como pide la maniobra, y el más barato de brazo y pierna (brazo y muslo −20; Core p.91-92).
+ */
+export const PEN_APUNTADO = { cabeza: 60, corazon: 60, inutilizar: 10, inconsciencia: 60 } as const;
 
 /** Maniobras que se resuelven contra TA 0 y piden un control enfrentado. */
 export function esManiobraDeControl(m: Maniobra): m is 'derribo' | 'presa' | 'desarmar' {
