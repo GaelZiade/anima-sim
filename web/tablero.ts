@@ -15,6 +15,8 @@ export interface FichaTablero {
   pvMax?: number;
   caido?: boolean;
   aLaDefensiva?: boolean;
+  /** Estados a la vista (derribado, en llamas, ceguera…): un punto sobre la ficha. */
+  marcas?: string[];
 }
 
 export interface MapaTablero {
@@ -83,6 +85,10 @@ export class Tablero {
   private caminos = new Map<string, Celda[]>();
   private progreso = 1;
   private animacion = 0;
+  /** Colores del tema, leídos del CSS una vez (se vacía al cambiar de tema). */
+  private colores = new Map<string, string>();
+  /** Suelo, grilla, paredes y terreno ya dibujados: sólo cambian con el mapa, el tamaño o el tema. */
+  private fondo: { lienzo: HTMLCanvasElement; mapa: MapaTablero; celda: number; dpr: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -93,7 +99,11 @@ export class Tablero {
     // El clic derecho borra paredes: sin menú contextual sobre el mapa.
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     new ResizeObserver(() => this.dibujar()).observe(canvas.parentElement!);
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.dibujar());
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      this.colores.clear();
+      this.fondo = null;
+      this.dibujar();
+    });
   }
 
   /**
@@ -128,22 +138,54 @@ export class Tablero {
 
   // ---------- Dibujo ----------
 
+  private color = (v: string): string => {
+    let c = this.colores.get(v);
+    if (c === undefined) this.colores.set(v, (c = getComputedStyle(document.documentElement).getPropertyValue(v).trim()));
+    return c;
+  };
+
   dibujar() {
     const { ancho, alto } = this.mapa;
     const disponible = this.canvas.parentElement!.clientWidth;
     this.celda = Math.max(12, Math.min(40, Math.floor(disponible / ancho)));
     const c = this.celda;
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.style.width = `${ancho * c}px`;
-    this.canvas.style.height = `${alto * c}px`;
-    this.canvas.width = Math.round(ancho * c * dpr);
-    this.canvas.height = Math.round(alto * c * dpr);
+    const w = Math.round(ancho * c * dpr), h = Math.round(alto * c * dpr);
+    // Reasignar el tamaño reinicia el lienzo: sólo si cambió.
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.style.width = `${ancho * c}px`;
+      this.canvas.style.height = `${alto * c}px`;
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
     const g = this.canvas.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(this.lienzoFondo(dpr), 0, 0);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const color = this.color;
 
-    const css = getComputedStyle(document.documentElement);
-    const color = (v: string) => css.getPropertyValue(v).trim();
+    for (const e of this.estelas) this.dibujarEstela(g, e, color);
+    // Los caídos abajo, así no tapan a los que siguen en pie.
+    const orden = [...this.fichas].sort((a, b) => Number(!!b.caido) - Number(!!a.caido));
+    for (const f of orden) this.dibujarFicha(g, f, color);
+    if (this.flecha) this.dibujarFlecha(g, this.flecha, color);
+    if (this.dano) this.dibujarDano(g, this.dano, color);
+    const t = this.turno && this.fichas.find((f) => f.id === this.turno);
+    if (t) this.dibujarTurno(g, t, color);
+  }
 
+  /** La capa de fondo: se rehace sólo si cambiaron el mapa (se reemplaza entero al editarlo), la celda o el tema. */
+  private lienzoFondo(dpr: number): HTMLCanvasElement {
+    const f = this.fondo;
+    if (f && f.mapa === this.mapa && f.celda === this.celda && f.dpr === dpr) return f.lienzo;
+    const { ancho, alto } = this.mapa;
+    const c = this.celda;
+    const lienzo = f?.lienzo ?? document.createElement('canvas');
+    lienzo.width = this.canvas.width;
+    lienzo.height = this.canvas.height;
+    const g = lienzo.getContext('2d')!;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const color = this.color;
     g.fillStyle = color('--suelo');
     g.fillRect(0, 0, ancho * c, alto * c);
     // Grilla: cada 5 m una línea más marcada, para medir a ojo.
@@ -182,15 +224,8 @@ export class Tablero {
       }
       g.stroke();
     }
-
-    for (const e of this.estelas) this.dibujarEstela(g, e, color);
-    // Los caídos abajo, así no tapan a los que siguen en pie.
-    const orden = [...this.fichas].sort((a, b) => Number(!!b.caido) - Number(!!a.caido));
-    for (const f of orden) this.dibujarFicha(g, f, color);
-    if (this.flecha) this.dibujarFlecha(g, this.flecha, color);
-    if (this.dano) this.dibujarDano(g, this.dano, color);
-    const t = this.turno && this.fichas.find((f) => f.id === this.turno);
-    if (t) this.dibujarTurno(g, t, color);
+    this.fondo = { lienzo, mapa: this.mapa, celda: c, dpr };
+    return lienzo;
   }
 
   /** Dónde se dibuja una ficha ahora (en celdas, con decimales si se está moviendo). */
@@ -290,6 +325,13 @@ export class Tablero {
       g.moveTo(cx + r * 0.7, cy - r * 0.7);
       g.lineTo(cx - r * 0.7, cy + r * 0.7);
       g.stroke();
+    }
+    // Con algún estado encima, un punto en la esquina (el detalle está en la lista de turno).
+    if (f.marcas?.length && !f.caido) {
+      g.beginPath();
+      g.arc(cx + r * 0.75, cy - r * 0.75, Math.max(2.5, c * 0.1), 0, Math.PI * 2);
+      g.fillStyle = color('--marca-estado');
+      g.fill();
     }
     if (f.pv !== undefined && f.pvMax) {
       const w = c * 0.84, h = Math.max(3, c * 0.1);

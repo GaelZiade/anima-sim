@@ -1,6 +1,6 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
-import type { Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario, Tecnica } from './modelo';
+import type { Contexto, Equipo, Evento, Ficha, FotoLuchador, Luchador, OpcionesEscenario, Tecnica } from './modelo';
 import { crearRng, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
@@ -18,7 +18,7 @@ import {
   gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
-import { pasarAsalto } from './condiciones';
+import { estadoVisible, pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
@@ -104,7 +104,14 @@ function taEnergia(l: Luchador): number {
 
 function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>) {
   if (!ctx.registro) return;
-  const foto = ctx.luchadores.map((l) => ({ x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: l.aLaDefensiva }));
+  const foto = ctx.luchadores.map((l): FotoLuchador => {
+    const f: FotoLuchador = { x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: l.aLaDefensiva };
+    const marcas = estadoVisible(l);
+    if (marcas.length) f.marcas = marcas;
+    if (l.ki) f.ki = l.ki.reserva;
+    if (l.magia) f.zeon = zeonLibre(l.magia);
+    return f;
+  });
   const turno = ctx.turnoDe ? ctx.luchadores.indexOf(ctx.turnoDe) : undefined;
   ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto(), foto, turno, ...extra?.() });
 }

@@ -479,6 +479,11 @@ export interface FotoLuchador {
   pv: number;
   estado: Estado;
   aLaDefensiva: boolean;
+  /** Estados a la vista (condiciones.ts, `estadoVisible`); sólo si tiene alguno. */
+  marcas?: string[];
+  /** Reserva de Ki y zeon libre, si los tiene. */
+  ki?: number;
+  zeon?: number;
 }
 
 /** Reglas opcionales y condiciones del escenario. */

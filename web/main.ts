@@ -7,7 +7,7 @@ import type { HojaJson } from '../src/hoja/hojaAJson';
 import { disposicionAbierta, simularCombate, type ResultadoCombate } from '../src/motor/combate';
 import { estilos } from '../src/motor/estilos';
 import type { Celda } from '../src/motor/mapa';
-import type { Evento, Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
+import type { Evento, Ficha, FotoLuchador, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import abel from '../ejemplos/arquetipos-abel.json';
 import tiradores from '../ejemplos/tiradores.json';
@@ -63,11 +63,22 @@ interface OpcionesGuardadas {
   oscuridad: string;
   faseLunar: string;
   cuerdas?: string;
+  sinManiobras?: string;
   casillas: Record<string, boolean>;
 }
 
-const CASILLAS = ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio', 'escasaVisibilidad', 'disparosParalelos'] as const;
+type OpcionSiNo = { [K in keyof OpcionesEscenario]-?: OpcionesEscenario[K] extends boolean | undefined ? K : never }[keyof OpcionesEscenario];
 
+/** Reglas que se prenden o apagan: una fila acá arma la casilla, la guarda y la pasa al motor. */
+const CASILLAS: readonly { id: OpcionSiNo; texto: string }[] = [
+  { id: 'rotura', texto: 'Rotura de armas y armaduras' },
+  { id: 'huida', texto: 'Se puede huir' },
+  { id: 'espacioReducido', texto: 'Espacio reducido' },
+  { id: 'armasEnfundadas', texto: 'Armas enfundadas' },
+  { id: 'desequilibrio', texto: 'Desequilibrio de atributos (Dominus)' },
+  { id: 'escasaVisibilidad', texto: 'Escasa visibilidad: niebla, humo (−20 a los proyectiles)' },
+  { id: 'disparosParalelos', texto: 'Disparos paralelos (opcional, Core p.95)' },
+];
 
 /**
  * Genéricos: los arquetipos de Abel y las fichas de los ejemplos. Las copias de una misma ficha en
@@ -111,6 +122,10 @@ function crear<K extends keyof HTMLElementTagNameMap>(etiqueta: K, props: Record
   return el;
 }
 
+$('casillas').replaceChildren(...CASILLAS.map(({ id, texto }) =>
+  crear('label', {}, crear('input', { type: 'checkbox', id }), ` ${texto}`)));
+
+
 // ---------- Estado ----------
 
 function cargarEstado(): Estado {
@@ -124,11 +139,27 @@ function cargarEstado(): Estado {
 const estado = cargarEstado();
 estado.mapa ??= { ...MAPA_INICIAL };
 
+let guardadoPendiente = 0;
+
+/**
+ * Guarda el estado (biblioteca, equipos, mapa) un momento después del último cambio: pintar paredes
+ * arrastrando cambia muchas celdas seguidas y serializar todo en cada una traba la página.
+ */
 function guardar() {
+  clearTimeout(guardadoPendiente);
+  guardadoPendiente = window.setTimeout(guardarYa, 400);
+}
+
+function guardarYa() {
+  clearTimeout(guardadoPendiente);
   try {
     localStorage.setItem(GUARDADO, JSON.stringify(estado));
   } catch { /* lleno o bloqueado: sólo se pierde al recargar */ }
 }
+
+// Si se cierra o se oculta la página con un guardado pendiente, se guarda ya.
+addEventListener('pagehide', guardarYa);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardarYa(); });
 
 function buscar(clave: string) {
   return estado.biblioteca.find((e) => e.clave === clave) ?? GENERICOS.find((e) => e.clave === clave);
@@ -157,18 +188,14 @@ function escenarioActual() {
   const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
   const oscuridad = $<HTMLSelectElement>('oscuridad').value as OpcionesEscenario['oscuridad'] | '';
   const cuerdas = $<HTMLSelectElement>('cuerdas').value as OpcionesEscenario['cuerdas'] | '';
+  const maniobras = $<HTMLSelectElement>('sinManiobras').value as '' | 'todos' | 'A' | 'B';
   const a = equipoDe(estado.equipoA);
   const b = equipoDe(estado.equipoB);
   // Si una ficha se repite, las copias se numeran (lo mismo que la consola).
   [a.fichas, b.fichas] = numerarCopias(a.fichas, b.fichas);
   const opciones: OpcionesEscenario = {
-    rotura: marcado('rotura'),
-    huida: marcado('huida'),
-    espacioReducido: marcado('espacioReducido'),
-    armasEnfundadas: marcado('armasEnfundadas'),
-    desequilibrio: marcado('desequilibrio'),
-    escasaVisibilidad: marcado('escasaVisibilidad'),
-    disparosParalelos: marcado('disparosParalelos'),
+    ...Object.fromEntries(CASILLAS.map((c) => [c.id, marcado(c.id)])),
+    ...(maniobras ? { sinManiobras: maniobras === 'todos' ? true : maniobras } : {}),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
     ...(cuerdas ? { cuerdas } : {}),
@@ -373,7 +400,8 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
     estado.equipoB.forEach((i, k) => (i.pos = d.B[k]));
   }
   completarPosiciones();
-  for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o[id];
+  for (const { id } of CASILLAS) ($(id) as HTMLInputElement).checked = !!o[id];
+  ($('sinManiobras') as HTMLSelectElement).value = o.sinManiobras === true ? 'todos' : o.sinManiobras || '';
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
   ($('oscuridad') as HTMLSelectElement).value = o.oscuridad ?? '';
   ($('cuerdas') as HTMLSelectElement).value = o.cuerdas ?? '';
@@ -679,12 +707,15 @@ function irA(k: number) {
   f.indice = k;
   const e = registro[k];
   const foto = e.foto ?? [];
-  const fichas: FichaTablero[] = f.r.luchadores.map((l, j) => {
+  // Quien huyó dejó el campo: no se dibuja (los caídos sí, tachados).
+  const fichas: FichaTablero[] = [];
+  f.r.luchadores.forEach((l, j) => {
     const s = foto[j] ?? { x: l.pos.x, y: l.pos.y, pv: l.pv, estado: l.estado, aLaDefensiva: false };
-    return {
+    if (s.estado === 'huido') return;
+    fichas.push({
       id: f.ids[j], nombre: l.ficha.nombre, equipo: l.equipo, x: s.x, y: s.y, pv: s.pv, pvMax: l.ficha.pv,
-      caido: s.estado !== 'activo', aLaDefensiva: s.aLaDefensiva,
-    };
+      caido: s.estado !== 'activo', aLaDefensiva: s.aLaDefensiva, marcas: s.marcas,
+    });
   });
 
   // Turno, ataque y daño de esta línea.
@@ -730,9 +761,10 @@ function irA(k: number) {
     const s = foto[j];
     const clases = ['ficha-turno', l.equipo === 'A' ? 'a' : 'b'];
     if (e.turno === j) clases.push('activo');
-    if (s && s.estado !== 'activo') clases.push('caido');
+    if (s?.estado === 'huido') clases.push('huido');
+    else if (s && s.estado !== 'activo') clases.push('caido');
     else if (s?.aLaDefensiva) clases.push('defensiva');
-    return crear('span', { className: clases.join(' '), title: `${l.ficha.nombre}: ${s?.pv ?? l.pv}/${l.ficha.pv} PV` },
+    return crear('span', { className: clases.join(' '), title: textoEstado(l.ficha.nombre, l.ficha.pv, s, l.pv) },
       crear('span', { className: `marca ${l.equipo.toLowerCase()}` }), ` ${l.ficha.nombre}`,
       crear('small', {}, ` ${Math.max(0, s?.pv ?? l.pv)}`));
   }));
@@ -749,6 +781,20 @@ function irA(k: number) {
       ...(quien ? [' · Turno de ', crear('span', { className: `marca ${quien.equipo.toLowerCase()}` }), ` ${quien.ficha.nombre}`] : [])),
     crear('span', { className: 'cartel-linea' }, ...resaltarTiradas(texto)));
   $('posicion').textContent = `${k + 1} / ${registro.length}`;
+}
+
+const NOMBRE_ESTADO_FINAL: Record<FotoLuchador['estado'], string> = {
+  activo: '', caido: 'caído', inconsciente: 'inconsciente', muerto: 'muerto', huido: 'huyó',
+};
+
+/** Lo que se sabe de un luchador en una línea: PV, cómo terminó, sus estados, Ki y zeon. */
+function textoEstado(nombre: string, pvMax: number, s: FotoLuchador | undefined, pv: number): string {
+  const partes = [`${nombre}: ${s?.pv ?? pv}/${pvMax} PV`];
+  if (s && s.estado !== 'activo') partes.push(NOMBRE_ESTADO_FINAL[s.estado]);
+  if (s?.marcas) partes.push(...s.marcas);
+  if (s?.ki !== undefined) partes.push(`Ki ${s.ki}`);
+  if (s?.zeon !== undefined) partes.push(`zeon ${s.zeon}`);
+  return partes.join(' · ');
 }
 
 function reproducir(si: boolean) {
@@ -873,7 +919,8 @@ function leerOpciones(): OpcionesGuardadas {
     oscuridad: $<HTMLSelectElement>('oscuridad').value,
     faseLunar: $<HTMLSelectElement>('faseLunar').value,
     cuerdas: $<HTMLSelectElement>('cuerdas').value,
-    casillas: Object.fromEntries(CASILLAS.map((id) => [id, marcado(id)])),
+    sinManiobras: $<HTMLSelectElement>('sinManiobras').value,
+    casillas: Object.fromEntries(CASILLAS.map(({ id }) => [id, marcado(id)])),
   };
 }
 
@@ -884,7 +931,8 @@ function mostrarOpciones(o: OpcionesGuardadas) {
   $<HTMLSelectElement>('oscuridad').value = o.oscuridad;
   $<HTMLSelectElement>('faseLunar').value = o.faseLunar;
   $<HTMLSelectElement>('cuerdas').value = o.cuerdas ?? '';
-  for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o.casillas[id];
+  $<HTMLSelectElement>('sinManiobras').value = o.sinManiobras ?? '';
+  for (const { id } of CASILLAS) ($(id) as HTMLInputElement).checked = !!o.casillas[id];
 }
 
 const dialogo = $<HTMLDialogElement>('dialogoSimular');
