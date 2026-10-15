@@ -55,6 +55,7 @@ function referencia(col: number, fila: number): string {
 }
 
 function decodificarXml(texto: string): string {
+  if (!texto.includes('&')) return texto;
   return texto
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
@@ -63,8 +64,12 @@ function decodificarXml(texto: string): string {
 }
 
 /** Atributo de una etiqueta XML, ignorando el prefijo de espacio de nombres. */
+const patronesAtributo = new Map<string, RegExp>();
+
 function atributo(attrs: string, nombre: string): string | undefined {
-  const m = new RegExp(`(?:^|\\s)(?:\\w+:)?${nombre}="([^"]*)"`).exec(attrs);
+  let re = patronesAtributo.get(nombre);
+  if (!re) patronesAtributo.set(nombre, (re = new RegExp(`(?:^|\\s)(?:\\w+:)?${nombre}="([^"]*)"`)));
+  const m = re.exec(attrs);
   return m ? decodificarXml(m[1]) : undefined;
 }
 

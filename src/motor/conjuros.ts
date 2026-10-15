@@ -341,10 +341,18 @@ export function conocidos(m: MagiaFicha): EntradaGrimorio[] {
     libres.has(clave(e.nombre)) || (e.via !== 'libre acceso' && (nivel.get(e.via) ?? 0) >= e.nivel));
 }
 
+// Una ficha se usa en miles de combates: sus conjuros se buscan una vez.
+const deFicha = new WeakMap<MagiaFicha, readonly Conjuro[]>();
+
 /** Los conjuros que conoce y el simulador sabe usar en combate. */
 export function conjurosDe(m: MagiaFicha): Conjuro[] {
-  const sabe = new Set(conocidos(m).map((e) => clave(e.nombre)));
-  return CATALOGO.filter((c) => sabe.has(clave(c.nombre)));
+  let res = deFicha.get(m);
+  if (!res) {
+    const sabe = new Set(conocidos(m).map((e) => clave(e.nombre)));
+    res = CATALOGO.filter((c) => sabe.has(clave(c.nombre)));
+    deFicha.set(m, res);
+  }
+  return [...res];
 }
 
 /** Los que conoce pero el simulador todavía no usa (falta catalogar qué hacen en combate). */
@@ -358,8 +366,18 @@ export function sinSimular(m: MagiaFicha): EntradaGrimorio[] {
  * Inteligencia para ese conjuro (Arcana p.30).
  */
 export function gradosPosibles(c: Conjuro, inteligencia: number, m?: MagiaFicha): number[] {
-  const int = inteligencia + (m?.especialista?.some((x) => normalizarRasgo(x) === normalizarRasgo(c.nombre)) ? 1 : 0);
+  const int = inteligencia + (esEspecialista(c, m) ? 1 : 0);
   const res: number[] = [];
-  c.grados.forEach((g, i) => { if (g.int <= int) res.push(i); });
+  for (let i = 0; i < c.grados.length; i++) if (c.grados[i].int <= int) res.push(i);
   return res;
+}
+
+const especialidades = new WeakMap<MagiaFicha, ReadonlySet<string>>();
+
+/** Es su Conjuro Especialista (Arcana p.30). */
+export function esEspecialista(c: Conjuro, m?: MagiaFicha): boolean {
+  if (!m?.especialista?.length) return false;
+  let s = especialidades.get(m);
+  if (!s) especialidades.set(m, (s = new Set(m.especialista.map(clave))));
+  return s.has(clave(c.nombre));
 }

@@ -88,6 +88,10 @@ const PASOS: [number, number, number][] = [
   [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
   [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
 ];
+// Los mismos pasos en arreglos planos, para el bucle de Dijkstra.
+const PASO_X = Int8Array.from(PASOS, (p) => p[0]);
+const PASO_Y = Int8Array.from(PASOS, (p) => p[1]);
+const PASO_M = Float64Array.from(PASOS, (p) => p[2]);
 
 /** Cola de prioridad (montículo binario) sobre arreglos tipados, reutilizable. */
 class Monticulo {
@@ -174,14 +178,14 @@ function dijkstra(
     if (parar && parar(i)) return i;
     const x = i % ancho, y = (i - x) / ancho;
     for (let k = 0; k < 8; k++) {
-      const dx = PASOS[k][0], dy = PASOS[k][1];
+      const dx = PASO_X[k], dy = PASO_Y[k];
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= ancho || ny >= alto) continue;
       const j = ny * ancho + nx;
       if (muro[j] || (bloqueada && bloqueada[j])) continue;
       // Sin cortar esquinas de paredes en diagonal (el borde de un abismo sí se puede rodear).
       if (dx && dy && (pared[y * ancho + nx] || pared[ny * ancho + x])) continue;
-      const nd = d + PASOS[k][2];
+      const nd = d + PASO_M[k];
       if (nd < dist[j] && nd <= tope) {
         dist[j] = nd;
         // Se encola el valor ya guardado en 32 bits: si no, al sacarlo parecería mayor y se descartaría.

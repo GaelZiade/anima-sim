@@ -7,13 +7,23 @@ import type { ArmaDistancia, Ficha } from './modelo';
 import { MAX_CANSANCIO_ASALTO, umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
 
+// Los textos que se normalizan son nombres de fichas y catálogos: pocos y repetidos en cada decisión.
+// Se recuerdan (con un tope, por si alguien normaliza texto libre en un bucle).
+const normalizados = new Map<string, string>();
+
 /** Minúsculas, sin acentos ni espacios repetidos (`CombatData.normalizeTrait`). */
 export function normalizarRasgo(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let n = normalizados.get(texto);
+  if (n === undefined) {
+    n = texto
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (normalizados.size > 20000) normalizados.clear();
+    normalizados.set(texto, n);
+  }
+  return n;
 }
 
 /** Algún nombre de la lista contiene `texto` (`CombatData.hasTrait`). */

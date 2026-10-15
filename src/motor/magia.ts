@@ -2,7 +2,7 @@
 // queda activo de ellos (escudo y armadura mágicos).
 
 import type { Luchador } from './modelo';
-import { conjurosDe, gradosPosibles, type BonoMagico, type Conjuro, type Grado } from './conjuros';
+import { conjurosDe, esEspecialista, gradosPosibles, type BonoMagico, type Conjuro, type Grado } from './conjuros';
 import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
@@ -129,7 +129,7 @@ export function maximoInnato(act: number): number {
 /** Su ACT este asalto preparando ese conjuro: +10 si es su Conjuro Especialista (Arcana p.30). */
 export function actPara(l: Luchador, c?: Conjuro | null): number {
   const m = l.ficha.magia!;
-  return m.act + (c && m.especialista?.some((x) => normalizarRasgo(x) === normalizarRasgo(c.nombre)) ? 10 : 0);
+  return m.act + (c && esEspecialista(c, m) ? 10 : 0);
 }
 
 /** Zeon libre de la reserva: lo que no está acumulado ni en un conjuro preparado. */

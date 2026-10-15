@@ -340,20 +340,31 @@ function tamanoArma(libro: Libro, b: string): 'P' | 'M' | 'G' | null {
 
 /** Columna Tamaño de la "Tabla de Armas y Escudos" de la hoja Tablas: 0 P, 1 M, 2 G. */
 function tamanoArmaBase(libro: Libro, nombre: string): number | null {
-  if (!nombre || !libro.tieneHoja('Tablas')) return null;
+  if (!nombre) return null;
+  return tablaDeTamanos(libro).get(nombre.toLowerCase()) ?? null;
+}
+
+// La tabla se lee una vez por planilla (cada arma la consultaba entera).
+const tamanosPorLibro = new WeakMap<Libro, Map<string, number | null>>();
+
+function tablaDeTamanos(libro: Libro): Map<string, number | null> {
+  let tabla = tamanosPorLibro.get(libro);
+  if (tabla) return tabla;
+  tabla = new Map();
+  tamanosPorLibro.set(libro, tabla);
+  if (!libro.tieneHoja('Tablas')) return tabla;
   const titulo = libro.buscarFila('Tablas', 'X', 'Tama', 600, 700);
-  if (titulo === null) return null;
-  const buscado = nombre.toLowerCase();
+  if (titulo === null) return tabla;
   for (let fila = titulo + 1; fila <= titulo + 500; fila++) {
     const arma = libro.celda('Tablas', `D${fila}`);
-    if (arma === undefined || quitarAcentos(arma).trim().toLowerCase() !== buscado) continue;
+    if (arma === undefined) continue;
+    const clave = quitarAcentos(arma).trim().toLowerCase();
+    // La primera fila con ese nombre es la que vale.
+    if (tabla.has(clave)) continue;
     const t = quitarAcentos(libro.celda('Tablas', `X${fila}`) ?? '').toLowerCase();
-    if (t.startsWith('peque')) return 0;
-    if (t.startsWith('median')) return 1;
-    if (t.startsWith('grande')) return 2;
-    return null;
+    tabla.set(clave, t.startsWith('peque') ? 0 : t.startsWith('median') ? 1 : t.startsWith('grande') ? 2 : null);
   }
-  return null;
+  return tabla;
 }
 
 function desarmado(libro: Libro): ArmaJson {
