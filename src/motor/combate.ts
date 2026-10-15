@@ -1213,6 +1213,32 @@ function liberarAmenazados(ctx: Contexto, l: Luchador) {
   for (const x of ctx.luchadores) if (x.amenazadoPor === l) x.amenazadoPor = null;
 }
 
+/** Un escudo sobrenatural que recibe golpes (de energía del Ki, mágico; mañana, psíquico). */
+interface EscudoSobrenatural {
+  /** Cómo se lo nombra en el registro ("el escudo de energía de X", "Escudo de Luz de X"). */
+  nombre: string;
+  resistencia: number;
+  quedan(resistencia: number): void;
+  romper(): void;
+}
+
+/**
+ * El escudo detiene un golpe y recibe su daño (Core p.100): si aguanta, pierde esa resistencia; si no,
+ * se rompe y el resto pasa sin defensa. Devuelve el daño base que pasa, o −1 si aguantó.
+ */
+function escudoRecibe(ctx: Contexto, golpe: number, ataqueTotal: number, esc: EscudoSobrenatural): number {
+  if (golpe < esc.resistencia) {
+    const quedan = esc.resistencia - golpe;
+    esc.quedan(quedan);
+    log(ctx, () => `  ${esc.nombre[0].toUpperCase()}${esc.nombre.slice(1)} aguanta (le quedan ${quedan}).`);
+    return -1;
+  }
+  const pasa = golpe - esc.resistencia;
+  esc.romper();
+  log(ctx, () => `  ¡El golpe rompe ${esc.nombre}! Pasa con daño ${pasa} → ${ataqueTotal}.`);
+  return pasa;
+}
+
 function resolverDefensa(
   ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
@@ -1322,15 +1348,11 @@ function resolverDefensa(
   if (resultado <= 0 && quienDefiende.escudoKi > 0 && !quienDefiende.ficha.acumulacion) {
     const golpe = danoAEscudo(atk, quienDefiende, o.esContra, o.ranura, o.ki, o.tipo);
     if (golpe >= 40) {
-      if (golpe < quienDefiende.escudoKi) {
-        quienDefiende.escudoKi -= golpe;
-        log(ctx, () => `  El escudo de energía de ${quienDefiende.ficha.nombre} aguanta (le quedan ${quienDefiende.escudoKi}).`);
-      } else {
-        baseTrasEscudo = golpe - quienDefiende.escudoKi;
-        quienDefiende.escudoKi = 0;
-        resultado = habAtk + tA.valor;
-        log(ctx, () => `  ¡El golpe rompe el escudo de energía de ${quienDefiende.ficha.nombre}! Pasa con daño ${baseTrasEscudo} → ${resultado}.`);
-      }
+      baseTrasEscudo = escudoRecibe(ctx, golpe, habAtk + tA.valor, {
+        nombre: `el escudo de energía de ${quienDefiende.ficha.nombre}`, resistencia: quienDefiende.escudoKi,
+        quedan: (r) => { quienDefiende.escudoKi = r; }, romper: () => { quienDefiende.escudoKi = 0; },
+      });
+      if (baseTrasEscudo >= 0) resultado = habAtk + tA.valor;
     }
   }
 
@@ -1341,16 +1363,11 @@ function resolverDefensa(
     const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
     const sobrenatural = atk.cap.danaEnergia || !!o.ki?.danaEnergia || !!o.ki?.sobrenatural || tipoG === 'ENE';
     if (!esc.conjuro.escudoSoloSobrenatural || sobrenatural) {
-      const golpe = danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo);
-      if (golpe < esc.resistencia) {
-        esc.resistencia -= golpe;
-        log(ctx, () => `  ${esc.conjuro.nombre} de ${def.ficha.nombre} aguanta (le quedan ${esc.resistencia}).`);
-      } else {
-        baseTrasEscudo = golpe - esc.resistencia;
-        romperEscudo(def);
-        resultado = habAtk + tA.valor;
-        log(ctx, () => `  ¡El golpe rompe ${esc.conjuro.nombre} de ${def.ficha.nombre}! Pasa con daño ${baseTrasEscudo} → ${resultado}.`);
-      }
+      baseTrasEscudo = escudoRecibe(ctx, danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo), habAtk + tA.valor, {
+        nombre: `${esc.conjuro.nombre} de ${def.ficha.nombre}`, resistencia: esc.resistencia,
+        quedan: (r) => { esc.resistencia = r; }, romper: () => romperEscudo(def),
+      });
+      if (baseTrasEscudo >= 0) resultado = habAtk + tA.valor;
     }
   }
 
