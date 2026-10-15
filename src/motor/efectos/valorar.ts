@@ -13,7 +13,7 @@ import { fallaResistencia, tabla } from '../probabilidades';
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, cacheDeDecision, conCambio, enemigos, lambda, pierdeElAsalto, riesgoContra, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, cacheDeDecision, conCambio, enemigos, lambda, pierdeElAsalto, riesgoContra, valorDejarFuera, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 import { blancosConjuro, radioArea } from './comun';
 
@@ -82,7 +82,7 @@ export function valorCriticoFijo(atk: Luchador, def: Luchador, nivel: number): n
     suma += (f * (1 - fuera)) / 100;
   }
   const negativo = pNeg > 0 ? suma / pNeg : 0;
-  return pFuera * (Math.max(0, def.pv) + 2 * amenaza(def, atk)) + pNeg * valorNegativo(atk, def, def.cap.mitadDolorCritico ? negativo * 0.6 : negativo, 0, 0);
+  return pFuera * valorDejarFuera(atk, def) + pNeg * valorNegativo(atk, def, def.cap.mitadDolorCritico ? negativo * 0.6 : negativo, 0, 0);
 }
 
 /** PV que perdería en llamas desde ese nivel de la Tabla 76 en los próximos asaltos, sin apagarse. */

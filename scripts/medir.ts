@@ -22,6 +22,8 @@ const enfrentamientos: [string, Ficha[], Ficha[]][] = [
   ['Kaito vs Teseo', [kaito], [teseo]],
   ['Kael vs Teseo', [kael], [teseo]],
   ['Kiran vs 8 soldados', [kiran], copias(abel.soldado, 8)],
+  // La moneda del puntaje (DISENO.md): rematar de a uno o frenar a varios con el área.
+  ['Kiran vs 12 élites', [kiran], copias(abel.elite, 12)],
   ['Stéphan+Kael+Kaito vs Teseo+Kiran+4', [stephan, kael, kaito], [teseo, kiran, ...copias(abel.soldado, 4)]],
 ];
 

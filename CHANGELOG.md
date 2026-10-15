@@ -17,7 +17,10 @@ retomar el trabajo, empezar por README.md.
 - **Reglas que faltaban** (AUDITORIA.md, correcciones 48 a 56): Debilidad, parada sin armas con
   armadura, armas con regla Presa, Maniobra Especial por rival, Inutilizar a la pantorrilla, Dumah y
   Kung Fu (tablas, bono al turno), Enuth arcano, Velez arcano y Ojos de la Muerte.
-- **IA:** cada hipótesis corre con su propia memoria.
+- **IA:** cada hipótesis corre con su propia memoria. Se probó unificar la moneda del puntaje y se
+  descartó porque empeora la IA (DISENO.md); "dejarlo fuera" en un solo lugar; la Debilidad ya no se
+  valora como sacarlo del combate. `npm run medir` suma Kiran contra 12 élites.
+- **Decidido:** la Tabla 25 queda como está.
 - **Medición** (500): sin cambios fuera del ruido.
 
 ## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)

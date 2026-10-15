@@ -10,7 +10,7 @@ import { mejorCaracteristica, pGanaControl } from '../maniobras';
 import type { Contexto, Luchador } from '../modelo';
 import { tabla } from '../probabilidades';
 import { umbralPifia } from '../reglas';
-import { amenaza, enemigos, lambda, valorNegativo } from '../ia';
+import { amenaza, enemigos, lambda, valorDejarFuera, valorNegativo } from '../ia';
 import { ataqueMagico, pronostico } from '../calculos';
 import type { ManejadorEfecto, Motor } from './tipos';
 import { aLaVista, ASALTOS_EFECTO, defensaContraConjuro, fallaResistencia, precioZeon, resistencias } from './valorar';
@@ -189,7 +189,7 @@ export const naturaleza: ManejadorEfecto = {
     for (const x of enemigos(ctx, l)) {
       if (distancia(l, x) > (g.radio ?? 0) || !x.ficha.naturaleza?.includes(g.naturaleza ?? '')) continue;
       const f = fallaResistencia(resistencias(x).rm, g.rm ?? 0);
-      v += f.p * (g.contraNaturaleza === 'domina' ? Math.max(0, x.pv) + 2 * amenaza(x, l) : Math.min(Math.max(0, x.pv), (x.ficha.acumulacion ? 20 : 2) * f.fracaso) * 2);
+      v += f.p * (g.contraNaturaleza === 'domina' ? valorDejarFuera(l, x) : Math.min(Math.max(0, x.pv), (x.ficha.acumulacion ? 20 : 2) * f.fracaso) * 2);
     }
     const suyos = ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x) && distancia(l, x) <= (g.radio ?? 0));
     if (v > 0) probar({ conjuro: c, grado: i, objetivo: null, blancos: suyos }, v);

@@ -196,6 +196,14 @@ export function amenaza(e: Luchador, l: Luchador): number {
   return (b.amen ??= calcularAmenaza(e, l, b));
 }
 
+/**
+ * Lo que vale para `atk` dejar a `def` fuera de combate: los PV que le quedarían (después de
+ * `danoPrevio`) más su amenaza de dos asaltos. Una sola cuenta para golpes, críticos, estados y conjuros.
+ */
+export function valorDejarFuera(atk: Luchador, def: Luchador, danoPrevio = 0): number {
+  return Math.max(0, def.pv - danoPrevio) + 2 * amenaza(def, atk);
+}
+
 function calcularAmenaza(e: Luchador, l: Luchador, b: Base): number {
   let otros = 0;
   for (const x of quienesLlegan(l)) if (x !== e) otros++;
@@ -242,7 +250,7 @@ function valorCritico(
   });
   // Quien reduce el dolor de los críticos (Inmunidad, Eliminación) sufre más o menos la mitad.
   const negativo = def.cap.mitadDolorCritico ? ef.negativo * 0.6 : ef.negativo;
-  const fuera = Math.max(0, def.pv - danoPrevio) + 2 * amenaza(def, atk);
+  const fuera = valorDejarFuera(atk, def, danoPrevio);
   return pCritica * (ef.pFuera * fuera + ef.pNegativo * valorNegativo(atk, def, negativo, golpes, danoPrevio));
 }
 
@@ -1334,7 +1342,7 @@ function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golp
   const { p, fracaso: medio } = fallaResistencia(rfDe(def) + (animo ? frialdadDe(def) : 0), est.rf);
   if (!p) return 0;
   const pv = Math.max(0, def.pv);
-  const fuera = pv + 2 * amenaza(def, atk);
+  const fuera = valorDejarFuera(atk, def);
   switch (est.estado) {
     case 'dano': return p * Math.min(medio, pv);
     case 'dobleDano': return p * Math.min(2 * medio, pv);
@@ -1351,6 +1359,8 @@ function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golp
     case 'reduccionRf': return p * medio * 0.1;
     case 'reduccionCaracteristica': return p * Math.floor(medio / 10) * 0.1 * amenaza(def, atk);
     case 'reduccionCaracteristicas': return p * Math.floor(medio / 10) * 0.3 * amenaza(def, atk);
+    // −1 a las cuatro físicas cada 10: cerca de −5 a lo que hace con cada una, todo el combate.
+    case 'debilidad': return p * valorNegativo(atk, def, 5 * Math.floor(medio / 10), golpes, 0) * 2;
     case 'ilusion': return 0;
     // Paralización total, inconsciencia, coma, muerte, control y terror: lo sacan de la pelea.
     default: return p * fuera;

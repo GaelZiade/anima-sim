@@ -7,7 +7,7 @@ import type { Golpe } from '../golpe';
 import { dejarDeMantener, estadoLlamas, golpeDeConjuro, mantenidoCon, RANURA_MAGIA, type Mantenido } from '../magia';
 import type { Conjuro, Grado } from '../conjuros';
 import type { Contexto, Luchador } from '../modelo';
-import { amenaza, enemigos, lambda } from '../ia';
+import { enemigos, lambda, valorDejarFuera } from '../ia';
 import { danoEsperado, enAlcance, faltaParaLlegar, metrosTotales } from '../calculos';
 import { ZEON_CONTROL_DEL_ESPACIO } from '../magia';
 import type { ManejadorEfecto, Motor } from './tipos';
@@ -232,7 +232,7 @@ export const controlFuego: ManejadorEfecto = {
       if (!activo(obj) || !aLaVista(ctx, l, obj, alcance)) continue;
       if (obj.equipo !== l.equipo && obj.ficha.naturaleza?.includes('fuego')) {
         const p = fallaResistencia(resistencias(obj).rm, g.rm ?? 0).p;
-        probar({ conjuro: c, grado: i, objetivo: obj }, p * (Math.max(0, obj.pv) + 2 * amenaza(obj, l)));
+        probar({ conjuro: c, grado: i, objetivo: obj }, p * valorDejarFuera(l, obj));
       } else if (obj.llamas) {
         const n = 20 * (g.intensidades ?? 0);
         const cambio = obj.equipo === l.equipo

@@ -21,7 +21,7 @@ import type { Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { ModKi } from './ki';
 import { atributo, bonoCaracteristica } from './maniobras';
-import { alcanzable, amenaza, enemigos, lambda, nuevaDecision, perfil, trabadoConAlguien, valorGolpe, valorNegativo, conCambio,
+import { alcanzable, enemigos, lambda, nuevaDecision, perfil, trabadoConAlguien, valorDejarFuera, valorGolpe, valorNegativo, conCambio,
 } from './ia';
 
 
@@ -290,7 +290,7 @@ export function aumentarCritico(ctx: Contexto, atk: Luchador, def: Luchador, bas
   const rf = rfCritico(def);
   const valor = (b: number) => {
     const ef = efectoCritico(b, rf, null, { sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion });
-    return ef.pFuera * (Math.max(0, def.pv) + 2 * amenaza(def, atk)) + ef.pNegativo * valorNegativo(atk, def, ef.negativo, 0, 0);
+    return ef.pFuera * valorDejarFuera(atk, def) + ef.pNegativo * valorNegativo(atk, def, ef.negativo, 0, 0);
   };
   const sin = valor(base);
   let mejor: { conjuro: Conjuro; grado: number } | null = null;

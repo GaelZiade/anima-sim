@@ -61,8 +61,9 @@ arcano (Poder en los controles), Enuth arcano contra la acumulación y la Maniob
 a ganar un combate; Ojos de la Muerte ignora la Barrera de Daño de los *objetos* (Dominus p.78), no
 la de las criaturas.
 
-**Pendiente de decisión:** la Tabla 25 da la velocidad "una vez que ya se encuentra en movimiento"
-(Core p.62) sin decir cuánto avanza quien arranca de parado; hoy corre a tope desde el primer asalto.
+**Decidido por el usuario (15/10/2026):** la Tabla 25 da la velocidad "una vez que ya se encuentra en
+movimiento" (Core p.62) sin decir cuánto avanza quien arranca de parado: queda como está, corre a
+tope desde el primer asalto (el manual no da otra cifra).
 
 ## 4. Verificado correcto
 
@@ -264,4 +265,9 @@ En el escenario más lento no hay un cuello de botella: el perfil se reparte (Di
 
 **IA, hipótesis:** `conCambio` aparta la memoria de la decisión mientras prueba un cambio y la
 recupera al deshacerlo; ninguna hipótesis puede leer valores del estado real (huella idéntica).
+
+**Valoración de la IA:** un bug propio de esta tanda: la Debilidad, agregada al registro de estados,
+se valoraba en `valorEstado` como si sacara al rival del combate (caía en el caso por defecto); ahora
+vale el negativo que deja. "Dejarlo fuera de combate" se cuenta en un solo lugar (`valorDejarFuera`),
+que antes estaba copiado en cinco archivos.
 

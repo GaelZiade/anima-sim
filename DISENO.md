@@ -83,12 +83,20 @@ negativo = lo que deja de pegar (este asalto si no actuó, el próximo si sigue 
 - `sinManiobras` en las opciones del escenario: `'A'` o `'B'` le quita las maniobras a un equipo
   (para medir cuánto le aportan, el rival no tiene que cambiar), `true` a los dos.
 
-### Pendiente: la moneda del puntaje
+### La moneda del puntaje (probado el 15/10/2026)
 
-Dejar a un enemigo fuera de combate se valora como sus PV restantes; frenar su ataque, como el daño
-que iba a hacer. Son escalas distintas: un enemigo con muchos PV que casi no lastima vale mucho más
-muerto que frenado. Contra 12 soldados de élite, Kiran remata de a uno (gana 41%) cuando frenar a
-varios con el área rinde más (forzando el área gana 54%).
+Dejar a un enemigo fuera de combate se valora con sus PV restantes más dos asaltos de su amenaza
+(`valorDejarFuera`); frenar su ataque, con el daño que iba a hacer. Son escalas distintas, y se
+probó unificarlas: cada PV de un luchador valía su amenaza de los próximos `H` asaltos repartida
+entre sus PV, para el daño que se hace y el que se recibe. **Empeoró la IA** (300 combates, H = 2, 4
+y 8): Teseo contra 10 oficiales bajó de 49% a 16-22%, Stéphan contra Teseo de 90% a 9-19%, y Kiran
+contra 12 élites apenas cambió (80% a 76-83%). La amenaza que mide la IA es física: un mago queda con
+sus PV casi sin valor y deja de cuidarse, y quien tiene mucha vida y pega poco queda subvalorado
+como blanco. Se volvió a la escala de siempre.
+
+El síntoma que lo motivaba ya no está: Kiran contra 12 élites gana 80% (era 41% cuando se anotó; la
+IA mejoró desde entonces). Queda en `npm run medir` para vigilarlo. Si se retoma, el primer paso es
+una amenaza que cuente la magia y el Ki, no sólo el golpe físico.
 
 ### Reglas de la IA que salieron de probar
 

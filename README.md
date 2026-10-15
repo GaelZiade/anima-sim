@@ -156,14 +156,14 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
    extiende sin romper"). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
    confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
    (`sinSimular` dice qué falta).
-2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
-   acción activa sólo cuando conviene.
-3. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
-   desde parado; falta decidir cuánto se avanza al arrancar); Erudición del Ki (localizar sin ver)
+2. **IA:** una amenaza que cuente la magia y el Ki (hoy sólo el golpe físico; ver DISENO.md, "La
+   moneda del puntaje", donde se probó y se descartó unificar la escala); moverse con acción activa
+   sólo cuando conviene.
+3. Detalles abiertos: Erudición del Ki (localizar sin ver)
    supone la tirada; lo que no se simula del Ki y de los proyectiles (DISENO.md). Las reglas que
    faltaban de AUDITORIA.md sección 3 están todas.
 
-**Decisiones del usuario que conviene no reabrir:** el combate desarmado es Precisa y apunta a la
+**Decisiones del usuario que conviene no reabrir:** la Tabla 25 se corre a tope desde parado; el combate desarmado es Precisa y apunta a la
 cabeza con −30 (Core p.76-77); Defensa adicional de Ki = +N defensas libres; técnicas en espera se
 pagan por asalto; el Ki sobrante vale en el mismo asalto y vuelve al terminarlo; un área de Ki no se
 intercepta. El resto, en DISENO.md y AUDITORIA.md.
