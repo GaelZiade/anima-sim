@@ -724,19 +724,28 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
     (!!def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque, o.ki ?? atk.ki?.activo));
   // Un área sobrenatural contra un ser con acumulación: el doble de daño (Core p.99).
   if (areaDoblaDano(atk, def, m, o.area, o.ki)) base *= 2;
-  return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
+  // Porcentaje desde el que critica, como `aplicarDano` (combate.ts): Ojos de la Muerte y el crítico
+  // automático de Ki critican en cuanto dañan (Dominus p.78, p.71); un punto vulnerable con 1/10 de
+  // los PV (Core p.97), y con Ojos todo el cuerpo de un ser con acumulación lo es; si no, la mitad.
+  const ojos = atk.cap.est.criticoAutomatico || !!o.ki?.criticoAuto;
+  const acumula = !!def.ficha.acumulacion;
+  const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
+  // Critica con el daño pleno: el de Inutilizar e Inconsciencia antes de reducirlo a la mitad.
+  const pleno = base / (o.factorDano || 1);
+  const pctCritico = ojos && !acumula ? 10 : porcentajePara(vulnerable ? def.pv / 10 : def.pv / 2, pleno);
+  return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo, pctCritico };
 }
 
 /** Pronóstico de un ataque a partir de las habilidades finales (sin dados). */
 export function pronostico(
   atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico = {},
 ): Pronostico {
-  return pronosticoDesde(preparar(atk, def, habAtaque, habDefensa, o), def, habAtaque - habDefensa, !!o.ki?.criticoAuto);
+  return pronosticoDesde(preparar(atk, def, habAtaque, habDefensa, o), def, habAtaque - habDefensa);
 }
 
 /** `pronostico` a partir de una preparación ya hecha (`preparacionCon`) y la ventaja `s`. */
-export function pronosticoDesde(p: Preparacion, def: Luchador, s: number, criticoAuto: boolean): Pronostico {
-  const { t, abs, absDano, base, nulo } = p;
+export function pronosticoDesde(p: Preparacion, def: Luchador, s: number): Pronostico {
+  const { t, abs, absDano, base, nulo, pctCritico } = p;
   const pContra = def.ficha.acumulacion ? 0 : t.pContra(s);
   return {
     dano: nulo ? 0 : (t.porcentajeEsperado(s, absDano) * base) / 100,
@@ -744,8 +753,7 @@ export function pronosticoDesde(p: Preparacion, def: Luchador, s: number, critic
     pContra,
     bonoContra: pContra > 0 ? t.bonoContraEsperado(s) / pContra : 0,
     pBaja: nulo ? 0 : def.pv > 0 ? t.pPorcentajeAlMenos(s, absDano, porcentajePara(def.pv, base)) : 1,
-    // Crítico automático (Ki): critica en cuanto daña (Dominus p.71).
-    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, criticoAuto ? 10 : porcentajePara(def.pv / 2, base)),
+    pCritico: nulo || def.pv <= 0 ? 0 : t.pPorcentajeAlMenos(s, absDano, pctCritico),
     pManiobra: t.pPorcentajeAlMenos(s, abs, 10),
   };
 }

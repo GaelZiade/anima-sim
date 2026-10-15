@@ -4,8 +4,8 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
-  absorcionContra, activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
-  danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
@@ -750,14 +750,13 @@ function mejorManiobra(
     if (!p) preps.set(clave, (p = preparacionCon(atk, def, { maniobra: m, esContra, tipo, ki, factorDano, ranura })));
     return p;
   };
-  const criticoAuto = !!ki?.criticoAuto;
   const valor = (m: Maniobra, tipo?: TipoAtaque, estadoMushin: EstadoMushin | null = null): number => {
     const hab = ki?.ataqueFijo || habDe(m, tipo, estadoMushin);
     // Daño reducido (desventaja): ese golpe hace la mitad o nada, pero sus efectos funcionan.
     const reducido = ki?.danoReducido ? 1 - ki.danoReducido : undefined;
-    const p = pronosticoDesde(prepDe(m, tipo, reducido), def, hab - habDef, criticoAuto);
+    const p = pronosticoDesde(prepDe(m, tipo, reducido), def, hab - habDef);
     // Inutilizar e Inconsciencia: la mitad de daño (y de chance de tumbarlo por PV); el crítico, pleno.
-    const real = esNoLetal(m) ? pronosticoDesde(prepDe(m, tipo, 0.5 * (reducido ?? 1)), def, hab - habDef, criticoAuto) : p;
+    const real = esNoLetal(m) ? pronosticoDesde(prepDe(m, tipo, 0.5 * (reducido ?? 1)), def, hab - habDef) : p;
     // Los ataques que no dañan (engatillar, puntos de presión) se valoran sólo por su efecto.
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
     const danoEste = sinDano ? 0 : real.dano;
@@ -771,23 +770,24 @@ function mejorManiobra(
       const s = hab - habDef;
       const pDana = prep.nulo ? 0 : prep.t.pPorcentajeAlMenos(s, prep.absDano, 10);
       const pContacto = prep.t.pPorcentajeAlMenos(s, absorcion(0), 10);
-      const pleno = reducido !== undefined ? pronosticoDesde(prep, def, s, criticoAuto) : p;
+      const pleno = reducido !== undefined ? pronosticoDesde(prep, def, s) : p;
       const danoPleno = pleno.pImpacto > 0 ? pleno.dano / pleno.pImpacto : 0;
       v += valorEfectosKi(atk, def, ki, p, golpesSiguientes, pDana, pContacto, danoPleno);
     }
 
-    // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
-    // cualquier otro golpe, con la mitad de los PV y en un lugar al azar.
+    // Crítico (cuándo critica lo decide `preparar`): un punto vulnerable pega donde apuntó (Core p.97);
+    // cualquier otro golpe, en un lugar al azar.
     const danoSiImpacta = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
-    const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
-    if (!sinDano && vulnerable) {
-      const t = tablaPara(atk, def);
-      const base = Math.max(1, danoBase(atk, def, esContra, ranura, ki));
-      const pct = Math.max(10, Math.ceil(def.pv / 10 / base * 10) * 10);
-      const pCrit = t.pPorcentajeAlMenos(hab - habDef, absorcionContra(def, atk, m, tipo, ranura, ki), pct);
-      v += valorCritico(atk, def, pCrit, Math.max(def.pv / 10, danoSiImpacta), localizacionApuntada(m), m, golpesSiguientes, danoEste, ki?.critico);
-    } else if (!sinDano) {
-      v += valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, m, golpesSiguientes, danoEste, ki?.critico);
+    if (!sinDano) {
+      const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
+      const minimo = vulnerable ? def.pv / 10 : def.pv / 2;
+      v += valorCritico(atk, def, p.pCritico, Math.max(minimo, danoSiImpacta), vulnerable ? localizacionApuntada(m) : null, m, golpesSiguientes, danoEste, ki?.critico);
+      // Enuth arcano: si daña sin criticar, igual obliga a un control de inconsciencia (Dominus p.43).
+      if (e.enuth >= 3) {
+        const pr = prepDe(m, tipo, reducido);
+        const pDana = pr.nulo ? 0 : pr.t.pPorcentajeAlMenos(hab - habDef, pr.absDano, 10);
+        v += valorCritico(atk, def, Math.max(0, pDana - p.pCritico), danoSiImpacta, null, 'inconsciencia', golpesSiguientes, danoEste);
+      }
     }
 
     if (m === 'derribo' || m === 'presa' || m === 'desarmar') {
