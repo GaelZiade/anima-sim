@@ -80,7 +80,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -695,7 +695,10 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const plan = ia.elegirManiobra(ctx, atk, def, a.esContra, bonoFinal, a.tecnica, ranuraProyectil);
   const m = plan.maniobra;
   atk.stats.maniobras[m] = (atk.stats.maniobras[m] ?? 0) + 1;
-  if (plan.especial) atk.maniobraEspecialUsada = true;
+  // La presencian el blanco y los rivales activos que ven al atacante (interpretación de "presenciado").
+  if (plan.especial)
+    for (const x of ctx.luchadores)
+      if (x === def || (x.equipo !== atk.equipo && activo(x) && visionEntre(ctx.luchadores, x, atk) !== 'bloqueada')) atk.maniobraEspecialVista.add(x);
   // Técnica de Ki: se declara antes de tirar y gasta lo concentrado (Core p.105). Sin técnica nueva
   // valen los efectos de Asalto activos y, una vez por asalto, los de Acción de una mantenida.
   let ki: ModKi | undefined;

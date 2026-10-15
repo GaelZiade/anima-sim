@@ -442,7 +442,8 @@ export interface Luchador {
   godhandListo: boolean;
   godhandPreparado: boolean;
   ataqueFinalUsado: boolean;
-  maniobraEspecialUsada: boolean;
+  /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.84). */
+  maniobraEspecialVista: Set<Luchador>;
   /** Kardad supremo: ya repitió este asalto un control fallado al defenderse (Dominus p.37). */
   repitioControl: boolean;
   /** Ars Magnus Samiel: puntos acumulados contra cada enemigo. */

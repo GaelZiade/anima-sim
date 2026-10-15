@@ -3,11 +3,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { puedeManiobraEspecial, absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { caracteristicasControl, penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
 import { umbralEstallido } from '../src/motor/proyectiles';
+import { roturaEnParada } from '../src/motor/rotura';
+import { crearRng } from '../src/motor/rng';
 import { SIN_KI } from '../src/motor/ki';
 import { actDe, hacerOtraAccion } from '../src/motor/magia';
 import { imponer } from '../src/motor/condiciones';
@@ -302,6 +304,33 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(caracteristicasControl('presa', latigo, def).atk).toBe(10);
     const espada = crearLuchador(ficha('Espadachín', {}, { atributos: { FUE: 9, DES: 5 } }), 'A', 0, 0);
     expect(penManiobra(espada, 'presa', false)).toBe(Infinity);
+  });
+
+  it('parar sin armas: una armadura dura de camisola o completa bloquea con su entereza (Core p.93)', () => {
+    const motor = { log() {}, limitePorDano() {}, verificarCaida() {} } as unknown as Motor;
+    const danoRecibido = (capasArmadura: CapaArmadura[]) => {
+      const atk = crearLuchador(ficha('A', {}, { arma: { nombre: 'Mandoble', rotura: 8 } }), 'A', 1, 0);
+      const def = crearLuchador(ficha('D', {}, { arma: { nombre: 'Desarmado', desarmado: true }, defensa: 100, atributos: { CON: 5, DES: 5 }, capasArmadura }), 'B', 0, 0);
+      const ctx = { rng: crearRng(3) } as unknown as Contexto;
+      for (let i = 0; i < 30; i++) roturaEnParada(motor, ctx, atk, def, { pen: 0, sinArmas: false }, true);
+      return def.ficha.pv - def.pv;
+    };
+    expect(danoRecibido([])).toBeGreaterThan(0);
+    expect(danoRecibido([{ nombre: 'Coraza', clase: 'dura', localizacion: 'completa', ta: {}, calidad: 0, entereza: 25 }])).toBe(0);
+    expect(danoRecibido([{ nombre: 'Peto', clase: 'dura', localizacion: 'peto', ta: {}, calidad: 0, entereza: 25 }])).toBeGreaterThan(0);
+  });
+
+  it('Maniobra Especial: deja de servir sólo contra quien ya la presenció o sufrió (Dominus p.84)', () => {
+    const atk = crearLuchador(ficha('A', { ventajas: [], artesMarciales: [] }), 'A', 0, 0);
+    atk.cap = { ...atk.cap, est: { ...atk.cap.est, maniobraEspecial: true } };
+    const b1 = crearLuchador(ficha('B1'), 'B', 1, 0);
+    const b2 = crearLuchador(ficha('B2'), 'B', 2, 0);
+    expect(puedeManiobraEspecial(atk, b1)).toBe(true);
+    atk.maniobraEspecialVista.add(b1);
+    expect(puedeManiobraEspecial(atk, b1)).toBe(false);
+    expect(puedeManiobraEspecial(atk, b2)).toBe(true);
+    const experto = crearLuchador(ficha('E', {}, { defensa: 210 }), 'B', 3, 0);
+    expect(puedeManiobraEspecial(atk, experto)).toBe(false);
   });
 });
 

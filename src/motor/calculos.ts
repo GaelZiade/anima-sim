@@ -303,9 +303,12 @@ function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolea
   return (m === 'normal' || esApuntado(m)) && (atk.objetivoUnico === null || atk.objetivoUnico === def);
 }
 
-/** Puede usar la Maniobra Especial: sin usar, y el defensor no la supera por 60 de habilidad base. */
+/**
+ * Da su +20 contra `def` si `def` no la presenció ni sufrió y no la supera por 60 de habilidad base
+ * (Dominus p.84).
+ */
 export function puedeManiobraEspecial(atk: Luchador, def: Luchador): boolean {
-  return atk.cap.est.maniobraEspecial && !atk.maniobraEspecialUsada && def.ficha.defensa < atk.ficha.ataque + 60;
+  return atk.cap.est.maniobraEspecial && !atk.maniobraEspecialVista.has(def) && def.ficha.defensa < atk.ficha.ataque + 60;
 }
 
 export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}): number {

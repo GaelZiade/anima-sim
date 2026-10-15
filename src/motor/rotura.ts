@@ -2,7 +2,7 @@
 
 import type { Contexto, Luchador } from './modelo';
 import { dado } from './rng';
-import { capacidades, type Ranura } from './rasgos';
+import { capacidades, localizacionArmadura, type Ranura } from './rasgos';
 import { esMaestro } from './reglas';
 import { activo, capasDe, type ZonaArmadura } from './calculos';
 import { atributo } from './maniobras';
@@ -27,15 +27,20 @@ function controlRotura(ctx: Contexto, rotura: number, entereza: number): number 
 
 /**
  * Al parar: si las dos armas chocan, cada una puede romper a la otra. Si el defensor para sin armas
- * un arma, controla con su Constitución o Destreza y recibe 5 de daño por punto que falle, salvo
- * maestría en parada sin armas o Malla-yuddha avanzado (Core p.94, Dominus p.35).
+ * un arma, controla con su Constitución o Destreza (o la entereza de una armadura dura de camisola o
+ * completa) y recibe 5 de daño por punto que falle, salvo maestría en parada sin armas o Malla-yuddha
+ * avanzado (Core p.93, Dominus p.35).
  */
 export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, paro: boolean) {
   const atkArmado = !ranura.sinArmas && !atk.cap.desarmado;
   if (!atkArmado) return;
   if (def.cap.desarmado) {
     if (!paro || esMaestro(def.ficha.defensa) || def.cap.est.paradaSinArmasSegura) return;
-    const entereza = Math.max(atributo(def, 'CON'), atributo(def, 'DES')) + def.cap.est.enterezaSinArmas;
+    // Con una armadura dura de camisola o completa puede bloquear con ella, con su entereza (Core p.93).
+    const armadura = Math.max(0, ...(def.ficha.capasArmadura ?? [])
+      .filter((c) => c.clase === 'dura' && ['camisola', 'completa'].includes(c.localizacion ?? localizacionArmadura(c.nombre)))
+      .map((c) => c.entereza));
+    const entereza = Math.max(atributo(def, 'CON') + def.cap.est.enterezaSinArmas, atributo(def, 'DES') + def.cap.est.enterezaSinArmas, armadura);
     const falla = controlRotura(ctx, roturaDe(atk, ranura), entereza);
     if (falla > 0) {
       def.pv -= 5 * falla;
