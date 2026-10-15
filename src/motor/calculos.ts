@@ -128,9 +128,31 @@ export function umbralPifiaTurno(l: Luchador): number {
 export function turnoFinal(l: Luchador): number {
   // Quien pelea con magia usa el turno de las acciones desarmadas (Core p.117).
   const base = l.magia ? l.ficha.magia?.turno ?? l.ficha.sinArmas?.turno ?? l.ficha.turno : l.ficha.turno;
-  return base - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + bonoVariable(l, 'turno') + bonoOrochi(l) +
-    (l.ki?.activo.turno ?? 0) + (l.bono?.turno ?? 0) +
+  return base - Math.trunc(penAccion(l) / 2) + modEstados(l).turno + propioTurno(l) +
     (l.amenazadoPor ? AMENAZADO.turno : 0);
+}
+
+/*
+ * Modificadores propios: los que tiene el luchador sin importar contra quién ni con qué maniobra (modos
+ * de los estilos, bono variable, Orochi, Incrementar turno del Ki, beneficios sobrenaturales). Una fuente
+ * nueva de este tipo se suma acá y llega a las tres fórmulas (ataque, defensa, turno). Son números, sin
+ * armar objetos: están en el camino más caliente.
+ */
+
+/** Seraphite +20/+30 (arcano), Berserker +10, Ataque Final +20 (Dominus p.41, p.84, p.86), y lo demás propio. */
+export function propioAtaque(l: Luchador): number {
+  return (l.modo.seraphite === 3 ? 30 : l.modo.seraphite === 1 ? 20 : 0) + (l.modo.berserker ? 10 : 0) +
+    (l.modo.ataqueFinal ? 20 : 0) + bonoVariable(l, 'ataque') + bonoOrochi(l) + (l.bono?.ataque ?? 0) + (l.bono?.toda ?? 0);
+}
+
+/** Seraphite −30/−50 (arcano), Berserker −20, y lo demás propio. */
+export function propioDefensa(l: Luchador): number {
+  return -(l.modo.seraphite === 3 ? 50 : l.modo.seraphite === 1 ? 30 : 0) - (l.modo.berserker ? 20 : 0) +
+    bonoVariable(l, 'defensa') + bonoOrochi(l) + (l.bono?.toda ?? 0);
+}
+
+export function propioTurno(l: Luchador): number {
+  return bonoVariable(l, 'turno') + bonoOrochi(l) + (l.ki?.activo.turno ?? 0) + (l.bono?.turno ?? 0);
 }
 
 /**
@@ -320,9 +342,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (atk.previenePendiente.has(def) ? PEN_PREVER_SORPRESA : 0) +
     porCansancio * (o.cansancio ?? 0) + (o.bono ?? 0) +
     (o.esContra ? e.bonoContraataque : 0) +
-    (atk.modo.seraphite === 3 ? 30 : atk.modo.seraphite === 1 ? 20 : 0) +
-    (atk.modo.berserker ? 10 : 0) + (atk.modo.ataqueFinal ? 20 : 0) +
-    bonoVariable(atk, 'ataque') + bonoOrochi(atk) + (atk.bono ? (atk.bono.ataque ?? 0) + (atk.bono.toda ?? 0) : 0) +
+    propioAtaque(atk) +
     (aplicaXingQuan(atk, def, o) ? e.xingQuan : 0) +
     (atk.godhandListo && e.godhand ? e.godhand.ataque : 0) +
     (o.especial && puedeManiobraEspecial(atk, def) ? 20 : 0) + Math.min(150, o.samiel ?? 0) -
@@ -444,10 +464,9 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     ((def.ficha.tipoDefensa ?? 'parada') === 'parada' ? est.parada : est.esquiva) +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) -
     (def.previenePendiente.has(atk) ? PEN_PREVER_SORPRESA : 0) +
-    (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) -
-    (def.modo.seraphite === 3 ? 50 : def.modo.seraphite === 1 ? 30 : 0) -
-    (def.modo.berserker ? 20 : 0) + bonoVariable(def, 'defensa') + bonoOrochi(def) +
-    Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) + (def.bono?.toda ?? 0) +
+    (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) +
+    propioDefensa(def) +
+    Math.min(150, o.samiel ?? 0) + (ki ? (campo === 'parada' ? ki.parada : ki.esquiva) : 0) +
     // Amenazado: −120 a defenderse de quien lo amenaza (Tabla 43), salvo Hanja arcano (Dominus p.44).
     (def.amenazadoPor === atk && !e.defensaSinParalisis ? AMENAZADO.parada : 0);
   // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
