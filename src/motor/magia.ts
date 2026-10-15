@@ -2,11 +2,11 @@
 // queda activo de ellos (escudo y armadura mágicos).
 
 import type { Luchador } from './modelo';
-import { conjurosDe, esEspecialista, gradosPosibles, type BonoMagico, type Conjuro, type Grado } from './conjuros';
+import { conjurosDe, esEspecialista, gradosPosibles, type EfectoConjuro, type BonoMagico, type Conjuro, type Grado } from './conjuros';
 import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
-import { umbralPifia } from './reglas';
+import { umbralPifia, type TipoAtaque } from './reglas';
 import { SIN_KI, type ModKi } from './ki';
 import type { Ranura } from './rasgos';
 
@@ -287,7 +287,7 @@ export const ZEON_CONTROL_DEL_ESPACIO = 10;
  * quiénes (Arcana p.28).
  */
 export function deArea(c: Conjuro, g: Grado): boolean {
-  return !!g.area || (!!g.radio && (c.efecto === 'flash' || c.efecto === 'consumirEsencia'));
+  return !!g.area || (!!g.radio && !!c.radioOfensivo);
 }
 
 /** Lo que cuesta lanzarlo: su zeon, más 10 si usa Control del Espacio para elegir blancos. */
@@ -327,7 +327,7 @@ export function lanzar(l: Luchador, c: Conjuro, grado: number, extra: Omit<Mante
     e.lanzo = true;
   }
   // Un escudo nuevo reemplaza al que tenga, salvo la Barrera de Fuego, que sólo sirve de escudo si no hay otro.
-  if (g.resistencia && (c.efecto !== 'barrera' || !e.escudo)) e.escudo = { conjuro: c, grado, resistencia: g.resistencia };
+  if (g.resistencia && (!c.escudoSiNoHayOtro || !e.escudo)) e.escudo = { conjuro: c, grado, resistencia: g.resistencia };
   if (g.taEnergia !== undefined) e.armadura = { energia: g.taEnergia, resto: g.taResto ?? 0 };
   if (g.bono) for (const b of extra.blancos ?? []) bendecir(b, l, c, g.bono);
   if (g.mantenimiento || c.diario) e.mantenidos.push({ conjuro: c, grado, ...extra });
@@ -422,7 +422,20 @@ export function romperEscudo(l: Luchador) {
   e.mantenidos = e.mantenidos.filter((x) => x.conjuro !== c);
 }
 
-/** El conjuro con ese efecto que tiene activo (mantenido), si hay. */
+/** El conjuro con ese efecto que mantiene (Sacrificio Vital, una mina…), si hay. */
+export function mantenidoDe(l: Luchador, efecto: EfectoConjuro): Mantenido | undefined {
+  return l.magia?.mantenidos.find((x) => x.conjuro.efecto === efecto);
+}
+
+/** Su escudo mágico detiene ese tipo de ataque (la Barrera de Fuego, sólo algunos, Core p.157). */
+export function escudoDetiene(l: Luchador, tipo?: TipoAtaque): boolean {
+  const esc = l.magia?.escudo;
+  if (!esc) return false;
+  const contra = esc.conjuro.grados[esc.grado].escudoContra;
+  return !contra || (!!tipo && contra.includes(tipo));
+}
+
+/** Ese conjuro, si lo mantiene. */
 export function mantenidoCon(l: Luchador, c: Conjuro): Mantenido | undefined {
   return l.magia?.mantenidos.find((x) => x.conjuro === c);
 }

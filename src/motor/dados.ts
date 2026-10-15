@@ -57,3 +57,6 @@ export function textoTirada(habilidad: number, t: TiradaD100, valor = valorTirad
 export function tirarD100Cerrada(rng: Rng): number {
   return dado(rng, 100);
 }
+
+/** Un ataque automático o una habilidad fija: no se tira (resultado 0 de dado). */
+export const DADO_FIJO: TiradaD100 = { valor: 0, natural: 0, abiertas: 0, pifia: false, nivelPifia: 0 };

@@ -9,7 +9,7 @@ import { bonoFrialdad } from '../src/motor/reglas';
 import { CATALOGO, conjurosDe, conocidos, gradosPosibles, sinSimular } from '../src/motor/conjuros';
 import { GRIMORIO } from '../src/motor/grimorio';
 import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
-import { blancosConjuro } from '../src/motor/ia-magia';
+import { blancosConjuro } from '../src/motor/efectos';
 import { golpeDeConjuro } from '../src/motor/magia';
 
 const conjuro = (n: string) => CATALOGO.find((c) => c.nombre === n)!;
@@ -318,3 +318,19 @@ describe('parte 3: el resto de los conjuros de Stéphan', () => {
   });
 });
 
+
+describe('registro de efectos', () => {
+  it('cada conjuro del catálogo tiene su manejador, y los que la IA lanza sola se pueden valorar', async () => {
+    const { CATALOGO } = await import('../src/motor/conjuros');
+    const { EFECTOS } = await import('../src/motor/efectos');
+    for (const c of CATALOGO) {
+      const h = EFECTOS[c.efecto];
+      expect(h, c.nombre).toBeDefined();
+      // Activo y sin forma de valorarlo: la IA nunca lo lanzaría (salvo escudo y Aumentar el Crítico, que son pasivos).
+      if (c.accion === 'activa' && c.efecto !== 'escudo' && c.efecto !== 'aumentarCritico') expect(h.valorar, c.nombre).toBeDefined();
+      if (c.efecto === 'ataque') expect(c.tipos, c.nombre).toContain('ataque');
+      if (c.efecto === 'armadura') expect(c.grados[0].taEnergia, c.nombre).toBeDefined();
+      if (c.efecto === 'escudo') expect(c.grados[0].resistencia, c.nombre).toBeDefined();
+    }
+  });
+});

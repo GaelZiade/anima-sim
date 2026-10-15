@@ -2,7 +2,7 @@
 
 import type { ArmaDistancia, CapaArmadura, Ficha, Luchador } from './modelo';
 import {
-  absorcion, BONO_CANSANCIO, MOD_POSICION, MOD_SORPRESA_DEFENSA,
+  absorcion, BONO_CANSANCIO, bonoFrialdad, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
   esMaestro, penDefensaAdicional, penDefensaProyectil, posicionPorOrden, type Posicion, type TipoAtaque,
 } from './reglas';
@@ -773,4 +773,9 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
     conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
     (def.amenazadoPor === atk ? AMENAZADO.parada : 0);
+}
+
+/** Bono de la Frialdad (con lo que le sume Moral) a resistir efectos sobre el ánimo (Core p.54, Tabla 13). */
+export function frialdadDe(l: Luchador): number {
+  return bonoFrialdad((l.ficha.frialdad ?? 0) + (l.bono?.frialdad ?? 0));
 }

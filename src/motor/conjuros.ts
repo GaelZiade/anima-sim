@@ -11,10 +11,12 @@ import { GRIMORIO } from './grimorio';
 export type TipoConjuro = 'ataque' | 'defensa' | 'efecto' | 'animico' | 'automatico' | 'deteccion';
 
 /**
- * Lo que hace un conjuro que no es un ataque ni un escudo: cada uno se resuelve caso por caso, porque
- * no hay una forma genérica de manejarlos.
+ * Lo que hace un conjuro en combate: un ataque, un escudo, una armadura, o algo propio que se resuelve
+ * caso por caso (no hay una forma genérica de manejarlos). Cada efecto tiene su resolución en el motor
+ * y su valoración en la IA en el registro de efectos (efectos/).
  */
 export type EfectoConjuro =
+  | 'ataque' | 'escudo' | 'armadura'
   | 'flash' | 'secar' | 'consumirEsencia' | 'criticoDirecto' | 'incinerar' | 'tormenta' | 'aumentarCritico'
   | 'bendicion' | 'curar' | 'sacrificioPoder' | 'consumirVida' | 'mitigar' | 'calmar' | 'extasis' | 'lazos' | 'barrera'
   | 'mina' | 'fundir' | 'sacrificioVital' | 'transporte' | 'reparar' | 'capacidades' | 'holograma' | 'atar' | 'crearFuego'
@@ -71,6 +73,8 @@ export interface Grado {
   area?: number;
   /** Escudo: puntos de resistencia. */
   resistencia?: number;
+  /** Escudo que sólo detiene estos tipos de ataque (sin dato: todos). */
+  escudoContra?: readonly TipoAtaque[];
   /** Armadura: TA contra energía y contra el resto. */
   taEnergia?: number;
   taResto?: number;
@@ -130,7 +134,14 @@ export interface Conjuro {
   /** Escudo que sólo dañan los ataques sobrenaturales; los de este tipo le hacen el doble. */
   escudoSoloSobrenatural?: boolean;
   escudoDobleContra?: string;
-  efecto?: EfectoConjuro;
+  /** Sirve de escudo sólo si no tiene otro levantado (Barrera de Fuego, Core p.157). */
+  escudoSiNoHayOtro?: boolean;
+  efecto: EfectoConjuro;
+  /**
+   * Su radio alrededor del lanzador es un área ofensiva: alcanza a todos los de adentro salvo a él, y con
+   * Control del Espacio puede elegir a quiénes (Core p.122, Arcana p.28).
+   */
+  radioOfensivo?: boolean;
   /** Mantenimiento diario: una vez lanzado sigue activo todo el combate sin pagar por asalto (Core p.122). */
   diario?: boolean;
   /** Sobre quién cae un conjuro de efecto: un aliado (o él) o todos los aliados del radio. */
@@ -156,13 +167,13 @@ interface Comportamiento extends Omit<Conjuro, 'grados' | 'via' | 'nivel' | 'tip
 
 const COMPORTAMIENTO: readonly Comportamiento[] = [
   // Luz (Core p.126-127)
-  { nombre: 'Flash Cegador', tipos: ['automatico'], efecto: 'flash', centro: 'lanzador', fuente: 'Core p.126' },
-  { nombre: 'Escudo de Luz', escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126' },
-  { nombre: 'Armadura de Luz', fuente: 'Core p.127' },
-  { nombre: 'Descarga de Luz', ta: 'ENE', fuente: 'Core p.127' },
+  { nombre: 'Flash Cegador', tipos: ['automatico'], efecto: 'flash', centro: 'lanzador', radioOfensivo: true, fuente: 'Core p.126' },
+  { nombre: 'Escudo de Luz', efecto: 'escudo', escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126' },
+  { nombre: 'Armadura de Luz', efecto: 'armadura', fuente: 'Core p.127' },
+  { nombre: 'Descarga de Luz', efecto: 'ataque', ta: 'ENE', fuente: 'Core p.127' },
   // Fuego (Core p.157-159)
-  { nombre: 'Bola de Fuego', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157' },
-  { nombre: 'Descarga de Calor', ta: 'CAL', fuente: 'Core p.157' },
+  { nombre: 'Bola de Fuego', efecto: 'ataque', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157' },
+  { nombre: 'Descarga de Calor', efecto: 'ataque', ta: 'CAL', fuente: 'Core p.157' },
   {
     nombre: 'Arma Ígnea', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.157',
     grados: [10, 20, 30, 40].map((n) => ({ bono: { tipoArma: 'CAL', danoArma: n } })),
@@ -187,7 +198,7 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   },
   {
     // Int. 12 en avanzado según el manual (el grimorio dice 14).
-    nombre: 'Consumir Esencia', efecto: 'consumirEsencia', centro: 'lanzador', fuente: 'Core p.158',
+    nombre: 'Consumir Esencia', efecto: 'consumirEsencia', centro: 'lanzador', radioOfensivo: true, fuente: 'Core p.158',
     grados: [{}, {}, { int: 12 }, {}],
   },
   { nombre: 'Crítico Directo', efecto: 'criticoDirecto', fuente: 'Core p.159' },
@@ -280,8 +291,11 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   {
     // Muro de fuego (extensión 2 / 5 / 10 / 15 m; ataque automático de 240, el arcano 280) y escudo contra
     // calor y frío (avanzado, también energía; arcano, todo). Resistencia del arcano: 1.500 en el manual.
-    nombre: 'Barrera de Fuego', efecto: 'barrera', ta: 'CAL', tipos: ['automatico', 'defensa'], fuente: 'Core p.157',
-    grados: [{ metros: 2, habilidad: 240 }, { metros: 5, habilidad: 240 }, { metros: 10, habilidad: 240, resistencia: 800 }, { metros: 15, habilidad: 280, resistencia: 1500 }],
+    nombre: 'Barrera de Fuego', efecto: 'barrera', ta: 'CAL', tipos: ['automatico', 'defensa'], escudoSiNoHayOtro: true, fuente: 'Core p.157',
+    grados: [
+      { metros: 2, habilidad: 240, escudoContra: ['CAL', 'FRI'] }, { metros: 5, habilidad: 240, escudoContra: ['CAL', 'FRI'] },
+      { metros: 10, habilidad: 240, resistencia: 800, escudoContra: ['CAL', 'FRI', 'ENE'] }, { metros: 15, habilidad: 280, resistencia: 1500 },
+    ],
   },
   {
     // Ataque automático de 240 a más de la mitad del radio, 280 a menos y 320 a bocajarro.
