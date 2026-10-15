@@ -143,8 +143,8 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 
 **Próximos pasos, en orden:**
 
-1. **Psíquica** (CV, potencial; Rita). La magia está completa para Stéphan (DISENO.md, "Magia", con 22
-   interpretaciones nuevas a confirmar); otros magos: catalogar sus conjuros sobre el grimorio
+1. **Psíquica** (CV, potencial; Rita). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
+   confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
    (`sinSimular` dice qué falta).
 2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.

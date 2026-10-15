@@ -23,6 +23,7 @@ retomar el trabajo, empezar por README.md.
   naturaleza de los seres en la ficha), Marcha Implacable, pasar zeon entre magos (Transmisión de
   Magia). Stéphan simula 50 conjuros; los 12 restantes no tienen efecto en un combate. Teseo 93,2;
   Kaito 1,4; Kiran 0; soldados 100; grupo 66.
+- Las 28 interpretaciones de la parte 3, confirmadas.
 
 ## 15/10/2026: el grimorio completo
 

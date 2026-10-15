@@ -531,7 +531,7 @@ convierte PV en zeon cuando la reserva se le acaba. Intercepta una descarga si s
 probablemente llega y su daño no queda muy abajo. Cada conjuro nuevo se valora a su manera (Invisibilidad,
 con la chance de que lo noten; Transporte, según si lo alcanzan enseguida).
 
-**Interpretaciones nuevas, a confirmar:**
+**Interpretaciones confirmadas** (15/10/2026; de la 1 a la 28):
 
 1. La IA prepara un conjuro determinado sólo si es su Conjuro Especialista (por el +10); si no, la magia
    pura le da más libertad. Lanzar el preparado no hace volver la magia pura acumulada.
