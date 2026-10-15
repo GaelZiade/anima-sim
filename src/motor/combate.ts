@@ -173,12 +173,23 @@ export function simularCombate(equipoA: Ficha[], equipoB: Ficha[], o: OpcionesCo
  * a `distancia` metros, de a uno cada 2 m, con 4 m de margen para rodear. Con mapa, cada uno va a
  * la celda pedida o, si falta o está ocupada, a la libre más cercana a la que le tocaría.
  */
+/**
+ * El escenario sin mapa: un mapa abierto con el A en una columna y el B a `distancia` metros, de a uno
+ * cada 2 m, con 4 m de margen para rodear. La página lo usa para mostrar lo mismo que simula el motor.
+ */
+export function disposicionAbierta(nA: number, nB: number, distancia: number): { ancho: number; alto: number; A: Celda[]; B: Celda[] } {
+  const d = Math.max(1, Math.round(distancia));
+  const alto = Math.max(9, 2 * Math.max(nA, nB) + 7);
+  const columna = (cant: number, x: number) => Array.from({ length: cant }, (_, i) => ({ x, y: Math.floor(alto / 2) - (cant - 1) + 2 * i }));
+  return { ancho: d + 9, alto, A: columna(nA, 4), B: columna(nB, 4 + d) };
+}
+
 function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario): { mapa: MapaListo; celdas: Celda[] } {
   const d = Math.max(1, Math.round(distancia));
-  const n = Math.max(nA, nB);
-  const mapa = e.mapa ? prepararMapa(e.mapa) : mapaAbierto(d + 9, Math.max(9, 2 * n + 7));
-  const xA = e.mapa ? Math.min(1, mapa.ancho - 1) : 4;
-  const xB = e.mapa ? Math.max(0, Math.min(mapa.ancho - 2, xA + d)) : 4 + d;
+  const abierta = e.mapa ? null : disposicionAbierta(nA, nB, distancia);
+  const mapa = e.mapa ? prepararMapa(e.mapa) : mapaAbierto(abierta!.ancho, abierta!.alto);
+  const xA = Math.min(1, mapa.ancho - 1);
+  const xB = Math.max(0, Math.min(mapa.ancho - 2, xA + d));
   const columna = (cant: number, x: number, i: number): Celda => ({ x, y: Math.floor(mapa.alto / 2) - (cant - 1) + 2 * i });
   const ocupadas = new Set<number>();
   const celdas: Celda[] = [];
@@ -189,8 +200,8 @@ function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario
     ocupadas.add(indice(mapa, c));
     celdas.push(c);
   };
-  for (let i = 0; i < nA; i++) ubicar(e.posiciones?.A?.[i], columna(nA, xA, i));
-  for (let i = 0; i < nB; i++) ubicar(e.posiciones?.B?.[i], columna(nB, xB, i));
+  for (let i = 0; i < nA; i++) ubicar(e.posiciones?.A?.[i], abierta ? abierta.A[i] : columna(nA, xA, i));
+  for (let i = 0; i < nB; i++) ubicar(e.posiciones?.B?.[i], abierta ? abierta.B[i] : columna(nB, xB, i));
   return { mapa, celdas };
 }
 

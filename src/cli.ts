@@ -6,37 +6,21 @@
 //   npm run sim -- ficha "Kaito.xlsm"             → muestra lo que se lee de una planilla
 //
 // En un escenario, cada luchador puede ser una ficha completa o una planilla:
-//   { "hoja": "C:/fichas/Kaito.xlsm", "arma": "Espada", "perfil": "agresivo" }
+//   { "hoja": "C:/fichas/Kaito.xlsm", "arma": "Espada", "perfil": "agresivo", "nombre": "Kaito 2", "estado": "miedo" }
+// (el mismo formato que lee la página: src/escenario.ts).
 // La ruta de la planilla puede ser relativa al archivo del escenario.
 
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import type { Ficha, OpcionesEscenario, Perfil } from './motor/modelo';
+import type { Ficha } from './motor/modelo';
 import { monteCarloParalelo } from './paralelo-node';
 import { simularCombate } from './motor/combate';
 import { armasCuerpoACuerpo, jsonAFicha, leerHoja } from './hoja/ficha';
-
-interface DesdeHoja {
-  hoja: string;
-  arma?: string;
-  perfil?: Perfil;
-  /** Para distinguir dos copias de la misma planilla. */
-  nombre?: string;
-}
-
-interface Escenario {
-  distanciaInicial?: number;
-  /** Reglas opcionales: rotura, espacioReducido, oscuridad, armasEnfundadas, faseLunar, huida, desequilibrio. */
-  opciones?: OpcionesEscenario;
-  equipoA: (Ficha | DesdeHoja)[];
-  equipoB: (Ficha | DesdeHoja)[];
-}
+import { fichaDesdeHoja, numerarCopias, type DesdeHoja, type EscenarioJson } from './escenario';
 
 function cargar(entrada: Ficha | DesdeHoja, carpeta: string): Ficha {
   if (!('hoja' in entrada)) return entrada;
-  const json = leerHoja(readFileSync(resolve(carpeta, entrada.hoja)));
-  const ficha = jsonAFicha(json, { arma: entrada.arma, perfil: entrada.perfil });
-  return entrada.nombre ? { ...ficha, nombre: entrada.nombre, id: entrada.nombre } : ficha;
+  return fichaDesdeHoja(leerHoja(readFileSync(resolve(carpeta, entrada.hoja))), entrada);
 }
 
 const banderas = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));
@@ -61,14 +45,10 @@ if (primero === 'ficha') {
   process.exit(0);
 }
 
-const crudo = JSON.parse(readFileSync(primero, 'utf8')) as Escenario;
+const crudo = JSON.parse(readFileSync(primero, 'utf8')) as EscenarioJson;
 const carpeta = dirname(resolve(primero));
-const esc = {
-  distanciaInicial: crudo.distanciaInicial,
-  escenario: crudo.opciones,
-  equipoA: crudo.equipoA.map((e) => cargar(e, carpeta)),
-  equipoB: crudo.equipoB.map((e) => cargar(e, carpeta)),
-};
+const [equipoA, equipoB] = numerarCopias(crudo.equipoA.map((e) => cargar(e, carpeta)), crudo.equipoB.map((e) => cargar(e, carpeta)));
+const esc = { distanciaInicial: crudo.distanciaInicial, escenario: crudo.opciones, equipoA, equipoB };
 
 if (modo === 'ver') {
   const r = simularCombate(esc.equipoA, esc.equipoB, {

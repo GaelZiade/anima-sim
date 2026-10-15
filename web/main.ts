@@ -4,7 +4,7 @@
 
 import { armasCuerpoACuerpo, jsonAFicha, leerHoja } from '../src/hoja/ficha';
 import type { HojaJson } from '../src/hoja/hojaAJson';
-import { simularCombate, type ResultadoCombate } from '../src/motor/combate';
+import { disposicionAbierta, simularCombate, type ResultadoCombate } from '../src/motor/combate';
 import { estilos } from '../src/motor/estilos';
 import type { Celda } from '../src/motor/mapa';
 import type { Evento, Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
@@ -16,6 +16,7 @@ import ejemploEstilos from '../ejemplos/estilos.json';
 import grupo from '../ejemplos/grupo.json';
 import { correrEnParalelo, type Corrida } from './paralelo';
 import { Tablero, type FichaTablero, type Pincel } from './tablero';
+import { conEstado, ESTADOS_INICIALES, fichaDesdeHoja, numerarCopias, type EscenarioJson } from '../src/escenario';
 
 type Entrada =
   | { clave: string; nombre: string; tipo: 'hoja'; json: HojaJson }
@@ -27,8 +28,10 @@ interface Integrante {
   arma: string;
   /** Vacío: el de la ficha. */
   perfil: Perfil | '';
-  /** Estado con el que empieza (ver ESTADOS); vacío: normal. Falta en lo guardado antes. */
+  /** Estado con el que empieza (ESTADOS_INICIALES); vacío: normal. Falta en lo guardado antes. */
   estado?: string;
+  /** Nombre que le puso el escenario (para distinguir copias de una planilla). */
+  nombre?: string;
   /** Celda en el mapa. */
   pos?: Celda;
 }
@@ -65,13 +68,6 @@ interface OpcionesGuardadas {
 
 const CASILLAS = ['rotura', 'huida', 'espacioReducido', 'armasEnfundadas', 'desequilibrio', 'escasaVisibilidad', 'disparosParalelos'] as const;
 
-/** Lo que trae un escenario .json (el mismo formato que usa el CLI). */
-interface EscenarioJson {
-  distanciaInicial?: number;
-  opciones?: OpcionesEscenario;
-  equipoA: (Ficha | { hoja: string; arma?: string; perfil?: Perfil; nombre?: string; estado?: string })[];
-  equipoB: EscenarioJson['equipoA'];
-}
 
 /**
  * Genéricos: los arquetipos de Abel y las fichas de los ejemplos. Las copias de una misma ficha en
@@ -97,22 +93,6 @@ const GENERICOS: Entrada[] = (() => {
   return res;
 })();
 
-/** Estados de la Tabla 43 y del capítulo 14 del Core con que puede empezar un luchador. */
-const ESTADOS: [string, string, (f: Ficha) => Ficha][] = [
-  ['', 'Sin estados', (f) => f],
-  ['cegueraParcial', 'Ceguera parcial', (f) => ({ ...f, estados: { ...f.estados, ceguera: 'parcial' } })],
-  ['cegueraAbsoluta', 'Ceguera absoluta', (f) => ({ ...f, estados: { ...f.estados, ceguera: 'absoluta' } })],
-  ['miedo', 'Miedo (−60)', (f) => ({ ...f, estados: { ...f.estados, miedo: true } })],
-  ['dolor', 'Dolor (−40)', (f) => ({ ...f, estados: { ...f.estados, dolor: 'normal' } })],
-  ['dolorExtremo', 'Dolor extremo (−80)', (f) => ({ ...f, estados: { ...f.estados, dolor: 'extremo' } })],
-  ['levitando', 'Levitando', (f) => ({ ...f, estados: { ...f.estados, levitando: true } })],
-  ['vuelo7', 'Vuelo 7 a 14', (f) => ({ ...f, tipoVuelo: 7 })],
-  ['vuelo15', 'Vuelo 15 o más', (f) => ({ ...f, tipoVuelo: 15 })],
-];
-
-function conEstado(f: Ficha, estado = ''): Ficha {
-  return (ESTADOS.find(([v]) => v === estado)?.[2] ?? ((x: Ficha) => x))(f);
-}
 
 const PERFILES: [Perfil | '', string][] = [
   ['', 'Perfil de la ficha'], ['agresivo', 'Agresivo'], ['equilibrado', 'Equilibrado'], ['cauto', 'Cauto'], ['bestia', 'Bestia'],
@@ -154,38 +134,33 @@ function buscar(clave: string) {
   return estado.biblioteca.find((e) => e.clave === clave) ?? GENERICOS.find((e) => e.clave === clave);
 }
 
-function fichaBase(e: Entrada, arma = '', perfil: Perfil | '' = ''): Ficha {
-  const f = e.tipo === 'hoja' ? jsonAFicha(e.json, { arma: arma || undefined }) : e.ficha;
+function fichaBase(e: Entrada, arma = '', perfil: Perfil | '' = '', nombre = ''): Ficha {
+  const f = e.tipo === 'hoja' ? fichaDesdeHoja(e.json, { arma: arma || undefined, nombre: nombre || undefined }) : e.ficha;
   return perfil ? { ...f, perfil } : f;
 }
 
-/**
- * Fichas y celdas de un equipo, en el mismo orden. Si una ficha se repite, las copias se numeran
- * para distinguirlas.
- */
-function equipoDe(equipo: Integrante[], vistos: Map<string, number>): { fichas: Ficha[]; celdas: (Celda | null)[] } {
+/** Fichas y celdas de un equipo, en el mismo orden. */
+function equipoDe(equipo: Integrante[]): { fichas: Ficha[]; celdas: (Celda | null)[] } {
   const fichas: Ficha[] = [];
   const celdas: (Celda | null)[] = [];
   for (const i of equipo) {
     const e = buscar(i.clave);
     if (!e) continue;
-    const f = conEstado(fichaBase(e, i.arma, i.perfil), i.estado);
-    const n = (vistos.get(f.id) ?? 0) + 1;
-    vistos.set(f.id, n);
-    fichas.push(n === 1 ? f : { ...f, id: `${f.id}-${n}`, nombre: `${f.nombre} (${n})` });
+    fichas.push(conEstado(fichaBase(e, i.arma, i.perfil, i.nombre), i.estado));
     celdas.push(i.pos ?? null);
   }
   return { fichas, celdas };
 }
 
 function escenarioActual() {
-  const vistos = new Map<string, number>();
   const selectorLuna = $<HTMLSelectElement>('faseLunar');
   const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
   const oscuridad = $<HTMLSelectElement>('oscuridad').value as OpcionesEscenario['oscuridad'] | '';
   const cuerdas = $<HTMLSelectElement>('cuerdas').value as OpcionesEscenario['cuerdas'] | '';
-  const a = equipoDe(estado.equipoA, vistos);
-  const b = equipoDe(estado.equipoB, vistos);
+  const a = equipoDe(estado.equipoA);
+  const b = equipoDe(estado.equipoB);
+  // Si una ficha se repite, las copias se numeran (lo mismo que la consola).
+  [a.fichas, b.fichas] = numerarCopias(a.fichas, b.fichas);
   const opciones: OpcionesEscenario = {
     rotura: marcado('rotura'),
     huida: marcado('huida'),
@@ -376,7 +351,7 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
         errores.push(`Falta cargar la planilla "${clave}"`);
         return [];
       }
-      return [{ clave, arma: x.arma ?? '', perfil: x.perfil ?? '', estado: x.estado ?? '' }];
+      return [{ clave, arma: x.arma ?? '', perfil: x.perfil ?? '', estado: x.estado ?? '', ...(x.nombre ? { nombre: x.nombre } : {}) }];
     }
     const generico = GENERICOS.find((g) => g.tipo === 'ficha' && g.ficha.id === x.id);
     const clave = generico?.clave ?? `ficha:${x.id}`;
@@ -391,14 +366,11 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
     estado.equipoA.forEach((i, n) => (i.pos = o.posiciones?.A?.[n] ?? undefined));
     estado.equipoB.forEach((i, n) => (i.pos = o.posiciones?.B?.[n] ?? undefined));
   } else {
-    // Sin mapa: uno abierto con los bandos a la distancia inicial, como hace el motor.
-    const d = Math.max(1, Math.round(esc.distanciaInicial ?? 10));
-    const n = Math.max(estado.equipoA.length, estado.equipoB.length);
-    estado.mapa = { ancho: Math.max(MAPA_INICIAL.ancho, d + 5), alto: Math.max(MAPA_INICIAL.alto, 2 * n + 3), bloqueadas: [] };
-    const centro = Math.floor(estado.mapa.alto / 2);
-    const columna = (lista: Integrante[], x: number) => lista.forEach((i, k) => (i.pos = { x, y: centro - (lista.length - 1) + 2 * k }));
-    columna(estado.equipoA, 2);
-    columna(estado.equipoB, 2 + d);
+    // Sin mapa: el mismo mapa abierto y las mismas celdas que arma el motor (y la consola).
+    const d = disposicionAbierta(estado.equipoA.length, estado.equipoB.length, esc.distanciaInicial ?? 10);
+    estado.mapa = { ancho: d.ancho, alto: d.alto, bloqueadas: [] };
+    estado.equipoA.forEach((i, k) => (i.pos = d.A[k]));
+    estado.equipoB.forEach((i, k) => (i.pos = d.B[k]));
   }
   completarPosiciones();
   for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o[id];
@@ -497,7 +469,7 @@ function dibujarEquipo(clave: 'equipoA' | 'equipoB') {
       crear('div', { className: 'campos' },
         selector(armas, i.arma, cambiar('arma')),
         selector(PERFILES, i.perfil, cambiar('perfil')),
-        selector(ESTADOS.map(([v, texto]): [string, string] => [v, texto]), i.estado ?? '', cambiar('estado'))));
+        selector(ESTADOS_INICIALES.map(([v, texto]): [string, string] => [v, texto]), i.estado ?? '', cambiar('estado'))));
   }));
 }
 
