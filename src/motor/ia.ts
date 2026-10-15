@@ -208,6 +208,14 @@ export function valorGolpe(atk: Luchador, def: Luchador, p: Pronostico, golpes: 
     valorCritico(atk, def, p.pCritico, Math.max(def.pv / 2, danoSiImpacta), null, 'normal', golpes, p.dano);
 }
 
+/**
+ * ¿Impactarlo ahora le quita el asalto? Como el motor: a quien todavía no actuó y no tiene
+ * acumulación, salvo Seraphite arcano (Dominus p.40) o si decidió resistir el golpe (Core p.93).
+ */
+export function pierdeElAsalto(def: Luchador): boolean {
+  return !def.haActuado && puedeActuar(def) && !def.ficha.acumulacion && def.modo.seraphite !== 3 && !def.planResistir;
+}
+
 interface Oportunidad {
   objetivo: Luchador;
   valor: number;
@@ -225,7 +233,7 @@ function valorAtaque(
   const amen = amenaza(e, l);
   let v = valorGolpe(l, e, p, Math.max(0, (o.declarados ?? l.ataquesDeclarados) - 1));
   // Tempo: si todavía no actuó, impactarlo lo deja sin acciones este asalto.
-  if (o.primeraVez !== false && !e.haActuado && puedeActuar(e) && !e.ficha.acumulacion)
+  if (o.primeraVez !== false && pierdeElAsalto(e))
     v += p.pImpacto * amen;
   // Riesgo de contra: sólo si le quedan ataques para devolverla.
   if (e.ataquesRestantes > 0 && puedeActuar(e)) {
@@ -754,9 +762,8 @@ function mejorManiobra(
     const sinDano = m === 'engatillar' || m === 'puntosPresion';
     const danoEste = sinDano ? 0 : real.dano;
     let v = danoEste + (sinDano || m === 'inconsciencia' ? 0 : real.pBaja * amen * 2);
-    if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
     // Ataque indirecto (Ki) o desde lejos: no se le puede contraatacar (Dominus p.52).
-    if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !(aDistancia && lejos)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+    const contra = def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !(aDistancia && lejos) ? lambda(atk) * p.pContra * golpeDe(def, atk) : 0;
     if (ki && ki !== SIN_KI && !esManiobraDeControl(m) && (ki.estados.length || ki.impacto || ki.marca || ki.interrumpe)) {
       // Como el motor: Marca, Interrupción y los Estados de ataque piden que el golpe dañe (contra la
       // armadura real, con el daño sin reducir); los de contacto, alcanzar el 10% contra TA 0.
@@ -827,7 +834,11 @@ function mejorManiobra(
       v += p.pImpacto * pFalla * (Math.min(2 * fallo, def.pv) + valorNegativo(atk, def, fallo, golpesSiguientes, 2 * fallo));
       if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen);
     }
-    return v;
+    // Ataque adicional (Ki): cada golpe vale lo mismo y arriesga su contra; el asalto se le quita
+    // una vez, si lo impacta alguno (Dominus p.55).
+    const golpes = 1 + (ki?.ataquesAdicionales ?? 0);
+    const tempo = pierdeElAsalto(def) ? (1 - Math.pow(1 - p.pImpacto, golpes)) * amen : 0;
+    return golpes * (v - contra) + tempo;
   };
 
   // Tipo de crítico: el principal o el secundario, el que más rinda (Tabla de Ataque Inusual).
@@ -879,7 +890,7 @@ function mejorManiobra(
       area.forEach((b, i) => {
         const p = pronostico(atk, b, habs[i].hab, habs[i].def, { tipo });
         let vb = valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
-        if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) vb += p.pImpacto * amenaza(b, atk);
+        if (pierdeElAsalto(b)) vb += p.pImpacto * amenaza(b, atk);
         if (b.ataquesRestantes > 0 && puedeActuar(b)) vb -= lambda(atk) * p.pContra * golpeDe(b, atk);
         v += llega[i] * vb;
       });
@@ -900,7 +911,7 @@ function mejorManiobra(
       const rf = rfDe(def);
       const tope = Math.min(Math.floor(presenciaBase(atk.ficha) / 5), atk.ki!.reserva - 1);
       let base = 0;
-      if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) base += p.pImpacto * amen;
+      if (pierdeElAsalto(def)) base += p.pImpacto * amen;
       if (def.ataquesRestantes > 0 && puedeActuar(def)) base -= lambda(atk) * p.pContra * golpeDe(def, atk);
       for (let extra = 0; extra <= tope; extra++) {
         // Fracaso = margen − d100 (1-99; el 100 resiste): su media y la chance de dejarlo a 0 PV.
@@ -1190,7 +1201,7 @@ function valorAreaKi(
       continue;
     }
     let vb = valorGolpe(atk, b, p, 0);
-    if (!b.haActuado && puedeActuar(b) && !b.ficha.acumulacion) vb += p.pImpacto * amenaza(b, atk);
+    if (pierdeElAsalto(b)) vb += p.pImpacto * amenaza(b, atk);
     if (b.ataquesRestantes > 0 && puedeActuar(b)) vb -= lambda(atk) * p.pContra * golpeDe(b, atk);
     v += vb;
   }

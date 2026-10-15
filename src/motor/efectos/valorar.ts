@@ -13,7 +13,7 @@ import { fallaResistencia, tabla } from '../probabilidades';
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, cacheDeDecision, conCambio, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, cacheDeDecision, conCambio, enemigos, golpeDe, lambda, pierdeElAsalto, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 import { blancosConjuro, radioArea } from './comun';
 
@@ -39,7 +39,7 @@ export function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: 
   const area = radioArea(c, g);
   const p = pronostico(atk, def, ataqueMagico(atk, def), defensaContraConjuro(def, atk, ki, area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area });
   let v = valorGolpe(atk, def, p, 0);
-  if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amenaza(def, atk);
+  if (pierdeElAsalto(def)) v += p.pImpacto * amenaza(def, atk);
   if (enAlcance(atk, def) && def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
   return v;
 }
