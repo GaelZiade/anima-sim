@@ -1,30 +1,32 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
 import type { Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario, Tecnica } from './modelo';
-import { crearRng, dado, type Rng } from './rng';
+import { crearRng, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, esMaestro, haySorpresa, localizar, nivelCritico,
-  penPifiaTurno, umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
+  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, haySorpresa, localizar, nivelCritico, penPifiaTurno,
+  umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, nro, areaDoblaDano, danoAEscudo, frialdadDe, rfCritico, rfDe, ataqueFinal, barreraFrena,
-  danoBase, defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno,
-  penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, defensaEscudoMagico, modProyectil, visionEntre,
-  PEN_COBERTURA, type ZonaArmadura,
+  absorcionContra, activo, ALCANCE, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
+  defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
+  perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
 } from './calculos';
 import {
-  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
-  esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin, modificadorPorResultado, type Maniobra,
+  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, esApuntado, esManiobraDeControl, esNoLetal,
+  gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
-import { imponer, nivelCondicion, pasarAsalto } from './condiciones';
+import { pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
+import {
+  aplicarAuras, destruccionPorKi, efectosAlImpactar, estadosAutomaticos, puntosDePresion, reflectar, repetirFascinacion,
+} from './combate-ki';
+import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
-import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
 import { cruzarMuros, type Motor } from './efectos';
 import { GRADOS } from './conjuros';
 import {
@@ -38,8 +40,9 @@ import {
   type Celda, type MapaListo,
 } from './mapa';
 import {
-  ajusteTaEnergia, alMatar, curable, dificultadDestruccion, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, presenciaBase, radioAura, sensibleAlAura, alPerderPv, alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto,
-  textoKi, costeKi, recuperarKi, SIN_KI, type EstadoSobrenatural, type ModKi,
+  ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
+  alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
+  recuperarKi, type ModKi,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -94,51 +97,6 @@ function tirar(ctx: Contexto, umbral: number): TiradaD100 {
   return tirarD100(ctx.rng, umbral);
 }
 
-/**
- * Aura de combate (Dominus p.21-22): cada rival sensible en el radio hace un control con su Presencia
- * base + d100 contra la dificultad del Aura. Quien lo supera no lo repite en el combate; afectado
- * lo repite cada 5 asaltos sin poder empeorar. Por el fracaso (Tabla 9): hasta 19 afectado (−10 a
- * toda acción), hasta 49 miedo, hasta 99 paralización parcial, 100 o más se desvanece.
- */
-function aplicarAuras(ctx: Contexto, vivos: Luchador[]) {
-  for (const fuente of vivos) {
-    if (!fuente.ki?.auraActiva || !activo(fuente)) continue;
-    const dificultad = dificultadAura(fuente, penAccion(fuente));
-    for (const x of ctx.luchadores) {
-      // Alcanza a todos los del radio, aliados incluidos (Dominus p.21: "aquellos que lo rodean").
-      if (x === fuente || !activo(x) || !sensibleAlAura(fuente, x) || distancia(fuente, x) > radioAura(fuente)) continue;
-      const previo = x.aura;
-      if (previo && (previo.estado !== 'afectado' || ctx.asalto - previo.asalto < 5)) continue;
-      const dado100 = tirarD100Cerrada(ctx.rng);
-      // Con Frialdad suma su bono (Dominus p.21, Core p.54).
-      const base = presenciaBase(x.ficha) + frialdadDe(x);
-      // Un empate no supera el control: "0 a −19", afectado (Dominus p.22, Tabla 9).
-      const { falla, fracaso } = resultadoResistencia(base, dado100, dificultad);
-      const estado = !falla ? 'resistio' : fracaso < 20 ? 'afectado' : fracaso < 50 ? 'miedo' : fracaso < 100 ? 'paralizado' : 'desvanecido';
-      const texto = `${x.ficha.nombre} siente el Aura de combate de ${fuente.ficha.nombre} (Presencia ${base + dado100} [${base}+${dado100}] contra ${dificultad})`;
-      // Repetir el control como afectado sólo puede mejorar: o lo supera o sigue igual.
-      if (previo && estado !== 'resistio') {
-        x.aura = { ...previo, asalto: ctx.asalto };
-        log(ctx, () => `${texto}: sigue afectado.`);
-        continue;
-      }
-      if (estado === 'desvanecido') {
-        log(ctx, () => `${texto}: falla por ${fracaso} y se desvanece.`);
-        caer(ctx, fuente, x, 'inconsciente');
-        continue;
-      }
-      x.aura = { fuente, estado, asalto: ctx.asalto };
-      if (estado === 'paralizado') {
-        // "Incapaz apenas de moverse": paralización parcial (Core p.233), mientras dure el combate.
-        imponer(x, 'paralisis', { nivel: Math.max(nivelCondicion(x, 'paralisis'), 2), asaltos: Infinity });
-      }
-      const efecto = { resistio: 'lo resiste', afectado: `falla por ${fracaso}: queda afectado, −10 a toda acción`,
-        miedo: `falla por ${fracaso}: siente miedo, −60 a toda acción`, paralizado: `falla por ${fracaso}: queda paralizado` }[estado];
-      log(ctx, () => `${texto}: ${efecto}.`);
-    }
-  }
-}
-
 /** TA contra energía en el cuerpo, con la Armadura de energía mayor o arcana encendida o no. */
 function taEnergia(l: Luchador): number {
   return Math.max(0, (l.ficha.ta.ENE ?? 0) + ajusteTaEnergia(l));
@@ -154,7 +112,7 @@ function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<E
 /** Lo que el motor le presta a los efectos de conjuro (efectos/). */
 const MOTOR: Motor = {
   log, tirar, tirarResistencia, tirarRf, perderPv, huir, caer, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha,
-  verificarCaida, ofrecerContra,
+  verificarCaida, ofrecerContra, aplicarDano, limitePorDano, moverEnLinea,
   prender: (ctx, atk, l, valor) => prender(MOTOR, ctx, atk, l, valor),
   mitigarFuego: (ctx, l, intensidades) => mitigarFuego(MOTOR, ctx, l, intensidades),
 };
@@ -336,7 +294,7 @@ function jugarAsalto(ctx: Contexto) {
     }
   }
 
-  aplicarAuras(ctx, vivos);
+  aplicarAuras(MOTOR, ctx, vivos);
   zonasMagicas(MOTOR, ctx);
   percibirInvisibles(MOTOR, ctx);
 
@@ -456,7 +414,7 @@ function turno(ctx: Contexto, l: Luchador) {
       // Estados de condición automática: una acción activa sin tirada de ataque (Dominus p.67).
       const auto = ia.estadosAutomaticos(ctx, l);
       if (auto) {
-        estadosAutomaticos(ctx, l, auto.tecnica, auto.blancos);
+        estadosAutomaticos(MOTOR, ctx, l, auto.tecnica, auto.blancos);
         l.ataquesRestantes--;
         continue;
       }
@@ -970,7 +928,7 @@ function resolverDefensa(
   const proteccion = ia.protectorPara(ctx, def, atk);
   const quienDefiende = proteccion?.quien ?? def;
   // Fascinación: al verse en peligro repite la RF (Dominus p.67).
-  if (def.fascinado) repetirFascinacion(ctx, def);
+  if (def.fascinado) repetirFascinacion(MOTOR, ctx, def);
   // Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69).
   const tipoGolpe = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
   if (!proteccion && def.ki?.activo.intangible && tipoGolpe !== 'ENE' && !atk.cap.danaEnergia && !o.ki?.danaEnergia) {
@@ -1061,7 +1019,7 @@ function resolverDefensa(
     const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${def.magia!.escudo!.conjuro.nombre}` : '';
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
+    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(MOTOR, ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
 
   // Escudo de energía (Ki): si detiene el golpe recibe su daño base (+10 por punto de TA que reste),
@@ -1103,7 +1061,7 @@ function resolverDefensa(
     // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
     // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
     if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
-      reflectar(ctx, quienDefiende, atk, habAtk + tA.valor + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
+      reflectar(MOTOR, ctx, quienDefiende, atk, habAtk + tA.valor + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
       return { defensor: quienDefiende, contra: null, impacto: false };
     }
     // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
@@ -1198,7 +1156,7 @@ function resolverDefensa(
     const habriaDanado = dano;
     if (ki.danoReducido) dano = Math.floor(dano * (1 - ki.danoReducido));
     const porcentajeContacto = porcentajeDano(resultado, absorcion(0));
-    efectosAlImpactar(ctx, atk, def, ki, habriaDanado, porcentajeContacto);
+    efectosAlImpactar(MOTOR, ctx, atk, def, ki, habriaDanado, porcentajeContacto);
     if (!activo(def)) {
       avisar();
       return { defensor: def, contra: null, impacto: true };
@@ -1216,13 +1174,13 @@ function resolverDefensa(
   }
   // Destrucción por Ki: basta con alcanzarlo, aunque el golpe no dañe (Core p.104).
   if (m === 'destruccionKi') {
-    destruccionPorKi(ctx, atk, def, o.kiDestruccion ?? 0, resiste);
+    destruccionPorKi(MOTOR, ctx, atk, def, o.kiDestruccion ?? 0, resiste);
     avisar();
     return { defensor: def, contra: null, impacto: true };
   }
   // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
   if (m === 'puntosPresion') {
-    if (dano > 0) puntosDePresion(ctx, atk, def, dano, o.estadoMushin ?? null);
+    if (dano > 0) puntosDePresion(MOTOR, ctx, atk, def, dano, o.estadoMushin ?? null);
     else log(ctx, () => `  No alcanza los puntos de presión.`);
     avisar();
     return { defensor: def, contra: null, impacto: true };
@@ -1247,51 +1205,13 @@ function resolverDefensa(
   else if (!esManiobraDeControl(m) && !absorbido) {
     log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
     // La armadura evitó el daño: puede romperse (Core p.93).
-    if (ctx.opciones.rotura) roturaDeArmadura(ctx, atk, def, o.ranura, zonaDe(m));
+    if (ctx.opciones.rotura) roturaDeArmadura(MOTOR, ctx, atk, def, o.ranura, zonaDe(m));
   }
   avisar();
   return { defensor: def, contra: null, impacto: true };
 }
 
-/**
- * Destrucción por Ki (Core p.104): RF contra la Presencia base del atacante (+5 por punto de Ki extra,
- * hasta el doble); pierde tantos PV como el fracaso, sin que cuente la armadura. Un 100 natural en la
- * RF siempre resiste.
- */
-function destruccionPorKi(ctx: Contexto, atk: Luchador, def: Luchador, extra: number, resistia: boolean) {
-  const dif = dificultadDestruccion(atk, extra);
-  const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = rfDe(def);
-  const fracaso = dadoRf === 100 ? 0 : dif - (baseRf + dadoRf);
-  const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dif}`;
-  if (fracaso <= 0) {
-    log(ctx, () => `  ${def.ficha.nombre} resiste la Destrucción por Ki (${tirada}).`);
-    return;
-  }
-  log(ctx, () => `  ${def.ficha.nombre} falla la RF contra la Destrucción por Ki (${tirada}) por ${fracaso}.`);
-  aplicarDano(ctx, atk, def, fracaso, resistia, 'normal');
-}
-
 // --------------------------------------------------------------------------- efectos sobrenaturales (Ki)
-
-/**
- * Lo que una técnica hace al alcanzar (Dominus cap. 5): Impacto con sólo superar la defensa; Marca,
- * Interrupción y los Estados de condición Ataque o Beso si el golpe dañaría; los de Contacto físico
- * con que alcance contra TA 0 (Dominus p.68).
- */
-function efectosAlImpactar(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, dano: number, porcentajeContacto: number) {
-  if (ki.marca && dano > 0 && (def.marcas.get(atk) ?? 0) < ki.marca) {
-    def.marcas.set(atk, ki.marca);
-    log(ctx, () => `  ${def.ficha.nombre} queda marcado por ${atk.ficha.nombre} (+${ki.marca} a sus ataques contra él).`);
-  }
-  if (ki.interrumpe && dano > 0) interrupcion(ctx, def, dano + ki.interrupcion);
-  for (const est of ki.estados) {
-    if (!activo(def)) return;
-    const alcanza = est.condicion === 'contacto' ? porcentajeContacto > 0 : est.condicion !== 'automatico' && dano > 0;
-    if (alcanza) estadoSobrenatural(ctx, atk, def, est);
-  }
-  if (ki.impacto && activo(def)) impacto(ctx, atk, def, ki.impacto, ki.atraer);
-}
 
 /** RF del defensor contra una dificultad (las Resistencias no sufren negativos, Core p.232). */
 function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra = 0): Resistencia {
@@ -1319,17 +1239,6 @@ function tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: s
   return controlResistencia(ctx, l, usa, (usa === 'RF' ? rf : rm) + bono, dificultad, que);
 }
 
-/**
- * Estado sobrenatural (Dominus p.67): RF contra su Resistencia; el fracaso decide la intensidad
- * (efectos/estados.ts).
- */
-function estadoSobrenatural(ctx: Contexto, atk: Luchador, def: Luchador, est: EstadoSobrenatural) {
-  if (est.estado === 'ilusion') return;
-  // Miedo, Terror y Fascinación afectan el ánimo: suma la Frialdad (Core p.54).
-  const { falla, fracaso } = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado], ESTADOS_DE_ANIMO.has(est.estado) ? frialdadDe(def) : 0);
-  if (falla) aplicarEstado(MOTOR, ctx, atk, def, est.estado, fracaso, { dificultad: est.rf, atributo: est.atributo });
-}
-
 /** Ficha nueva por un estado que dura el combate: las capacidades se derivan de la ficha. */
 function cambiarFicha(l: Luchador, f: Ficha) {
   l.ficha = f;
@@ -1346,268 +1255,7 @@ function perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number) {
   verificarCaida(ctx, atk, def);
 }
 
-/** Fascinación: cada vez que lo atacan repite la RF; si la supera, se libera (Dominus p.67). */
-function repetirFascinacion(ctx: Contexto, l: Luchador) {
-  if (!tirarRf(ctx, l, l.fascinado, 'la Fascinación').falla) l.fascinado = 0;
-}
-
-/**
- * Interrupción del Ki (Dominus p.69): RF contra el daño más el valor de la técnica (entre cinco
- * contra acumulación); si falla, pierde lo acumulado, las mantenidas y las que tenía en espera.
- */
-function interrupcion(ctx: Contexto, def: Luchador, dificultad: number) {
-  const e = def.ki;
-  if (!e) return;
-  const dif = def.ficha.acumulacion ? Math.floor(dificultad / 5) : dificultad;
-  if (!tirarRf(ctx, def, dif, 'la Interrupción').falla) return;
-  e.acumulado = {};
-  e.ganado = {};
-  e.mantenidas.clear();
-  e.enEspera.clear();
-  e.objetivo = null;
-  e.activo = { ...SIN_KI };
-  def.escudoKi = 0;
-  log(ctx, () => `  ${def.ficha.nombre} pierde su Ki acumulado y sus técnicas activas.`);
-}
-
-/** Tabla 2 del Dominus (p.12): metros (el mínimo de cada rango) y Grado, por Fuerza y fracaso. */
-const IMPACTO: [number, number][][] = [
-  // Fue 6-9, 10-12, 13-14, 15-16, 17-18, 19-20; filas por fracaso 1, 2, 3-4, 5-6, 7-8, 9+.
-  [[1, 1], [5, 1], [10, 2], [15, 2], [30, 3], [50, 4]],
-  [[2, 1], [7, 1], [15, 2], [30, 3], [50, 3], [100, 4]],
-  [[3, 1], [10, 2], [30, 3], [50, 3], [150, 4], [500, 4]],
-  [[5, 1], [15, 2], [50, 3], [100, 4], [500, 4], [1000, 5]],
-  [[7, 1], [20, 2], [80, 3], [200, 4], [1000, 5], [5000, 5]],
-  [[10, 2], [30, 2], [120, 4], [500, 4], [5000, 5], [25000, 5]],
-];
-/** Tabla 3: daño medio de cada Grado (G1 va incluido en el del ataque). */
-const DANO_GRADO = [0, 0, 8, 30, 75, 175];
-
-/**
- * Impacto (Dominus p.68, p.12): control enfrentado de su Fuerza contra la del Impacto; si lo pierde,
- * sale despedido según la Tabla 2 y sufre el daño del Grado (−10 por punto de TA contundente; desde
- * G4 crítico con el doble del daño). Con Atraer, en cambio, lo trae al cuerpo a cuerpo. Lejos del
- * combate, queda fuera del alcance de todos.
- */
-function impacto(ctx: Contexto, atk: Luchador, def: Luchador, fuerza: number, atraer: boolean) {
-  const dif = controlEnfrentado(ctx.rng, fuerza, atributo(def, 'FUE') + modControl(def));
-  if (dif <= 0) {
-    log(ctx, () => `  ${def.ficha.nombre} aguanta el Impacto (control ${dif}).`);
-    return;
-  }
-  if (atraer) {
-    if (!enAlcance(atk, def)) moverHacia(ctx, def, atk, Infinity);
-    log(ctx, () => `  El Impacto atrae a ${def.ficha.nombre} hasta ${atk.ficha.nombre}.`);
-    return;
-  }
-  const columna = fuerza >= 19 ? 5 : fuerza >= 17 ? 4 : fuerza >= 15 ? 3 : fuerza >= 13 ? 2 : fuerza >= 10 ? 1 : 0;
-  const fila = dif >= 9 ? 5 : dif >= 7 ? 4 : dif >= 5 ? 3 : dif >= 3 ? 2 : dif - 1;
-  const [metros, grado] = IMPACTO[fila][columna];
-  const recorrido = despedir(ctx, atk, def, metros);
-  log(ctx, () => `  El Impacto lanza a ${def.ficha.nombre} ${recorrido < metros ? `contra un obstáculo a ${recorrido.toFixed(0)} m` : `a ${metros} m`} (Grado ${grado}).`);
-  const dano = Math.max(0, DANO_GRADO[grado] - 10 * (def.ficha.ta.CON ?? 0));
-  if (dano > 0) {
-    perderPv(ctx, atk, def, dano);
-    if (grado >= 4 && activo(def)) critico(ctx, atk, def, 2 * dano, false, 'normal', { sinBonos: true });
-  }
-}
-
-/** Lo aleja en línea recta de `desde`; en el mapa, celda a celda hasta un muro u otro luchador. */
-function despedir(ctx: Contexto, desde: Luchador, l: Luchador, metros: number): number {
-  soltar(l);
-  if (l.apresando) soltar(l.apresando);
-  const dx = l.pos.x - desde.pos.x, dy = l.pos.y - desde.pos.y;
-  const d = Math.hypot(dx, dy) || 1;
-  let recorrido = metros;
-  if (l.mapa) {
-    const m = l.mapa;
-    const paso = { x: Math.round(dx / d), y: Math.round(dy / d) };
-    if (!paso.x && !paso.y) paso.x = 1;
-    const ocupadas = new Set(ctx.luchadores.filter((x) => x !== l && activo(x)).map((x) => indice(m, x.pos)));
-    let n = 0;
-    while (n < metros) {
-      const sig = { x: l.pos.x + paso.x, y: l.pos.y + paso.y };
-      if (!transitable(m, sig) || ocupadas.has(indice(m, sig))) break;
-      l.pos = sig;
-      n++;
-    }
-    recorrido = n * (paso.x && paso.y ? Math.SQRT2 : 1);
-  } else l.pos = { x: l.pos.x + (dx / d) * metros, y: l.pos.y + (dy / d) * metros };
-  for (const x of ctx.luchadores) if (!enAlcance(x, l)) x.trabados = x.trabados.filter((e) => e !== l);
-  l.trabados = l.trabados.filter((e) => enAlcance(l, e));
-  return recorrido;
-}
-
-/** Lo acerca hasta trabarse con `obj` sin gastar su movimiento (Atraer). */
-function moverHacia(ctx: Contexto, l: Luchador, obj: Luchador, metros: number) {
-  if (l.mapa) {
-    const m = l.mapa;
-    const ocupadas = new Set(ctx.luchadores.filter((x) => x !== l && activo(x)).map((x) => indice(m, x.pos)));
-    const libre = celdaLibreCerca(m, obj.pos, ocupadas);
-    if (libre) l.pos = libre;
-  } else moverEnLinea(l, obj, metros);
-  for (const e of ctx.luchadores) {
-    if (e.equipo === l.equipo || !activo(e) || !enAlcance(l, e)) continue;
-    if (!e.trabados.includes(l)) e.trabados.push(l);
-    if (!l.trabados.includes(e)) l.trabados.push(e);
-  }
-}
-
-/**
- * Reflectar el ataque (Dominus p.71): lo devuelve contra quien lo lanzó con su misma habilidad final
- * (más el bono de contra), con el daño del ataque pero sin sus efectos esotéricos.
- */
-function reflectar(ctx: Contexto, quien: Luchador, atk: Luchador, total: number, o: Golpe) {
-  const dano = danoBase(atk, quien, o.esContra, o.ranura, o.ki);
-  const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  const golpe: Golpe = { maniobra: 'normal', esContra: true, tipo, ranura: o.ranura, ki: { ...SIN_KI, danoFijo: dano }, reflejado: true };
-  resolverDefensa(ctx, quien, atk, total, DADO_FIJO, golpe, `${quien.ficha.nombre} refleja el ataque contra ${atk.ficha.nombre}`);
-}
-
-/**
- * Técnica de Estados de condición automática (Dominus p.67-68): una acción activa sin tirada de
- * ataque. Un blanco (o todos los que estén a su distancia si alcanza a varios) hace la RF.
- */
-function estadosAutomaticos(ctx: Contexto, l: Luchador, tecnica: Tecnica, blancos: Luchador[]) {
-  const ki = ejecutar(l, tecnica);
-  l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
-  log(ctx, () => `${l.ficha.nombre} usa ${tecnica.nombre} [Ki ${textoKi(l)}] sobre ${blancos.map((b) => b.ficha.nombre).join(', ')}.`);
-  for (const b of blancos)
-    for (const est of ki.estados) if (est.condicion === 'automatico' && activo(b)) estadoSobrenatural(ctx, l, b, est);
-}
-
-/**
- * Mushin: RF contra el daño + 20 (máx. 220; arcano +20, máx. 240). Si falla: −fracaso a toda
- * acción (se recupera 5 por asalto) y pierde el doble de PV. El arcano además induce un estado.
- */
-function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, estado: EstadoMushin | null) {
-  const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
-  const dadoRf = tirarD100Cerrada(ctx.rng);
-  // Las Resistencias no sufren el negativo a toda acción (Core p.232).
-  const baseRf = rfDe(def);
-  const res = baseRf + dadoRf;
-  if (!resultadoResistencia(baseRf, dadoRf, dif).falla) {
-    log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
-    return;
-  }
-  const fallo = dif - res;
-  def.penDolor += fallo;
-  def.pv -= 2 * fallo;
-  limitePorDano(ctx, def, 2 * fallo);
-  atk.stats.danoCausado += 2 * fallo;
-  def.stats.danoRecibido += 2 * fallo;
-  log(ctx, () => `  ${def.ficha.nombre} falla la RF (${res} [${baseRf}+${dadoRf}] contra ${dif}) por ${fallo}: −${fallo} a toda acción y −${2 * fallo} PV (${def.pv}/${def.ficha.pv}).`,
-    () => ({ dano: { quien: nro(ctx, def), cantidad: 2 * fallo } }));
-  if (estado) {
-    // Estados de la Tabla del Mushin arcano. Las parálisis duran tantos asaltos como el fracaso.
-    if (estado === 'dolor') def.penDolor += 40;
-    else if (estado === 'dolorExtremo') def.penDolor += 80;
-    else if (estado === 'paralisisMenor' || estado === 'paralisisParcial') {
-      imponer(def, 'paralisis', { nivel: estado === 'paralisisMenor' ? 1 : 2, asaltos: fallo });
-    } else if (estado === 'paralisisCompleta' || estado === 'coma') caer(ctx, atk, def, 'inconsciente');
-    else if (estado === 'muerte') caer(ctx, atk, def, 'muerto');
-    log(ctx, () => `  Además sufre ${estado}.`);
-  }
-  verificarCaida(ctx, atk, def);
-}
-
 // --------------------------------------------------------------------------- rotura (opcional, Core p.93)
-
-/** Bono a la rotura por Fuerza (Core p.93). */
-function bonoRoturaFuerza(fue: number): number {
-  return fue >= 15 ? 5 : fue >= 13 ? 4 : fue >= 11 ? 3 : fue === 10 ? 2 : fue >= 8 ? 1 : 0;
-}
-
-/** Rotura de un golpe: la del arma (o la del perfil sin armas) + Fuerza + Dumah y Ojos de la Muerte. */
-function roturaDe(l: Luchador, ranura: Ranura): number {
-  const sinArmas = ranura.sinArmas || l.cap.desarmado;
-  const base = sinArmas ? (l.ficha.sinArmas?.rotura ?? 0) : (l.ficha.arma?.rotura ?? 0);
-  return base + bonoRoturaFuerza(atributo(l, 'FUE')) + (sinArmas ? l.cap.est.roturaSinArmas : 0) + l.cap.est.roturaExtra;
-}
-
-/** Control de rotura: d10 + rotura contra la entereza; devuelve por cuánto la supera (0 si no). */
-function controlRotura(ctx: Contexto, rotura: number, entereza: number): number {
-  return Math.max(0, rotura + dado(ctx.rng, 10) - entereza);
-}
-
-/**
- * Al parar: si las dos armas chocan, cada una puede romper a la otra. Si el defensor para sin armas
- * un arma, controla con su Constitución o Destreza y recibe 5 de daño por punto que falle, salvo
- * maestría en parada sin armas o Malla-yuddha avanzado (Core p.94, Dominus p.35).
- */
-function roturaEnParada(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, paro: boolean) {
-  const atkArmado = !ranura.sinArmas && !atk.cap.desarmado;
-  if (!atkArmado) return;
-  if (def.cap.desarmado) {
-    if (!paro || esMaestro(def.ficha.defensa) || def.cap.est.paradaSinArmasSegura) return;
-    const entereza = Math.max(atributo(def, 'CON'), atributo(def, 'DES')) + def.cap.est.enterezaSinArmas;
-    const falla = controlRotura(ctx, roturaDe(atk, ranura), entereza);
-    if (falla > 0) {
-      def.pv -= 5 * falla;
-      limitePorDano(ctx, def, 5 * falla);
-      def.stats.danoRecibido += 5 * falla;
-      atk.stats.danoCausado += 5 * falla;
-      log(ctx, () => `  ${def.ficha.nombre} para sin armas y recibe ${5 * falla} de daño (${def.pv}/${def.ficha.pv}).`);
-      verificarCaida(ctx, atk, def);
-    }
-    return;
-  }
-  const rDef = { pen: 0, sinArmas: false };
-  if (controlRotura(ctx, roturaDe(atk, ranura), def.ficha.arma?.entereza ?? 10) > 0) romperArma(ctx, def);
-  if (activo(atk) && controlRotura(ctx, roturaDe(def, rDef), atk.ficha.arma?.entereza ?? 10) > 0) romperArma(ctx, atk);
-}
-
-/**
- * Un arma de calidad +5 o más no se rompe: pierde un grado (−5 ataque y parada, −5 turno, −10 daño,
- * −2 rotura, −10 entereza). Sin calidad se destruye y el luchador queda desarmado (Core p.93, p.76).
- */
-function romperArma(ctx: Contexto, l: Luchador) {
-  const arma = l.ficha.arma ?? {};
-  l.armaRota ??= l.ficha;
-  const calidad = arma.calidad ?? 0;
-  if (calidad < 5) {
-    log(ctx, () => `  ¡Se rompe el arma de ${l.ficha.nombre}!`);
-    desarmar(ctx, l, l);
-    return;
-  }
-  const paraConEsta = (l.ficha.tipoDefensa ?? 'parada') === 'parada';
-  l.ficha = {
-    ...l.ficha,
-    ataque: l.ficha.ataque - 5,
-    defensa: l.ficha.defensa - (paraConEsta ? 5 : 0),
-    turno: l.ficha.turno - 5,
-    danoBase: l.ficha.danoBase - 10,
-    arma: { ...arma, calidad: calidad - 5, rotura: (arma.rotura ?? 0) - 2, entereza: (arma.entereza ?? 10) - 10 },
-  };
-  l.cap = capacidades(l.ficha);
-  log(ctx, () => `  El arma de ${l.ficha.nombre} se mella: baja a calidad +${calidad - 5}.`);
-}
-
-/**
- * La armadura que evitó el daño puede romperse: cada capa rota pierde un punto de todas sus TA. Sólo
- * se controlan las capas de la zona golpeada (el yelmo en un golpe a la cabeza).
- */
-function roturaDeArmadura(ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, zona: ZonaArmadura) {
-  const capas = def.ficha.capasArmadura;
-  if (!capas?.length) return;
-  const enZona = new Set(capasDe(def.ficha, zona));
-  if (!enZona.size) return;
-  const rotura = roturaDe(atk, ranura);
-  let rotas = 0;
-  let rotasCuerpo = 0;
-  const nuevas = capas.map((c) => {
-    if (!enZona.has(c) || controlRotura(ctx, rotura, c.entereza) === 0) return c;
-    rotas++;
-    if ((c.localizacion ?? 'completa') !== 'cabeza') rotasCuerpo++;
-    return { ...c, ta: Object.fromEntries(Object.entries(c.ta).map(([t, v]) => [t, Math.max(0, (v ?? 0) - 1)])) };
-  });
-  if (!rotas) return;
-  // La TA total de la planilla es la del cuerpo: el yelmo no cuenta en ella.
-  const ta = { ...def.ficha.ta };
-  for (const t of Object.keys(ta) as (keyof typeof ta)[]) ta[t] = Math.max(0, (ta[t] ?? 0) - rotasCuerpo);
-  def.ficha = { ...def.ficha, ta, capasArmadura: nuevas };
-  log(ctx, () => `  La armadura de ${def.ficha.nombre} se daña: −${rotas} a la TA de ${zona === 'cabeza' ? 'su yelmo' : 'las capas golpeadas'}.`);
-}
 
 /** Derribo, Presa o Desarmar: control enfrentado de características (Core p.91-92). */
 function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento = 0) {

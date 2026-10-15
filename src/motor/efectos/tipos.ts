@@ -10,6 +10,7 @@ import type { TiradaD100 } from '../dados';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from '../golpe';
 import type { EstadoMagia, Mantenido } from '../magia';
 import type { Maniobra } from '../maniobras';
+import type { ModKi } from '../ki';
 import type { Contexto, Evento, Ficha, Luchador } from '../modelo';
 import type { Resistencia } from '../reglas';
 
@@ -21,6 +22,12 @@ export interface Motor {
   verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador): void;
   /** Le ofrece un contraataque con ese bono. */
   ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number): void;
+  /** Le aplica el daño de un golpe que lo alcanzó (PV, crítico, caída). */
+  aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, ki?: ModKi): void;
+  /** Lo que se activa al perder PV (concentración de la magia, Límites del Ki). */
+  limitePorDano(ctx: Contexto, l: Luchador, dano: number, critico?: boolean): void;
+  /** Lo acerca en línea recta (sin mapa); devuelve los metros. */
+  moverEnLinea(l: Luchador, obj: Luchador, disponible: number): number;
   log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>): void;
   /** Resistencia contra una dificultad: si falla y por cuánto (Core p.13). */
   tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono?: number): Resistencia;
