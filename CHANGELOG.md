@@ -3,6 +3,29 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 15/10/2026: auditoría completa (reglas, estructura, velocidad)
+
+- **Reglas** (AUDITORIA.md, sección 7; correcciones 17 a 35): ataques en área sobrenaturales (−120 a
+  parar, −80 a esquivar si no sale del área, doble daño contra la acumulación), conjuros de fuego, frío
+  y electricidad se paran con −120, el ACT sufre los negativos, Campeón no sube la Proyección, una sola
+  RF y una sola resistencia al calor para motor e IA, daño a escudos por toda la reducción de TA,
+  empates en las Resistencias, suerte en todas las tiradas, Fascinación −20 a defenderse, ceguera
+  parcial el último asalto de un destello, escudos mágicos con acumulación, desempate de iniciativa,
+  Tabla 48, cañón, crítico del Impacto.
+- **Estructura** (DISENO.md, "Arquitectura"): registro exhaustivo de efectos de conjuro
+  (`motor/efectos/`) con el motor prestado por interfaz; la IA de magia en `ia-magia.ts`; estados en
+  un solo lugar (`aplicarEstado`); Resistencias, RF y calor en un solo lugar; bonos sobrenaturales con
+  cualquier origen; un solo camino para los escudos (`escudoRecibe`); áreas en el golpe; hipótesis de
+  la IA con `conCambio` (corrige un bug que borraba lo que un rival percibía); datos en el catálogo
+  en vez de nombres; `noUnusedLocals` y `noUnusedParameters`.
+- **Velocidad** (misma huella): Stéphan 143 → ~300 combates/s; carga de planillas 1,97 → 1,10 s.
+- **Herramientas:** huella más estricta (registro completo de 20 combates por escenario, escenarios
+  de magia, estilos, tiradores y reglas opcionales), `scripts/huella.sh`, `npm run medir`.
+- **Medición** (500, % que gana el primero): Stéphan vs Teseo 92 → 87; Kael vs Teseo 13 → 56;
+  Stéphan+Kael+Kaito vs Teseo+Kiran+4 52 → 64; Kaito vs Teseo 71; Stéphan vs Kaito 0,4; vs Kiran 0;
+  vs cuatro soldados 99.
+- Cuatro puntos para decidir (AUDITORIA.md 7).
+
 ## 15/10/2026: magia, parte 3 (Stéphan completo)
 
 - **Reglas**: conjuro preparado (sostenerlo Poder asaltos, +40 a la concentración, Conjuro

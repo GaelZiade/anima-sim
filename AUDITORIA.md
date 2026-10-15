@@ -8,6 +8,8 @@ Gaia I. Las páginas son las del PDF (las del índice impreso son 2 menos), como
 - **Decisiones:** 9 puntos donde la regla no era literal, todos respondidos y aplicados.
 - **Falta modelar:** reglas del manual que el simulador todavía no tiene.
 - Pruebas: 142, todas pasan (`test/auditoria.test.ts` cubre lo corregido).
+- **Segunda auditoría (15/10/2026):** 19 correcciones más (17 a 35) y 4 puntos para decidir, en la
+  sección 7.
 
 ## 1. Corregido
 
@@ -168,3 +170,49 @@ Agregado después (lo que faltaba de la Tabla 43 y los estados del capítulo 14 
 - **Miedo** (−60) y **Dolor** (−20 / −40 / −80) como estados que duran todo el combate (Core
   p.232-233).
 - En la página: selector de luz en Opciones y un tercer selector por luchador con su estado.
+
+
+## 7. Segunda auditoría (15/10/2026)
+
+Revisión del motor entero contra Core, Arcana y Dominus, más la coherencia entre el motor y la IA (que
+antes calculaban algunas reglas de dos maneras). Cada hallazgo se verificó en el manual antes de
+tocarlo. Los tests están en `test/auditoria.test.ts` ("segunda auditoría").
+
+| # | Qué estaba mal | Qué dice el manual | Dónde |
+|---|---|---|---|
+| 17 | **RF contra Destrucción por Ki y puntos de presión** no sumaba el Incremento de RF del Ki ni las Resistencias de Protección Final; la IA valoraba los críticos y los Estados con otra RF que el motor | Incremento de RF: "contra cualquier clase de efecto, durante todo el asalto" (Dominus p.61). Protección Final: "+10 a todas las Resistencias" (Arcana p.35). Una sola RF (`rfDe`, `rfCritico`) para motor e IA; la IA suma la Frialdad en Miedo, Terror y Fascinación como el motor (Core p.54) | `calculos.ts`, `combate.ts`, `ia.ts` |
+| 18 | **Resistencia al calor** distinta entre motor e IA: la IA no sumaba la Inmunidad contra el fuego a Incinerar ni la restaba al prender; tocar a Cuerpo a Fuego no sumaba el bono contra el calor | Inmunidad contra el Fuego: +5 a las Resistencias contra el calor por intensidad y −20 en la Tabla 76 (Core p.156, p.236). Una sola cuenta (`resistenciaCalor`, `nivelLlamas`) | `calculos.ts`, `magia.ts`, `efectos/` |
+| 19 | **Ataques en área sobrenaturales** (Bola de Fuego, Tormenta, Mina, Consumir Esencia, áreas de Ki) se defendían como cualquier otro | "Parar estos ataques de manera convencional no resulta posible […] aplicará un penalizador de –120 a su habilidad de parada"; esquivando, −80 si su movimiento no le alcanza para salir del área ese asalto; un escudo sobrenatural no sufre nada (Core p.101). Vale para las áreas de Ki: Incremento de movimiento sirve "para contrarrestar los Penalizadores de un Ataque en área" (Dominus p.61). Kael vs Teseo pasa de 13% a 50% | `calculos.ts`, `combate.ts`, `efectos/` |
+| 20 | **Conjuros de calor, frío o electricidad** no se podían parar (como los de energía) | Los de energía, parada a cero; los de electricidad, frío o fuego, "como una descarga ígnea", −120 a parar si no se puede parar energía (Core p.100) | `calculos.ts` |
+| 21 | **Áreas contra seres con acumulación** hacían el daño normal | "Recibirá el doble de daño de lo que indique el Resultado del Asalto" (Core p.99). En el motor y en el pronóstico de la IA | `combate.ts`, `calculos.ts` |
+| 22 | **El ACT no bajaba con los negativos** a toda acción | "Un personaje sufre un penalizador a su ACT equivalente a la mitad del negativo, redondeado hacia arriba en grupos de cinco" (Core p.232). También para la magia innata (Tabla 58) | `magia.ts` (`actDe`) |
+| 23 | **El "+ a toda acción" de Campeón** (y la Luna) subía la Proyección Mágica | El bono a toda acción "no aumenta las habilidades sobrenaturales del personaje en ninguno de sus aspectos" (Core p.232; Campeón da "+10 a toda acción", Arcana p.35) | `calculos.ts` |
+| 24 | **Daño a los escudos**: sólo sumaba la reducción de TA de las técnicas de Ki (y citaba Dominus p.11) | "Un luchador aumenta el Daño que producen sus ataques a los escudos en un valor equivalente a diez puntos por cada TA que resta", también por calidad (Dominus p.13); Sin armadura, +200 (Dominus p.60). Una sola cuenta (`danoAEscudo`) para el escudo mágico, el de energía y la IA que elige el grado | `calculos.ts`, `combate.ts`, `ia-magia.ts` |
+| 25 | **Cegado por Flash** tenía ceguera absoluta hasta el final | "En el asalto previo a recuperar la vista el personaje afectado sólo aplica el penalizador de ceguera parcial" (Core p.233) | `calculos.ts` |
+| 26 | **Fascinación** sólo impedía las acciones activas | "Las acciones pasivas que realice sufren un penalizador de –20" (Core p.233): defenderse, también con un escudo mágico | `calculos.ts` |
+| 27 | **Empates en las Resistencias** contaban como superadas (y el Aura con fracaso 0 como resistida) | "Para pasar un control de Resistencia […] si supera la dificultad requerida" (Core p.13); el Aura: "0 a −19, Afectado" (Dominus p.22, Tabla 9). Una sola regla (`resultadoResistencia`) para RF, RM, Aura, puntos de presión, Fundir y la probabilidad que usa la IA | `reglas.ts`, `combate.ts`, `efectos/`, `probabilidades.ts` |
+| 28 | **Buena y Mala suerte** sólo cambiaban la pifia en combate físico y Acrobacias | "La cifra requerida para pifiar" cambia en general (Core p.21, p.25): también Proyección Mágica, Advertir, Buscar, Trucos de manos y Resistir el dolor | `combate.ts`, `magia.ts` |
+| 29 | **Pifia defendiendo con escudo mágico** usaba el umbral de la defensa física (maestría y arma Compleja) | La maestría es la de la habilidad que se tira (Core p.10, p.17); lo Complejo sólo cuenta al parar con el arma (Core p.76) | `combate.ts` |
+| 30 | **Defensa final con mínimo 0** (heredado del toolkit), distinto del pronóstico de la IA | Una pifia en defensa resta su nivel "directamente de su habilidad de defensa" (Core p.98), sin mínimo | `combate.ts` |
+| 31 | **Empate de iniciativa** se desempataba por el turno de la ficha | "Actuará primero quien tenga mayor turno final" (Core p.86) | `combate.ts` |
+| 32 | **Tabla 48**: un disparo que igualaba la dificultad llegaba | "Si el resultado final supera la dificultad" (Core p.96) | `combate.ts` |
+| 33 | **Cañón** se encasquillaba como el arcabuz (80) | "Pifia con el cañón de nivel inferior a 70, el arma se bloquea" (Core p.81) | `proyectiles.ts` |
+| 34 | **Seres con acumulación** no podían usar escudos mágicos, y nunca perdían la concentración al acumular | Pueden usarlos "aplicando un penalizador de –80 a su habilidad de Proyección, pero cuando su defensa es superada, sí perderán su acción" (Core p.99); "no efectúan este control, salvo si reciben un ataque que les produzca un crítico" (Core p.118) | `calculos.ts`, `combate.ts`, `magia.ts` |
+| 35 | **Crítico de un Impacto de Grado 4+** sumaba los bonos de crítico del atacante | El crítico viene del choque: "un valor equivalente al doble del Daño recibido" (Dominus p.12), no del arma | `combate.ts` |
+
+**Efecto medido** (`npm run medir`, 500 combates, % que gana el primero): Kael contra Teseo 13 → 56
+(Teseo para las áreas de Ki, que ahora tienen −120); Stéphan contra Teseo 92 → 87; Stéphan, Kael y
+Kaito contra Teseo, Kiran y cuatro soldados 52 → 64; el resto, sin cambios apreciables.
+
+### Para decidir (la regla no lo precisa)
+
+1. **ACT a la mitad por hacer otra cosa:** hoy se aplica al terminar el asalto (lo ganado queda en la
+   mitad). El ejemplo de Serenade (Core p.117) lo baja "al declarar"; con el Ki, la acumulación queda
+   entera dentro del asalto. ¿Se baja en el momento en que hace la otra acción?
+2. **Impacto de Grado 4:** "un Crítico con un valor equivalente al doble del Daño" (Dominus p.12). Hoy:
+   nivel = doble del daño + 1d100 (como cualquier crítico). ¿O nivel fijo, sin tirada?
+3. **Ataque en área físico contra la acumulación:** el doble de daño vale "si se utiliza un ataque en
+   área con un arma lo suficientemente grande como para cubrir la mitad del ser" (Core p.99). No se
+   aplica: depende del tamaño del arma y del ser.
+4. **Dolor:** el estado Dolor del Ki es −40 que dura el combate; el Dolor de la tabla del Mushin
+   arcano baja 5 por asalto (se suma al dolor de los críticos). ¿Quedan así?

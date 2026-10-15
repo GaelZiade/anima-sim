@@ -327,6 +327,58 @@ Monte Carlo en paralelo: `motor/tandas.ts` corta en tandas de 250 con semilla pr
 resultado se combina por índice. Con la misma semilla da lo mismo con 1 o con N hilos, en la página
 y en el CLI (`src/paralelo-node.ts`, `--hilos=N`).
 
+Auditoría del 15/10/2026 (sin cambiar resultados):
+
+- `normalizarRasgo` memorizada (se llamaba miles de veces por decisión con los mismos nombres), los
+  conjuros de cada ficha calculados una vez, y `cacheDeDecision` (`ia.ts`): cualquier módulo registra
+  una caché que se vacía con cada decisión, como `base`. Stéphan contra Teseo: 143 → ~300/s.
+- Carga de planillas: la tabla de tamaños de armas indexada una vez por libro, y el lector XML sin
+  trabajo de más (7 planillas: 1,97 s → 1,10 s, mismas fichas).
+- La huella se hizo más estricta: además del resultado de cada combate, el registro completo de 20
+  combates por escenario (cada línea y la foto de todos), y escenarios de magia, estilos, tiradores y
+  reglas opcionales juntas. `scripts/huella.sh` la da sin velocidades para compararla con `diff`.
+- `npm run medir`: victorias en los enfrentamientos de referencia, para ver el efecto de un cambio de
+  reglas o de IA.
+
+## Arquitectura: cómo se extiende sin romper
+
+Lo que hay que saber para sumar reglas nuevas (poderes psíquicos, más conjuros, criaturas) sin tocar
+diez lugares.
+
+- **Efectos de conjuro** (`motor/efectos/`): cada efecto (`EfectoConjuro`) tiene un manejador con su
+  resolución en el motor (`resolver`, o los ganchos del ataque: `blancos`, `golpe`, `trasGolpe`,
+  `alAlcanzar` para los anímicos, `cadaAsalto`, `alTerminar`) y su valoración para la IA
+  (`valorar`). El registro (`efectos/index.ts`) es exhaustivo: un efecto nuevo sin manejador no
+  compila. Agregar un conjuro con un efecto existente es sólo una línea en `COMPORTAMIENTO`; uno con
+  un efecto nuevo, un manejador.
+- **El motor se presta por interfaz** (`Motor` en `efectos/tipos.ts`): los manejadores no importan
+  `combate.ts`; reciben `resolverDefensa`, `perderPv`, `tirarResistencia`… Sin dependencias
+  circulares.
+- **Datos antes que código:** lo que distingue a un conjuro va en el catálogo (`radioOfensivo`,
+  `escudoContra`, `escudoSiNoHayOtro`), no en comparaciones por nombre.
+- **Estados** (`efectos/estados.ts`): `aplicarEstado` aplica cualquier estado de la tabla por un
+  fracaso, sea cual sea la Resistencia tirada (RF del Ki hoy; RP de los psíquicos mañana).
+  Exhaustivo.
+- **Resistencias:** una regla (`resultadoResistencia` en `reglas.ts`: se pasa superando, el 100
+  siempre pasa), una RF (`rfDe`, `rfCritico`), una resistencia al calor (`resistenciaCalor`) y una
+  probabilidad para la IA (`fallaResistencia`). Motor e IA usan las mismas.
+- **Bonos sobrenaturales:** toda fuente entra por `bendecir(l, fuente, origen, bono)` (`magia.ts`) y
+  queda sumada en `l.bono`, que ya leen ataque, defensa, turno, TA y Resistencias. Un poder psíquico
+  que da bonos no toca ninguna fórmula.
+- **Escudos sobrenaturales:** `escudoRecibe` (`combate.ts`) con una interfaz chica
+  (`EscudoSobrenatural`): un escudo psíquico sólo dice cómo se llama y dónde guarda su resistencia;
+  el daño que recibe es `danoAEscudo` (Dominus p.13, p.60).
+- **Áreas sobrenaturales:** el `Golpe` lleva `area` y `centroArea`; la defensa (Core p.101) y el doble
+  daño contra la acumulación (Core p.99) salen de ahí, en el motor y en el pronóstico.
+- **IA:** `ia.ts` (cuerpo a cuerpo, Ki, distancia), `ia-magia.ts` (turno de magia, escudos) y
+  `efectos/valorar.ts` (lo que comparten las valoraciones de conjuros). Las hipótesis ("¿y si lo
+  bendigo?") se prueban con `conCambio`, que siempre deshace.
+- **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
+
+Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de
+efectos con `resolver`/`valorar` que reciba el mismo `Motor`, `aplicarEstado` con la RP, `bendecir`
+para los bonos y `escudoRecibe` para los escudos.
+
 ## Mapa
 
 Grilla de celdas de 1 m (`motor/mapa.ts`), al estilo BattleCast. Hay dos clases de celdas no

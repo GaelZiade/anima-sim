@@ -28,12 +28,14 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 184 tests: reglas, flujo del combate, mapa, Ki, planillas
+npm test                                     # 300 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
 npm run bench                                # combates por segundo (un hilo)
-npm run bench -- huella                      # huella de resultados: no cambia con una optimización
+npm run bench -- huella                      # huella de resultados y del registro: no cambia con una optimización
+scripts/huella.sh > antes.txt                # la huella sin velocidades, para comparar con diff
+npm run medir                                # % de victorias en los enfrentamientos de referencia
 npm run typecheck && npm run build
 ```
 
@@ -112,7 +114,12 @@ src/motor/      el motor (sin DOM)
   reglas.ts       tablas y fórmulas puras del Core (absorción, críticos, Tabla 25, 44, 52…)
   calculos.ts     habilidades finales con todos los modificadores (Tabla 43, Dominus Tabla 1, ceguera, Ki)
   combate.ts      el combate: iniciativa, sorpresa, turnos, atacar/defender, daño, críticos, registro
+  golpe.ts        tipos del golpe que se resuelve contra una defensa (físico, Ki, conjuro)
   ia.ts           decisiones de la IA (declarar, objetivo, maniobra, cansancio, resistir, Ki)
+  ia-magia.ts     IA de la magia: qué lanzar, acumular o preparar, escudos
+  magia.ts        zeon, ACT, lanzar y mantener, beneficios (bendecir), Tabla 76
+  conjuros.ts, grimorio.ts   catálogo de conjuros (datos) y grimorio generado de la planilla
+  efectos/        registro de efectos de conjuro (resolver + valorar), estados, valoración compartida
   ki.ts           acumulación, técnicas, mantener, en espera, Límites
   maniobras.ts    maniobras, controles de características, estados (parálisis, vuelo, carga)
   estilos.ts      artes marciales, tablas de combate, ventajas → capacidades
@@ -143,9 +150,10 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 
 **Próximos pasos, en orden:**
 
-1. **Psíquica** (CV, potencial; Rita). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
+1. **Psíquica** (CV, potencial; Rita), sobre la arquitectura de DISENO.md ("Arquitectura: cómo se
+   extiende sin romper"). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
    confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
-   (`sinSimular` dice qué falta).
+   (`sinSimular` dice qué falta). Antes, responder los 4 puntos de AUDITORIA.md sección 7.
 2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.
 3. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
