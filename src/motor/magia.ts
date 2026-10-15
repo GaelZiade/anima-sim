@@ -7,6 +7,7 @@ import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { umbralPifia } from './reglas';
+import { normalizarRasgo } from './rasgos';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
 export interface Mantenido {
@@ -16,6 +17,34 @@ export interface Mantenido {
   blancos?: Luchador[];
   /** Zona estática donde sigue actuando (Tormenta de Fuego) y a quiénes deja fuera (Control del Espacio). */
   zona?: { x: number; y: number; radio: number; desde: number; excluye: 'aliados' | 'nadie' };
+  /** Innato: se mantiene sin gastar zeon (Core p.117). */
+  innato?: boolean;
+}
+
+/** Lo que decide al empezar el asalto (Core p.117, Arcana p.27, Core p.159). */
+export interface PlanMagia {
+  /** Acumula su ACT este asalto. */
+  acumula: boolean;
+  /** Prepara un conjuro determinado: el ACT va sólo a él (Core p.117). */
+  preparar?: { conjuro: Conjuro; grado: number } | null;
+  /** Puntos de cansancio que gasta para subir el ACT (+15, o lo que dé Explotación de la Energía Física). */
+  cansancio?: number;
+  /** Zeon de la reserva que gasta con Sacrificio de Poder: +5 al ACT cada 10 (Core p.159). */
+  sacrificioPoder?: number;
+  /** PV que sacrifica con Consumir Vida por Magia: 100 de zeon cada 5 (Core p.159). */
+  consumirVida?: number;
+  /** Este asalto lanza un conjuro innato: no acumula ni lanza otros (Core p.117). */
+  innato?: boolean;
+}
+
+/** Un conjuro determinado que prepara o ya tiene listo (Core p.117). */
+export interface Preparado {
+  conjuro: Conjuro;
+  grado: number;
+  /** Zeon reunido para él. */
+  zeon: number;
+  /** Asaltos que lleva listo, sin lanzarlo (lo sostiene tantos como su Poder). */
+  esperando: number;
 }
 
 /** Un conjuro de efecto activo sobre alguien: de quién viene y qué le da. */
@@ -43,6 +72,12 @@ export interface EstadoMagia {
   armadura: { energia: number; resto: number } | null;
   /** Hizo este asalto algo que no es lanzar conjuros (atacar, defenderse sin escudo, moverse): ACT a la mitad. */
   otraAccion: boolean;
+  /** Conjuro determinado que prepara o tiene listo. Su zeon está en la reserva, aparte de lo acumulado. */
+  preparado: Preparado | null;
+  /** Este asalto usa la magia innata (no acumula ni lanza otros conjuros). */
+  innato: boolean;
+  /** A dónde fue lo acumulado este asalto: magia pura o el conjuro preparado. */
+  ganadoEn: 'puro' | 'preparado';
 }
 
 export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
@@ -52,7 +87,7 @@ export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
   if (!conjuros.length) return null;
   return {
     reserva: m.zeon, acumulado: 0, ganado: 0, acumulando: false, lanzo: false, conjuros, mantenidos: [],
-    escudo: null, armadura: null, otraAccion: false,
+    escudo: null, armadura: null, otraAccion: false, preparado: null, innato: false, ganadoEn: 'puro',
   };
 }
 
@@ -65,37 +100,98 @@ function soltar(e: EstadoMagia) {
   e.acumulado = 0;
 }
 
+/** ACT extra por cada punto de cansancio: +15, o +25 / +40 con Explotación de la Energía Física (Arcana p.27). */
+export function actPorCansancio(l: Luchador): number {
+  const n = l.ficha.magia?.explotacion ?? 0;
+  return n >= 2 ? 40 : n === 1 ? 25 : 15;
+}
+
+/** Zeon de valor máximo que puede lanzar como innato según su ACT (Tabla 58, Core p.117). */
+export function maximoInnato(act: number): number {
+  if (act < 10) return 0;
+  if (act <= 50) return 10;
+  if (act <= 70) return 20;
+  if (act <= 90) return 30;
+  if (act <= 110) return 40;
+  if (act <= 130) return 50;
+  if (act <= 150) return 60;
+  if (act <= 180) return 70;
+  if (act <= 200) return 80;
+  return 90;
+}
+
+/** Su ACT este asalto preparando ese conjuro: +10 si es su Conjuro Especialista (Arcana p.30). */
+export function actPara(l: Luchador, c?: Conjuro | null): number {
+  const m = l.ficha.magia!;
+  return m.act + (c && m.especialista?.some((x) => normalizarRasgo(x) === normalizarRasgo(c.nombre)) ? 10 : 0);
+}
+
+/** Zeon libre de la reserva: lo que no está acumulado ni en un conjuro preparado. */
+export function zeonLibre(e: EstadoMagia): number {
+  return e.reserva - e.acumulado - (e.preparado?.zeon ?? 0);
+}
+
 /**
  * Comienzo del asalto: paga los mantenidos (de la reserva, sin usar lo acumulado; el que no pueda
- * pagar se cae) y, si acumula, suma su ACT sin pasar la reserva. Si deja de acumular, lo acumulado
- * vuelve a la reserva menos 10 (Core p.117).
+ * pagar se cae; los innatos y los diarios no cuestan) y acumula según el plan: magia pura o un conjuro
+ * determinado, con lo que sumen el cansancio y Sacrificio de Poder, sin pasar la reserva. Si deja de
+ * acumular magia pura, lo acumulado vuelve a la reserva menos 10 (Core p.117). Un conjuro listo se
+ * sostiene tantos asaltos como su Poder; después vuelve a la reserva menos 10.
  */
-export function empezarAsaltoMagia(l: Luchador, acumula: boolean) {
+export function empezarAsaltoMagia(l: Luchador, plan: PlanMagia | boolean) {
   const e = l.magia;
   if (!e) return;
+  const p: PlanMagia = typeof plan === 'boolean' ? { acumula: plan } : plan;
   e.lanzo = false;
   e.ganado = 0;
   e.otraAccion = false;
+  e.innato = !!p.innato;
+  // Consumir Vida por Magia: PV por zeon a la reserva (Core p.159).
+  if (p.consumirVida) {
+    l.pv -= p.consumirVida;
+    e.reserva += (p.consumirVida / 5) * 100;
+  }
   e.mantenidos = e.mantenidos.filter((x) => {
     // Un beneficio cuyos blancos ya cayeron no se sigue pagando.
     if (x.blancos?.length && !x.blancos.some((b) => b.estado === 'activo')) {
       quitarEfecto(e, x, l);
       return false;
     }
-    const coste = x.conjuro.grados[x.grado].mantenimiento ?? 0;
-    if (e.reserva - e.acumulado < coste) {
+    const coste = x.innato ? 0 : x.conjuro.grados[x.grado].mantenimiento ?? 0;
+    if (zeonLibre(e) < coste) {
       quitarEfecto(e, x, l);
       return false;
     }
     e.reserva -= coste;
     return true;
   });
-  e.acumulando = acumula;
-  if (!acumula) {
-    soltar(e);
+  // Un conjuro listo: un asalto más de espera; pasado su Poder, vuelve a la reserva menos 10.
+  const pr = e.preparado;
+  if (pr && pr.zeon >= pr.conjuro.grados[pr.grado].zeon && ++pr.esperando > atributo(l, 'POD')) {
+    e.reserva -= Math.min(PERDIDA_AL_SOLTAR, pr.zeon);
+    e.preparado = null;
+  }
+  e.acumulando = p.acumula && !p.innato;
+  const prepara = p.preparar && !p.innato ? p.preparar : null;
+  if (!e.acumulando || prepara) soltar(e);
+  if (!e.acumulando) return;
+  // Sacrificio de Poder: zeon de la reserva por ACT (Core p.159).
+  const sacrificio = Math.min(p.sacrificioPoder ?? 0, zeonLibre(e));
+  e.reserva -= sacrificio;
+  const act = actPara(l, prepara?.conjuro) + actPorCansancio(l) * (p.cansancio ?? 0) + Math.floor(sacrificio / 10) * 5;
+  if (prepara) {
+    if (!e.preparado || e.preparado.conjuro !== prepara.conjuro || e.preparado.grado !== prepara.grado) {
+      if (e.preparado) e.reserva -= Math.min(PERDIDA_AL_SOLTAR, e.preparado.zeon);
+      e.preparado = { conjuro: prepara.conjuro, grado: prepara.grado, zeon: 0, esperando: 0 };
+    }
+    const falta = prepara.conjuro.grados[prepara.grado].zeon - e.preparado.zeon;
+    e.ganado = Math.max(0, Math.min(act, falta, zeonLibre(e)));
+    e.preparado.zeon += e.ganado;
+    e.ganadoEn = 'preparado';
     return;
   }
-  e.ganado = Math.max(0, Math.min(l.ficha.magia!.act, e.reserva - e.acumulado));
+  e.ganadoEn = 'puro';
+  e.ganado = Math.max(0, Math.min(act, zeonLibre(e)));
   e.acumulado += e.ganado;
 }
 
@@ -110,7 +206,16 @@ export function terminarAsaltoMagia(l: Luchador) {
     soltar(e);
     return;
   }
-  if ((e.otraAccion || l.movioActivo) && e.ganado) e.acumulado -= Math.floor(e.ganado / 2);
+  if (!((e.otraAccion || l.movioActivo) && e.ganado)) return;
+  // Lo que ganó preparando un conjuro determinado también queda a la mitad.
+  if (e.ganadoEn === 'preparado' && e.preparado) e.preparado.zeon -= Math.floor(e.ganado / 2);
+  else e.acumulado -= Math.floor(e.ganado / 2);
+}
+
+/** El conjuro preparado está listo para lanzarse. */
+export function preparadoListo(e: EstadoMagia): Preparado | null {
+  const p = e.preparado;
+  return p && p.zeon >= p.conjuro.grados[p.grado].zeon ? p : null;
 }
 
 /** Puede lanzarlo en ese grado: le alcanza lo acumulado y su Inteligencia (Core p.121). */
@@ -162,13 +267,23 @@ export function lanzar(l: Luchador, c: Conjuro, grado: number, extra: Omit<Mante
   const e = l.magia!;
   const g = c.grados[grado];
   const coste = costeConjuro(c, g, control);
-  e.acumulado -= coste;
-  e.reserva -= coste;
-  e.lanzo = true;
+  const pr = preparadoListo(e);
+  if (extra.innato) {
+    // Innato: no gasta zeon (Core p.117); Control del Espacio, sí, de la reserva.
+    e.reserva -= coste - g.zeon;
+  } else if (pr && pr.conjuro === c && pr.grado === grado) {
+    // El conjuro preparado: se paga con lo reunido para él (Core p.117).
+    e.reserva -= coste;
+    e.preparado = null;
+  } else {
+    e.acumulado -= coste;
+    e.reserva -= coste;
+    e.lanzo = true;
+  }
   if (g.resistencia) e.escudo = { conjuro: c, grado, resistencia: g.resistencia };
   if (g.taEnergia !== undefined) e.armadura = { energia: g.taEnergia, resto: g.taResto ?? 0 };
   if (g.bono) for (const b of extra.blancos ?? []) bendecir(b, l, c, g.bono);
-  if (g.mantenimiento) e.mantenidos.push({ conjuro: c, grado, ...extra });
+  if (g.mantenimiento || c.diario) e.mantenidos.push({ conjuro: c, grado, ...extra });
   return g;
 }
 
@@ -268,18 +383,26 @@ export function taMagica(l: Luchador, tipo: string): number {
  */
 export function danoAlAcumular(l: Luchador, dano: number, rng: Rng): { tirada: number; resultado: 'conserva' | 'vuelve' | 'pierde' } | null {
   const e = l.magia;
-  if (!e || e.acumulado <= 0 || dano <= 0 || l.ficha.acumulacion) return null;
-  const habilidad = l.ficha.resistirDolor ?? 0;
+  // Un conjuro determinado que todavía prepara también está en juego; uno listo, no (ya no acumula).
+  const prep = e?.preparado && !preparadoListo(e) && e.preparado.zeon > 0 ? e.preparado : null;
+  if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || l.ficha.acumulacion) return null;
+  // Preparando un conjuro determinado (y sin magia pura en juego), +40 (Core p.118).
+  const habilidad = (l.ficha.resistirDolor ?? 0) + (e.acumulado <= 0 ? 40 : 0);
   const t = tirarD100(rng, umbralPifia(habilidad));
   const tirada = habilidad + t.valor;
   if (!t.pifia && tirada >= 2 * dano) return { tirada, resultado: 'conserva' };
   if (!t.pifia && tirada >= dano) {
     // Vuelve a la reserva, con los 10 que se pierden al interrumpir la acumulación (Core p.117).
     soltar(e);
+    if (prep) {
+      e.reserva -= Math.min(PERDIDA_AL_SOLTAR, prep.zeon);
+      e.preparado = null;
+    }
     return { tirada, resultado: 'vuelve' };
   }
-  e.reserva -= e.acumulado;
+  e.reserva -= e.acumulado + (prep?.zeon ?? 0);
   e.acumulado = 0;
+  if (prep) e.preparado = null;
   return { tirada, resultado: 'pierde' };
 }
 

@@ -21,7 +21,7 @@ import * as ia from './ia';
 import { GRADOS, type Conjuro } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, dejarDeMantener, empezarAsaltoMagia, lanzar, mantenidoCon, presenciaDe, rmDe, romperEscudo,
-  terminarAsaltoMagia, terminarMantenidos, estadoLlamas, danoLlamas,
+  terminarAsaltoMagia, terminarMantenidos, estadoLlamas, danoLlamas, actPorCansancio,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
@@ -271,8 +271,20 @@ function jugarAsalto(ctx: Contexto) {
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
     // Magia: paga los conjuros mantenidos y acumula su ACT (pasivo, Core p.117).
     if (l.magia) {
-      empezarAsaltoMagia(l, ia.acumulaMagia(ctx, l));
-      if (l.magia.ganado) log(ctx, () => `${l.ficha.nombre} acumula zeon: ${l.magia!.acumulado} (reserva ${l.magia!.reserva}).`);
+      const plan = ia.planMagia(ctx, l);
+      if (plan.cansancio) {
+        gastarCansancio(l, plan.cansancio);
+        log(ctx, () => `${l.ficha.nombre} gasta ${plan.cansancio} de cansancio en su ACT (+${actPorCansancio(l) * plan.cansancio!}).`);
+      }
+      if (plan.consumirVida) log(ctx, () => `${l.ficha.nombre} consume ${plan.consumirVida} PV por ${(plan.consumirVida! / 5) * 100} de zeon (Consumir Vida por Magia).`);
+      if (plan.sacrificioPoder) log(ctx, () => `${l.ficha.nombre} sacrifica ${plan.sacrificioPoder} de zeon por +${(plan.sacrificioPoder! / 10) * 5} al ACT (Sacrificio de Poder).`);
+      empezarAsaltoMagia(l, plan);
+      if (plan.consumirVida) verificarCaida(ctx, l, l);
+      const e = l.magia;
+      if (plan.innato) log(ctx, () => `${l.ficha.nombre} se dispone a usar su magia innata (no acumula).`);
+      else if (e.ganado && e.ganadoEn === 'preparado' && e.preparado)
+        log(ctx, () => `${l.ficha.nombre} prepara ${e.preparado!.conjuro.nombre} (${GRADOS[e.preparado!.grado]}): ${e.preparado!.zeon} de ${e.preparado!.conjuro.grados[e.preparado!.grado].zeon} (reserva ${e.reserva}).`);
+      else if (e.ganado) log(ctx, () => `${l.ficha.nombre} acumula zeon: ${e.acumulado} (reserva ${e.reserva}).`);
     }
     // Ki: suelta lo que ya no conviene mantener, paga mantenidas y técnicas en espera, y acumula
     // (acumular es pasivo, Core p.102). Una técnica que cambia el turno se declara antes de calcular
@@ -823,10 +835,11 @@ function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
  */
 function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
   const c = x.conjuro;
-  const g = lanzar(l, c, x.grado, c.efecto === 'bendicion' ? { blancos: x.blancos } : {}, x.control);
-  const nombre = `${c.nombre} (${GRADOS[x.grado]})`;
+  const g = lanzar(l, c, x.grado, { ...(c.efecto === 'bendicion' ? { blancos: x.blancos } : {}), ...(x.innato ? { innato: true } : {}) }, x.control);
+  const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : x.preparado ? ' preparado' : ''}`;
   l.stats.tecnicas[nombre] = (l.stats.tecnicas[nombre] ?? 0) + 1;
-  const zeon = `[zeon ${g.zeon}${x.control ? ' +10 (Control del Espacio)' : ''}; acumulado ${l.magia!.acumulado}, reserva ${l.magia!.reserva}]`;
+  const zeon = x.innato ? `[innato${x.control ? ', +10 de zeon (Control del Espacio)' : ''}; reserva ${l.magia!.reserva}]`
+    : `[zeon ${g.zeon}${x.control ? ' +10 (Control del Espacio)' : ''}; acumulado ${l.magia!.acumulado}, reserva ${l.magia!.reserva}]`;
   const obj = x.objetivo;
   const sobre = c.efecto === 'bendicion' && x.blancos?.length ? ` sobre ${x.blancos.map((b) => b.ficha.nombre).join(', ')}`
     : c.efecto === 'curar' && obj ? ` sobre ${obj.ficha.nombre}` : '';
@@ -843,6 +856,8 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
   switch (c.efecto) {
     case 'bendicion':
     case 'curar':
+    case 'sacrificioPoder':
+    case 'consumirVida':
     case 'flash':
     case 'incinerar':
     case 'tormenta':
@@ -2011,7 +2026,7 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */
 function limitePorDano(ctx: Contexto, l: Luchador, dano: number) {
   // Perder PV mientras acumula magia: Resistir el dolor para no perder la concentración (Core p.118).
-  const conc = l.magia?.acumulado ? danoAlAcumular(l, dano, ctx.rng) : null;
+  const conc = l.magia ? danoAlAcumular(l, dano, ctx.rng) : null;
   if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva (menos 10)' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
   const limite = alPerderPv(l, dano);
   if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);

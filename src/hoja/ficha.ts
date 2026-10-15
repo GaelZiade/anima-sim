@@ -117,7 +117,10 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
   // Metamagia (Arcana cap. 3): "Control del espacio", "Romper resistencias (1)", "Conjuro especializado
   // Nv 60" con el conjuro al final de la descripción.
   const metamagia = Object.entries((m.Metamagia ?? {}) as Record<string, string>).map(([k, d]) => [normalizar(k), d ?? ''] as const);
-  const romper = metamagia.find(([k]) => k.startsWith('romper resistencias'))?.[0].match(/\((\d)\)/)?.[1];
+  const esferas = (nombre: string) => metamagia.find(([k]) => k.startsWith(nombre))?.[0].match(/\((\d)\)/)?.[1];
+  const romper = esferas('romper resistencias');
+  const explotacion = esferas('explotacion de la energia fisica');
+  const determinada = esferas('proyeccion magica determinada');
   const especialista = metamagia.filter(([k]) => k.startsWith('conjuro especializado') || k.startsWith('conjuro especialista'))
     .map(([, d]) => d.split(':').pop()!.trim()).filter(Boolean);
   return {
@@ -131,6 +134,8 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
     ...(Object.keys(subvias).length ? { subvias } : {}),
     ...(metamagia.some(([k]) => k.startsWith('control del espacio')) ? { controlDelEspacio: true } : {}),
     ...(romper ? { romperResistencias: Number(romper) } : {}),
+    ...(explotacion ? { explotacion: Number(explotacion) } : {}),
+    ...(determinada ? { proyeccionDeterminada: Number(determinada) } : {}),
     ...(especialista.length ? { especialista } : {}),
   };
 }

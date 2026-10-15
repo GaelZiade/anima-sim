@@ -129,6 +129,10 @@ export interface MagiaFicha {
   romperResistencias?: number;
   /** Conjuros con Conjuro Especialista: +1 a la Inteligencia para su grado (Arcana p.30). */
   especialista?: string[];
+  /** Esferas de Explotación de la Energía Física: +25 / +40 al ACT por punto de cansancio (Arcana p.27). */
+  explotacion?: number;
+  /** Esferas de Proyección Mágica Determinada: proyectar con 120, 140… pagando zeon (Arcana p.24). */
+  proyeccionDeterminada?: number;
 }
 
 /** Lo que pasa con un arma a distancia durante el combate. */

@@ -3,7 +3,10 @@
 
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
-import { alcanceMagico, bendecir, costeConjuro, danoLlamas, deArea, quitarBendicion, rmDe, ZEON_CONTROL_DEL_ESPACIO } from './magia';
+import {
+  actPara, actPorCansancio, alcanceMagico, bendecir, costeConjuro, danoLlamas, deArea, maximoInnato, preparadoListo, quitarBendicion, rmDe,
+  zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
+} from './magia';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
   absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
@@ -1789,11 +1792,6 @@ function precioZeon(l: Luchador): number {
   return ((0.5 * l.ficha.pv) / inicial) * Math.sqrt(inicial / queda);
 }
 
-/** Acumula si le queda zeon y hay enemigos: es pasivo (Core p.117). */
-export function acumulaMagia(ctx: Contexto, l: Luchador): boolean {
-  const e = l.magia;
-  return !!e && e.reserva > e.acumulado && enemigos(ctx, l).length > 0;
-}
 
 /**
  * Un conjuro de ataque o anímico como un golpe sobrenatural: daña energía, en su TA y con su daño.
@@ -1847,6 +1845,10 @@ export type Lanzamiento = {
   conjuro: Conjuro;
   grado: number;
   objetivo: Luchador | null;
+  /** Es el conjuro determinado que tenía preparado (ya pagado). */
+  preparado?: boolean;
+  /** Lanzado con la magia innata: no gasta zeon. */
+  innato?: boolean;
   /** Beneficiados (conjuros de efecto) o designados (Incinerar). */
   blancos?: Luchador[];
   /** Usa Control del Espacio para dejar afuera a los suyos (+10 de zeon). */
@@ -2085,6 +2087,22 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
       }
       return mejor;
     }
+    case 'consumirVida': {
+      // Lo vale cuando la reserva no alcanza para el resto del combate: el zeon que daría en dos
+      // asaltos, a su precio, menos los PV (por λ).
+      if (zeonLibre(e) >= 3 * l.ficha.magia!.act || l.pv <= l.ficha.pv * 0.6) return null;
+      const pv = Math.min(g.maximo ?? 0, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
+      probar({ conjuro: c, grado: i, objetivo: null }, 2 * (precioZeon(l) * 20 * pv - lambda(l) * pv));
+      return mejor;
+    }
+    case 'sacrificioPoder': {
+      // Más ACT por asalto (5 cada 10 de zeon): lo que adelanta de su mejor conjuro, menos el zeon que pierde.
+      const meta = metaMagica(ctx, l, alcance);
+      if (!meta) return null;
+      const act = (g.maximo ?? 0) / 2;
+      probar({ conjuro: c, grado: i, objetivo: null }, ASALTOS_EFECTO * ((act / l.ficha.magia!.act) * meta.porAsalto - precioZeon(l) * act));
+      return mejor;
+    }
     case 'curar': {
       for (const a of aliadosEnRadio(ctx, l, c, alcance)) {
         if (a.pv > 0.7 * a.ficha.pv) continue;
@@ -2096,10 +2114,19 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
   return null;
 }
 
+/** Un conjuro que se puede mirar este asalto: activo y, si se mantiene, sin otro ejemplar (uno por blanco en los beneficios a un aliado). */
+function lanzable(e: NonNullable<Luchador['magia']>, c: Conjuro, ya: readonly Lanzamiento[]): boolean {
+  const porBlanco = c.blanco === 'aliado';
+  return c.accion === 'activa' && (porBlanco || !e.mantenidos.some((x) => x.conjuro === c)) &&
+    (porBlanco || !ya.some((x) => x.conjuro === c && !c.tipos.includes('ataque')));
+}
+
 /**
  * Su turno con magia (Core p.117): los conjuros activos que rinden más que su zeon (y lo que costará
- * mantenerlos), de a uno mientras le alcance lo acumulado; o esperar acumulando si no tiene a nadie
- * cuerpo a cuerpo (hacer otra cosa le baja el ACT a la mitad); o null para pelear como siempre.
+ * mantenerlos), de a uno mientras le alcance lo acumulado; el conjuro preparado, si ya está listo y
+ * rinde algo (su zeon ya está reunido); o, si este asalto usa la magia innata, el mejor innato. Si no,
+ * esperar acumulando si no tiene a nadie cuerpo a cuerpo (hacer otra cosa le baja el ACT a la mitad);
+ * o null para pelear como siempre.
  */
 export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[] } | { esperar: true } | null {
   const e = l.magia;
@@ -2107,15 +2134,23 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   nuevaDecision(ctx);
   const inteligencia = l.ficha.inteligencia ?? 6;
   const alcance = alcanceMagico(l.ficha.magia!.proyeccion);
+  if (e.innato) {
+    const inn = mejorInnato(ctx, l, alcance);
+    return inn ? { lanzar: [inn.l] } : null;
+  }
   const res: Lanzamiento[] = [];
+  // El preparado: lo lanza si rinde algo; si no, lo sigue sosteniendo.
+  const pr = preparadoListo(e);
+  if (pr && lanzable(e, pr.conjuro, res)) {
+    const uso = mejorUso(ctx, l, pr.conjuro, pr.grado, alcance, res);
+    const extra = precioZeon(l) * (pr.conjuro.grados[pr.grado].mantenimiento ?? 0) * (ASALTOS_EFECTO - 1);
+    if (uso && uso.valor - uso.extra - extra > 0 && (!uso.l.control || zeonLibre(e) >= ZEON_CONTROL_DEL_ESPACIO)) res.push({ ...uso.l, preparado: true });
+  }
   let disponible = e.acumulado;
   for (;;) {
     let mejor: { l: Lanzamiento; valor: number; zeon: number } | null = null;
     for (const c of e.conjuros) {
-      // Un ejemplar de cada conjuro mantenido; de los beneficios a un aliado, uno por blanco.
-      const porBlanco = c.blanco === 'aliado';
-      if (c.accion !== 'activa' || (!porBlanco && e.mantenidos.some((x) => x.conjuro === c)) ||
-        (!porBlanco && res.some((x) => x.conjuro === c && !c.tipos.includes('ataque')))) continue;
+      if (!lanzable(e, c, res)) continue;
       for (const i of gradosPosibles(c, inteligencia, l.ficha.magia)) {
         const g = c.grados[i];
         if (g.zeon > disponible) continue;
@@ -2135,6 +2170,105 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   // Sin nada que valga la pena lanzar: espera acumulando, salvo que lo tengan trabado.
   if (!trabadoConAlguien(l) && enemigos(ctx, l).some((x) => distancia(l, x) <= alcance)) return { esperar: true };
   return null;
+}
+
+/**
+ * El mejor conjuro innato (Core p.117, Tabla 58): de valor zeónico hasta lo que da su ACT, sin gastar
+ * zeon; si se mantiene, se sostiene gratis, pero mientras tanto no puede lanzar otro innato.
+ */
+function mejorInnato(ctx: Contexto, l: Luchador, alcance: number): { l: Lanzamiento; valor: number } | null {
+  const e = l.magia!;
+  if (e.mantenidos.some((x) => x.innato)) return null;
+  const maximo = maximoInnato(l.ficha.magia!.act);
+  let mejor: { l: Lanzamiento; valor: number } | null = null;
+  for (const c of e.conjuros) {
+    if (!lanzable(e, c, [])) continue;
+    for (const i of gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia)) {
+      if (c.grados[i].zeon > maximo) continue;
+      const uso = mejorUso(ctx, l, c, i, alcance, []);
+      if (!uso || (uso.l.control && zeonLibre(e) < ZEON_CONTROL_DEL_ESPACIO)) continue;
+      const v = uso.valor - uso.extra;
+      if (v > (mejor?.valor ?? 0)) mejor = { l: { ...uso.l, innato: true }, valor: v };
+    }
+  }
+  return mejor;
+}
+
+/** Valor neto por asalto de esperar al mejor conjuro: lo que rinde menos su zeon, dividido por los asaltos que tarda. */
+interface Meta {
+  conjuro: Conjuro;
+  grado: number;
+  /** Zeon que le falta para lanzarlo, ya con lo acumulado (o reunido, si es el preparado). */
+  falta: number;
+  porAsalto: number;
+}
+
+/** El conjuro al que conviene apuntar acumulando: el que más rinde por asalto de espera. */
+function metaMagica(ctx: Contexto, l: Luchador, alcance: number): Meta | null {
+  const e = l.magia!;
+  let mejor: Meta | null = null;
+  for (const c of e.conjuros) {
+    // Los que dan ACT o zeon no son una meta (y se valoran mirando la meta).
+    if (!lanzable(e, c, []) || c.efecto === 'sacrificioPoder' || c.efecto === 'consumirVida') continue;
+    for (const i of gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia)) {
+      const g = c.grados[i];
+      if (g.zeon > zeonLibre(e) + e.acumulado + (e.preparado?.zeon ?? 0)) continue;
+      const uso = mejorUso(ctx, l, c, i, alcance, []);
+      if (!uso) continue;
+      const zeon = costeConjuro(c, g, uso.l.control);
+      const neto = uso.valor - precioZeon(l) * (zeon + (g.mantenimiento ?? 0) * (ASALTOS_EFECTO - 1));
+      if (neto <= 0) continue;
+      const pr = e.preparado;
+      const reunido = pr && pr.conjuro === c && pr.grado === i ? pr.zeon : e.acumulado;
+      const falta = Math.max(0, zeon - reunido);
+      const porAsalto = neto / (1 + Math.ceil(falta / Math.max(1, actPara(l, c))));
+      if (porAsalto > (mejor?.porAsalto ?? 0)) mejor = { conjuro: c, grado: i, falta, porAsalto };
+    }
+  }
+  return mejor;
+}
+
+/** Puntos de cansancio que conserva siempre (por debajo de 5 empiezan los negativos, Core p.62). */
+const CANSANCIO_RESERVADO = 5;
+
+/**
+ * Lo que decide al empezar el asalto (Core p.117): acumular magia pura o preparar un conjuro
+ * determinado (cuando es su Conjuro Especialista, por el +10 al ACT), o usar la magia innata si su mejor
+ * innato rinde más que un asalto de espera. Si con cansancio (Explotación de la Energía Física) o con
+ * Sacrificio de Poder llega a lanzar la meta este mismo asalto, los gasta. Con Consumir Vida por Magia
+ * convierte PV en zeon cuando la reserva se le acaba.
+ */
+export function planMagia(ctx: Contexto, l: Luchador): PlanMagia {
+  const e = l.magia;
+  if (!e || !enemigos(ctx, l).length) return { acumula: false };
+  if (perfil(l) === 'bestia') return { acumula: zeonLibre(e) > 0 };
+  nuevaDecision(ctx);
+  const alcance = alcanceMagico(l.ficha.magia!.proyeccion);
+  const plan: PlanMagia = { acumula: zeonLibre(e) > 0 };
+  // Consumir Vida por Magia: cuando le queda menos de dos asaltos de ACT libres y conserva la mitad de sus PV.
+  const vida = e.mantenidos.find((x) => x.conjuro.efecto === 'consumirVida');
+  if (vida && zeonLibre(e) < 2 * l.ficha.magia!.act && l.pv > l.ficha.pv / 2) {
+    const max = vida.conjuro.grados[vida.grado].maximo ?? 0;
+    plan.consumirVida = Math.min(max, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
+  }
+  const meta = metaMagica(ctx, l, alcance);
+  const inn = mejorInnato(ctx, l, alcance);
+  if (inn && inn.valor > (meta?.porAsalto ?? 0)) return { ...plan, acumula: false, innato: true };
+  if (!meta || !plan.acumula) return plan;
+  const especialista = actPara(l, meta.conjuro) > l.ficha.magia!.act;
+  if (especialista) plan.preparar = { conjuro: meta.conjuro, grado: meta.grado };
+  // Lo que le falta después de este asalto de ACT: con cansancio o Sacrificio de Poder, ¿llega ya?
+  let falta = meta.falta - actPara(l, especialista ? meta.conjuro : null);
+  if (falta > 0 && falta <= actPorCansancio(l) * Math.max(0, l.cansancio - CANSANCIO_RESERVADO) && (l.ficha.magia!.explotacion ?? 0) > 0) {
+    plan.cansancio = Math.ceil(falta / actPorCansancio(l));
+    falta = 0;
+  }
+  const poder = e.mantenidos.find((x) => x.conjuro.efecto === 'sacrificioPoder');
+  if (falta > 0 && poder) {
+    const zeon = Math.ceil(falta / 5) * 10;
+    if (zeon <= (poder.conjuro.grados[poder.grado].maximo ?? 0) && zeon <= zeonLibre(e) - meta.falta) plan.sacrificioPoder = zeon;
+  }
+  return plan;
 }
 
 /**

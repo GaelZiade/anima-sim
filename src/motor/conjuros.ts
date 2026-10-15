@@ -16,7 +16,7 @@ export type TipoConjuro = 'ataque' | 'defensa' | 'efecto' | 'animico' | 'automat
  */
 export type EfectoConjuro =
   | 'flash' | 'secar' | 'consumirEsencia' | 'criticoDirecto' | 'incinerar' | 'tormenta' | 'aumentarCritico'
-  | 'bendicion' | 'curar';
+  | 'bendicion' | 'curar' | 'sacrificioPoder' | 'consumirVida';
 
 /** Beneficio que deja un conjuro sobre quien lo recibe (vías de Guerra, Fuego). */
 export interface BonoMagico {
@@ -71,6 +71,8 @@ export interface Grado {
   habilidad?: number;
   /** PV que cura. */
   curar?: number;
+  /** Lo máximo por asalto: zeon (Sacrificio de Poder, Magia por Capacidades) o PV (Consumir Vida, Sacrificio Vital). */
+  maximo?: number;
   /** Beneficio sobre los afectados. */
   bono?: BonoMagico;
 }
@@ -103,6 +105,8 @@ export interface Conjuro {
   escudoSoloSobrenatural?: boolean;
   escudoDobleContra?: string;
   efecto?: EfectoConjuro;
+  /** Mantenimiento diario: una vez lanzado sigue activo todo el combate sin pagar por asalto (Core p.122). */
+  diario?: boolean;
   /** Sobre quién cae un conjuro de efecto: un aliado (o él) o todos los aliados del radio. */
   blanco?: 'aliado' | 'aliados';
   /** Base, intermedio, avanzado, arcano. */
@@ -165,6 +169,13 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
     nombre: 'Tormenta de Fuego', efecto: 'tormenta', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.159',
     todos: { dano: 100 }, grados: [180, 240, 280, 320].map((habilidad) => ({ habilidad })),
   },
+  {
+    // Sacrificio de Poder y Consumir Vida por Magia: se lanzan una vez y quedan (mantenimiento diario);
+    // cada asalto deciden cuánto convierten.
+    nombre: 'Sacrificio de Poder', efecto: 'sacrificioPoder', fuente: 'Core p.159',
+    grados: [20, 50, 80, 120].map((maximo) => ({ maximo })),
+  },
+  { nombre: 'Consumir Vida por Magia', efecto: 'consumirVida', fuente: 'Core p.159', grados: [20, 80, 140, 200].map((maximo) => ({ maximo })) },
   // Sub-vía de Guerra (Arcana p.34-35)
   { nombre: 'Ira Ancestral', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', todos: { bono: { ataque: 10, ira: true } }, fuente: 'Arcana p.35' },
   {
@@ -207,9 +218,12 @@ export const CATALOGO: readonly Conjuro[] = COMPORTAMIENTO.map((b) => {
   const e = porNombre.get(clave(b.nombre));
   if (!e) throw new Error(`${b.nombre} no está en el grimorio`);
   const { centro: _c, todos: _t, grados: _g, ...resto } = b;
+  const grados = e.grados.map((x, i) => gradoDe(x, b, i));
+  // El mantenimiento diario se paga fuera del combate: no cuesta por asalto.
+  if (e.diario) for (const g of grados) delete g.mantenimiento;
   return {
-    ...resto, via: e.via, nivel: e.nivel, accion: b.accion ?? e.accion, tipos: b.tipos ?? (e.tipos as TipoConjuro[]),
-    grados: e.grados.map((x, i) => gradoDe(x, b, i)) as unknown as Conjuro['grados'],
+    ...resto, ...(e.diario ? { diario: true } : {}), via: e.via, nivel: e.nivel, accion: b.accion ?? e.accion,
+    tipos: b.tipos ?? (e.tipos as TipoConjuro[]), grados: grados as unknown as Conjuro['grados'],
   };
 });
 
