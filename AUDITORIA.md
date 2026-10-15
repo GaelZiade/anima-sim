@@ -204,15 +204,15 @@ tocarlo. Los tests están en `test/auditoria.test.ts` ("segunda auditoría").
 (Teseo para las áreas de Ki, que ahora tienen −120); Stéphan contra Teseo 92 → 87; Stéphan, Kael y
 Kaito contra Teseo, Kiran y cuatro soldados 52 → 64; el resto, sin cambios apreciables.
 
-### Para decidir (la regla no lo precisa)
+### Decididas por el usuario (15/10/2026)
 
-1. **ACT a la mitad por hacer otra cosa:** hoy se aplica al terminar el asalto (lo ganado queda en la
-   mitad). El ejemplo de Serenade (Core p.117) lo baja "al declarar"; con el Ki, la acumulación queda
-   entera dentro del asalto. ¿Se baja en el momento en que hace la otra acción?
-2. **Impacto de Grado 4:** "un Crítico con un valor equivalente al doble del Daño" (Dominus p.12). Hoy:
-   nivel = doble del daño + 1d100 (como cualquier crítico). ¿O nivel fijo, sin tirada?
-3. **Ataque en área físico contra la acumulación:** el doble de daño vale "si se utiliza un ataque en
-   área con un arma lo suficientemente grande como para cubrir la mitad del ser" (Core p.99). No se
-   aplica: depende del tamaño del arma y del ser.
-4. **Dolor:** el estado Dolor del Ki es −40 que dura el combate; el Dolor de la tabla del Mushin
-   arcano baja 5 por asalto (se suma al dolor de los críticos). ¿Quedan así?
+1. **ACT a la mitad por hacer otra cosa:** se aplica en el momento en que hace la otra acción (atacar,
+   defenderse sin el escudo, moverse con acción activa), como Serenade al declararlo (Core p.117):
+   pierde la mitad de lo acumulado ese asalto. `hacerOtraAccion` en `magia.ts`.
+2. **Impacto de Grado 4:** el crítico es el doble del daño + 1d100, como cualquier crítico, sin los
+   bonos del atacante (Dominus p.12). Queda como estaba.
+3. **Ataque en área físico contra la acumulación:** dobla el daño con un arma grande (la que alcanza a
+   cinco: Grande, Capoeira, Área excepcional) contra un ser de Tamaño 22 o menos (Core p.99).
+   `areaDoblaDano` en `calculos.ts`, en el motor y en el pronóstico.
+4. **Dolor:** quedan dos reglas distintas: el estado Dolor (Dominus p.67) dura el combate; el de la
+   tabla del Mushin arcano es dolor de la técnica y baja 5 por asalto, como el de los críticos.

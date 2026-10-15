@@ -6,7 +6,7 @@ import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueMagico, defensaEscudoMagico, defensaFinal } from '../src/motor/calculos';
 import { CATALOGO, conjurosDe, gradosPosibles } from '../src/motor/conjuros';
-import { actPorCansancio, alcanceMagico, danoAlAcumular, empezarAsaltoMagia, lanzar, maximoInnato, proyeccionDeterminada, puedeLanzar, terminarAsaltoMagia } from '../src/motor/magia';
+import { actPorCansancio, alcanceMagico, danoAlAcumular, empezarAsaltoMagia, lanzar, maximoInnato, proyeccionDeterminada, puedeLanzar, terminarAsaltoMagia, hacerOtraAccion } from '../src/motor/magia';
 import { golpeDeConjuro } from '../src/motor/magia';
 import { absorcion } from '../src/motor/reglas';
 import { hojaAFicha } from '../src/hoja/ficha';
@@ -59,7 +59,8 @@ describe('acumular y lanzar (Core p.117)', () => {
     terminarAsaltoMagia(l);
     expect(l.magia!.acumulado).toBe(50);
     empezarAsaltoMagia(l, true);
-    l.magia!.otraAccion = true;
+    hacerOtraAccion(l); // en el momento, no al terminar el asalto
+    expect(l.magia!.acumulado).toBe(75);
     terminarAsaltoMagia(l);
     expect(l.magia!.acumulado).toBe(75);
     expect(puedeLanzar(l, conjuro('Descarga de Luz'), 1)).toBe(false);

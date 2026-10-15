@@ -243,14 +243,23 @@ export function empezarAsaltoMagia(l: Luchador, plan: PlanMagia | boolean) {
 export function terminarAsaltoMagia(l: Luchador) {
   const e = l.magia;
   if (!e) return;
-  if (e.lanzo) {
-    soltar(e);
-    return;
-  }
-  if (!((e.otraAccion || l.movioActivo) && e.ganado)) return;
-  // Lo que ganó preparando un conjuro determinado también queda a la mitad.
-  if (e.ganadoEn === 'preparado' && e.preparado) e.preparado.zeon -= Math.floor(e.ganado / 2);
-  else e.acumulado -= Math.floor(e.ganado / 2);
+  if (e.lanzo) soltar(e);
+}
+
+/**
+ * Hace otra cosa que lanzar (atacar, defenderse sin el escudo, moverse con acción activa): su ACT de este
+ * asalto queda a la mitad en ese momento, como Serenade al declararlo (Core p.117, decisión del usuario).
+ * Lo que ganó preparando un conjuro determinado también.
+ */
+export function hacerOtraAccion(l: Luchador) {
+  const e = l.magia;
+  if (!e || e.otraAccion) return;
+  e.otraAccion = true;
+  if (!e.ganado) return;
+  const pierde = Math.floor(e.ganado / 2);
+  if (e.ganadoEn === 'preparado' && e.preparado) e.preparado.zeon -= Math.min(pierde, e.preparado.zeon);
+  else e.acumulado -= Math.min(pierde, e.acumulado);
+  e.ganado -= pierde;
 }
 
 /** Proyección Mágica Determinada por esferas: habilidad final fija y su zeon (Arcana p.26). */

@@ -3,13 +3,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
 import { umbralEstallido } from '../src/motor/proyectiles';
 import { SIN_KI } from '../src/motor/ki';
-import { actDe } from '../src/motor/magia';
+import { actDe, hacerOtraAccion } from '../src/motor/magia';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -254,5 +254,29 @@ describe('segunda auditoría: controles y tiradas', () => {
     expect(umbralEstallido(0, 'Cañón')).toBe(70);
     expect(umbralEstallido(0, 'Arcabuz')).toBe(80);
     expect(umbralEstallido(5, 'Pistola de mecha')).toBe(95);
+  });
+});
+
+describe('decisiones del usuario (15/10/2026)', () => {
+  it('hacer otra cosa que lanzar baja a la mitad lo acumulado este asalto en ese momento (Core p.117)', () => {
+    const l = crearLuchador(ficha('Mago', {}, { magia: { zeon: 500, act: 60, proyeccion: 150, vias: { luz: 40 } } }), 'A', 0, 0);
+    if (!l.magia) return; // sin conjuros de combate no hay estado de magia
+    l.magia.acumulado = 60;
+    l.magia.ganado = 60;
+    hacerOtraAccion(l);
+    expect(l.magia.acumulado).toBe(30);
+    hacerOtraAccion(l); // una sola vez por asalto
+    expect(l.magia.acumulado).toBe(30);
+  });
+
+  it('el Ataque en área con arma grande dobla el daño a un ser con acumulación de Tamaño humano (Core p.99)', () => {
+    const grande = crearLuchador(ficha('Mandoble', {}, { tamanoArma: 'G' }), 'A', 0, 0);
+    const media = crearLuchador(ficha('Espada'), 'A', 0, 0);
+    const golem = crearLuchador(ficha('Golem', {}, { acumulacion: true, tamano: 20 }), 'B', 1, 0);
+    const coloso = crearLuchador(ficha('Coloso', {}, { acumulacion: true, tamano: 30 }), 'B', 1, 0);
+    expect(areaDoblaDano(grande, golem, 'area')).toBe(true);
+    expect(areaDoblaDano(media, golem, 'area')).toBe(false);
+    expect(areaDoblaDano(grande, coloso, 'area')).toBe(false);
+    expect(areaDoblaDano(grande, golem, 'normal')).toBe(false);
   });
 });

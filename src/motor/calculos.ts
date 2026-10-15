@@ -702,7 +702,7 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
   const nulo = base === 0 || barreraFrena(def, atk, base, o.ki) ||
     (!!def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque, o.ki ?? atk.ki?.activo));
   // Un área sobrenatural contra un ser con acumulación: el doble de daño (Core p.99).
-  if (def.ficha.acumulacion && (o.area || o.ki?.area)) base *= 2;
+  if (areaDoblaDano(atk, def, m, o.area, o.ki)) base *= 2;
   return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
 }
 
@@ -871,3 +871,18 @@ export function taMagica(l: Luchador, tipo: string): number {
   const a = l.magia?.armadura;
   return a ? (tipo === 'ENE' ? a.energia : a.resto) : 0;
 }
+
+/** Tamaño humano o menor: el tope de lo que cubre la mitad de un arma grande (Core p.99, decisión del usuario). */
+const TAMANO_HUMANO = 22;
+
+/**
+ * Un ataque en área le hace el doble de daño a un ser con acumulación si cubre la mitad de su cuerpo
+ * (Core p.99): uno sobrenatural (un conjuro, un área de Ki), o la maniobra con un arma grande (la que
+ * alcanza a cinco: Grande, Capoeira, Área excepcional) contra un ser de Tamaño humano o menor.
+ */
+export function areaDoblaDano(atk: Luchador, def: Luchador, maniobra: Maniobra, area?: number, ki?: ModKi): boolean {
+  if (!def.ficha.acumulacion) return false;
+  if (area || ki?.area) return true;
+  return maniobra === 'area' && atk.cap.est.blancosArea >= 5 && (tamanoDe(def) ?? 0) <= TAMANO_HUMANO;
+}
+

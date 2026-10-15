@@ -9,7 +9,7 @@ import {
   penPifiaTurno, umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, danoAEscudo, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
+  absorcionContra, activo, ALCANCE, areaDoblaDano, danoAEscudo, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
   defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil,
   visionEntre, PEN_COBERTURA, type ZonaArmadura,
@@ -26,7 +26,7 @@ import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estado
 import { blancosConjuro, radioArea, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, nivelLlamas, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
+  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, nivelLlamas, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
   romperEscudo, terminarAsaltoMagia, terminarMantenidos, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
@@ -584,6 +584,7 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
   const yaActivo = l.movioActivo;
   if (l.metrosMovidos > total / 4 && !yaActivo) {
     l.movioActivo = true;
+    hacerOtraAccion(l);
     // En carga, correr no penaliza el ataque (Core p.90).
     if (!l.cargando) l.accionesActivas++;
   }
@@ -670,7 +671,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.stats.ataquesHechos++;
   if (a.esContra) atk.stats.contrasHechas++;
   // Atacar es hacer otra cosa que lanzar: si acumulaba magia, este asalto acumula la mitad (Core p.117).
-  if (atk.magia) atk.magia.otraAccion = true;
+  hacerOtraAccion(atk);
 
   // Selene: dobla el bono del contraataque peleando sin armas (Dominus p.39).
   const bono = a.esContra && atk.cap.est.doblaBonoContra ? a.bono * 2 : a.bono;
@@ -1296,7 +1297,7 @@ function resolverDefensa(
   }
   const conEscudo = !proteccion && escudoDetiene(def, tipoGolpe) && iaMagia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
   // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
-  if (quienDefiende.magia && !conEscudo) quienDefiende.magia.otraAccion = true;
+  if (!conEscudo) hacerOtraAccion(quienDefiende);
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
   const tecnica = quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
   let kiDef: ModKi | undefined;
@@ -1466,8 +1467,8 @@ function resolverDefensa(
   let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
   // Sangre de Aeon: daño de su elemento a la mitad.
   if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
-  // Un área sobrenatural contra un ser con acumulación: el doble de daño (Core p.99).
-  if (def.ficha.acumulacion && (o.area || o.ki?.area)) dano *= 2;
+  // Un área contra un ser con acumulación: el doble de daño (Core p.99).
+  if (areaDoblaDano(atk, def, m, o.area, o.ki)) dano *= 2;
   // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
   // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
   const ki = o.ki;
