@@ -461,7 +461,7 @@ export function danoAlAcumular(l: Luchador, dano: number, rng: Rng): { tirada: n
   if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || l.ficha.acumulacion) return null;
   // Preparando un conjuro determinado (y sin magia pura en juego), +40 (Core p.118).
   const habilidad = (l.ficha.resistirDolor ?? 0) + (e.acumulado <= 0 ? 40 : 0);
-  const t = tirarD100(rng, umbralPifia(habilidad));
+  const t = tirarD100(rng, umbralPifia(habilidad, l.cap.ajustePifia));
   const tirada = habilidad + t.valor;
   if (!t.pifia && tirada >= 2 * dano) return { tirada, resultado: 'conserva' };
   if (!t.pifia && tirada >= dano) {

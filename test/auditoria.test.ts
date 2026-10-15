@@ -6,7 +6,8 @@ import { crearLuchador } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
-import { bonoFrialdad, type TipoAtaque } from '../src/motor/reglas';
+import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
+import { umbralEstallido } from '../src/motor/proyectiles';
 import { SIN_KI } from '../src/motor/ki';
 import { actDe } from '../src/motor/magia';
 
@@ -238,5 +239,20 @@ describe('segunda auditoría: estados (Core p.233)', () => {
     const antes = defensaFinal(l, r);
     l.fascinado = 120;
     expect(defensaFinal(l, r)).toBe(antes - 20);
+  });
+});
+
+describe('segunda auditoría: controles y tiradas', () => {
+  it('Resistencia: se pasa superando la dificultad; un empate falla por 0; el 100 siempre la pasa (Core p.13)', () => {
+    expect(resultadoResistencia(50, 51, 100)).toEqual({ falla: false, fracaso: 0 });
+    expect(resultadoResistencia(50, 50, 100)).toEqual({ falla: true, fracaso: 0 });
+    expect(resultadoResistencia(50, 30, 100)).toEqual({ falla: true, fracaso: 20 });
+    expect(resultadoResistencia(0, 100, 500).falla).toBe(false);
+  });
+
+  it('un cañón se bloquea con pifia por debajo de 70; arcabuz y pistola, de 80 (Core p.80-81)', () => {
+    expect(umbralEstallido(0, 'Cañón')).toBe(70);
+    expect(umbralEstallido(0, 'Arcabuz')).toBe(80);
+    expect(umbralEstallido(5, 'Pistola de mecha')).toBe(95);
   });
 });

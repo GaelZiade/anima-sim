@@ -11,13 +11,14 @@ import type { Golpe, ResultadoDefensa } from '../golpe';
 import type { EstadoMagia, Mantenido } from '../magia';
 import type { Maniobra } from '../maniobras';
 import type { Contexto, Evento, Ficha, Luchador } from '../modelo';
+import type { Resistencia } from '../reglas';
 
 /** Lo que el motor le presta a los efectos. */
 export interface Motor {
   log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>): void;
-  /** Resistencia contra una dificultad: devuelve el fracaso (0 si resiste). */
-  tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono?: number): number;
-  tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra?: number): number;
+  /** Resistencia contra una dificultad: si falla y por cuánto (Core p.13). */
+  tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono?: number): Resistencia;
+  tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra?: number): Resistencia;
   perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number): void;
   huir(ctx: Contexto, l: Luchador): void;
   /** Lo suelta de una presa. */

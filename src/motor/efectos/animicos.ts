@@ -4,6 +4,7 @@
 
 import { activo, distancia, penAccion } from '../calculos';
 import { tirarD100Cerrada } from '../dados';
+import { resultadoResistencia } from '../reglas';
 import { ZEON_CONTROL_DEL_ESPACIO } from '../magia';
 import type { Luchador } from '../modelo';
 import { amenaza, enemigos, lambda, valorNegativo } from '../ia';
@@ -44,7 +45,7 @@ function valorarPorFracaso(v: Valoracion, como: 'secar' | 'consumir' | 'critico'
 export const secar: ManejadorEfecto = {
   alAlcanzar(m, { ctx, atk, def, rm, que }) {
     // A un ser vivo le hace la mitad del fracaso; resiste con la mejor de RM y RF (interpretación).
-    const fracaso = m.tirarResistencia(ctx, def, rm, que, 'RM o RF');
+    const { fracaso } = m.tirarResistencia(ctx, def, rm, que, 'RM o RF');
     // A un elemental de agua le hace el doble del fracaso (Core p.158).
     const pv = def.ficha.naturaleza?.includes('agua') ? 2 * fracaso : Math.floor(fracaso / 2);
     if (pv > 0) m.perderPv(ctx, atk, def, pv);
@@ -55,8 +56,8 @@ export const secar: ManejadorEfecto = {
 /** Consumir Esencia (Core p.158): el fracaso en PV y en zeon. */
 export const consumirEsencia: ManejadorEfecto = {
   alAlcanzar(m, { ctx, atk, def, rm, que }) {
-    const fracaso = m.tirarResistencia(ctx, def, rm, que, 'RM');
-    if (!fracaso) return;
+    const { falla, fracaso } = m.tirarResistencia(ctx, def, rm, que, 'RM');
+    if (!falla) return;
     const e = def.magia;
     if (e) {
       const pierde = Math.min(fracaso, e.reserva);
@@ -72,7 +73,7 @@ export const consumirEsencia: ManejadorEfecto = {
 /** Crítico Directo (Core p.159): si falla la RM, un crítico del nivel del grado. */
 export const criticoDirecto: ManejadorEfecto = {
   alAlcanzar(m, { ctx, atk, def, g, rm, que }) {
-    if (m.tirarResistencia(ctx, def, rm, que, 'RM')) m.critico(ctx, atk, def, 0, false, 'normal', 0, g.critico);
+    if (m.tirarResistencia(ctx, def, rm, que, 'RM').falla) m.critico(ctx, atk, def, 0, false, 'normal', 0, g.critico);
   },
   valorar: (v) => valorarPorFracaso(v, 'critico'),
 };
@@ -92,7 +93,7 @@ export const extasis: ManejadorEfecto = {
     }
   },
   alAlcanzar(m, { ctx, def, rm, que, afectados }) {
-    if (!m.tirarResistencia(ctx, def, rm, que, 'RM', frialdadDe(def))) return;
+    if (!m.tirarResistencia(ctx, def, rm, que, 'RM', frialdadDe(def)).falla) return;
     def.extasis = true;
     afectados?.push(def);
     m.log(ctx, () => `  ${def.ficha.nombre} queda en Éxtasis: −20 a toda acción, sin otros negativos.`);
@@ -134,7 +135,8 @@ export const fundir: ManejadorEfecto = {
   alAlcanzar(m, { ctx, atk, def, g }) {
     const presencia = 20 + (def.ficha.arma?.calidad ?? 0);
     const dado = tirarD100Cerrada(ctx.rng);
-    if (presencia + dado >= (g.rf ?? 0)) {
+    // El arma resiste si su control supera la dificultad (Core p.13).
+    if (!resultadoResistencia(presencia, dado, g.rf ?? 0).falla) {
       m.log(ctx, () => `  El arma de ${def.ficha.nombre} resiste el calor (${presencia + dado} [${presencia}+${dado}] contra ${g.rf}).`);
       return;
     }

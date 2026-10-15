@@ -17,7 +17,7 @@ import {
 
 /** Incinerar (Core p.158): RM o se prende, con una tirada con bono en la Tabla 76. */
 function intentarIncinerar(m: Motor, ctx: Contexto, l: Luchador, b: Luchador, rm: number, bono: number) {
-  if (!m.tirarResistencia(ctx, b, rm, 'Incinerar', 'RM', resistenciaCalor(b))) return;
+  if (!m.tirarResistencia(ctx, b, rm, 'Incinerar', 'RM', resistenciaCalor(b)).falla) return;
   m.prender(ctx, l, b, tirarD100Cerrada(ctx.rng) + bono);
 }
 
@@ -27,7 +27,7 @@ function intentarIncinerar(m: Motor, ctx: Contexto, l: Luchador, b: Luchador, rm
  */
 function controlarFuego(m: Motor, ctx: Contexto, l: Luchador, b: Luchador, g: Grado) {
   if (b.equipo !== l.equipo && b.ficha.naturaleza?.includes('fuego')) {
-    if (m.tirarResistencia(ctx, b, g.rm ?? 0, 'Control sobre el Fuego', 'RM')) {
+    if (m.tirarResistencia(ctx, b, g.rm ?? 0, 'Control sobre el Fuego', 'RM').falla) {
       m.log(ctx, () => `  ${b.ficha.nombre} queda bajo el control de ${l.ficha.nombre}: deja de pelear.`);
       m.huir(ctx, b);
     }
@@ -151,7 +151,7 @@ export const mitigar: ManejadorEfecto = {
   resolver(m, { ctx, l, c, g, obj }) {
     if (!obj) return;
     if (obj.equipo !== l.equipo && obj.ficha.naturaleza?.includes('fuego')) {
-      if (m.tirarResistencia(ctx, obj, g.rm ?? 0, c.nombre, 'RM')) m.perderPv(ctx, l, obj, (obj.ficha.acumulacion ? 25 : 5) * (g.intensidades ?? 0));
+      if (m.tirarResistencia(ctx, obj, g.rm ?? 0, c.nombre, 'RM').falla) m.perderPv(ctx, l, obj, (obj.ficha.acumulacion ? 25 : 5) * (g.intensidades ?? 0));
     } else m.mitigarFuego(ctx, obj, g.intensidades ?? 0);
   },
   valorar({ ctx, l, c, i, g, alcance, probar }) {

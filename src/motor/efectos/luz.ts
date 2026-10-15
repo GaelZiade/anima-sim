@@ -23,7 +23,7 @@ export const flash: ManejadorEfecto = {
     const control = !!x.control;
     for (const b of ctx.luchadores) {
       if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo)) continue;
-      const asaltos = Math.floor(m.tirarRf(ctx, b, g.rf ?? 0, 'el Flash Cegador') / 10);
+      const asaltos = Math.floor(m.tirarRf(ctx, b, g.rf ?? 0, 'el Flash Cegador').fracaso / 10);
       if (asaltos > 0) {
         b.cegado = Math.max(b.cegado, asaltos);
         m.log(ctx, () => `  ${b.ficha.nombre} queda ciego ${asaltos} asalto${asaltos > 1 ? 's' : ''}.`);
@@ -138,7 +138,7 @@ export const detectar: ManejadorEfecto = {
     const hallados: Luchador[] = [];
     for (const b of x.blancos ?? []) {
       if (!activo(b) || distancia(l, b) > (g.radio ?? 0)) continue;
-      if (!m.tirarResistencia(ctx, b, g.rm ?? 0, c.nombre, 'RM')) continue;
+      if (!m.tirarResistencia(ctx, b, g.rm ?? 0, c.nombre, 'RM').falla) continue;
       l.detecta.add(b);
       hallados.push(b);
       m.log(ctx, () => `  ${l.ficha.nombre} localiza a ${b.ficha.nombre}.`);
@@ -163,8 +163,8 @@ export const detectar: ManejadorEfecto = {
 function contraNaturaleza(m: Motor, ctx: Contexto, l: Luchador, g: Grado) {
   for (const b of ctx.luchadores) {
     if (b.equipo === l.equipo || !activo(b) || distancia(l, b) > (g.radio ?? 0) || !b.ficha.naturaleza?.includes(g.naturaleza ?? '')) continue;
-    const fracaso = m.tirarResistencia(ctx, b, g.rm ?? 0, `el poder de ${l.ficha.nombre}`, 'RM');
-    if (!fracaso) continue;
+    const { falla, fracaso } = m.tirarResistencia(ctx, b, g.rm ?? 0, `el poder de ${l.ficha.nombre}`, 'RM');
+    if (!falla) continue;
     if (g.contraNaturaleza === 'domina') {
       m.log(ctx, () => `  ${b.ficha.nombre} queda dominado por ${l.ficha.nombre}: deja de pelear.`);
       m.huir(ctx, b);

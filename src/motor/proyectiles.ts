@@ -124,9 +124,12 @@ export function lanzamientosPosibles(ataque: number, cadencia: number): number {
   return Math.max(1, Math.floor(ataque / Math.max(1, cadencia)));
 }
 
-/** Nivel de pifia desde el que un arma de fuego estalla en vez de encasquillarse: +15 por cada +5. */
-export function umbralEstallido(calidad = 0): number {
-  return 80 + 3 * Math.max(0, calidad);
+/**
+ * Nivel de pifia desde el que un arma de fuego estalla en vez de encasquillarse: 80 (arcabuz, pistola)
+ * o 70 (cañón), +15 por cada +5 de calidad (Core p.80-81).
+ */
+export function umbralEstallido(calidad = 0, nombre = ''): number {
+  return (normalizarRasgo(nombre).includes('canon') ? 70 : 80) + 3 * Math.max(0, calidad);
 }
 
 /** Tabla 47: modificador por la velocidad a la que se movió el blanco (Tipo de movimiento). */

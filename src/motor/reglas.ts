@@ -144,3 +144,19 @@ export function bonoFrialdad(frialdad: number): number {
   const tramos: [number, number][] = [[320, 40], [280, 35], [240, 30], [180, 25], [140, 20], [120, 15], [80, 10], [40, 5]];
   return tramos.find(([n]) => frialdad >= n)?.[1] ?? 0;
 }
+
+/** Resultado de un control de Resistencia: si falla y por cuánto (0 si resiste o falla por un empate). */
+export interface Resistencia {
+  falla: boolean;
+  fracaso: number;
+}
+
+/**
+ * Control de Resistencia (Core p.13): 1d100 sin tirada abierta más la Resistencia; la pasa si supera la
+ * dificultad (un empate no la supera), y un 100 natural siempre la pasa.
+ */
+export function resultadoResistencia(base: number, dado: number, dificultad: number): Resistencia {
+  const falla = dado !== 100 && base + dado <= dificultad;
+  return { falla, fracaso: falla ? dificultad - (base + dado) : 0 };
+}
+

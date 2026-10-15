@@ -783,10 +783,7 @@ function mejorManiobra(
     if (m === 'puntosPresion') {
       // RF contra daño + 20: si falla, −fracaso a toda acción y −2×fracaso PV (Dominus p.42).
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
-      const margen = dif - rfDe(def);
-      // Falla si el d100 de la RF sale por debajo del margen; el fracaso medio es la mitad del margen.
-      const pFalla = Math.max(0, Math.min(1, (margen - 1) / 100));
-      const fallo = Math.max(0, Math.min(margen, 100) / 2);
+      const { p: pFalla, fracaso: fallo } = fallaResistencia(rfDe(def), dif);
       v += p.pImpacto * pFalla * (Math.min(2 * fallo, def.pv) + valorNegativo(atk, def, fallo, golpesSiguientes, 2 * fallo));
       if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen);
     }

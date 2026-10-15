@@ -6,7 +6,7 @@ import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type 
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
   absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, esMaestro, haySorpresa, localizar, nivelCritico,
-  penPifiaTurno, umbralPifia, porcentajeDano,
+  penPifiaTurno, umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, danoAEscudo, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
@@ -109,8 +109,9 @@ function aplicarAuras(ctx: Contexto, vivos: Luchador[]) {
       const dado100 = tirarD100Cerrada(ctx.rng);
       // Con Frialdad suma su bono (Dominus p.21, Core p.54).
       const base = presenciaBase(x.ficha) + frialdadDe(x);
-      const fracaso = dado100 === 100 ? 0 : dificultad - (base + dado100);
-      const estado = fracaso <= 0 ? 'resistio' : fracaso < 20 ? 'afectado' : fracaso < 50 ? 'miedo' : fracaso < 100 ? 'paralizado' : 'desvanecido';
+      // Un empate no supera el control: "0 a −19", afectado (Dominus p.22, Tabla 9).
+      const { falla, fracaso } = resultadoResistencia(base, dado100, dificultad);
+      const estado = !falla ? 'resistio' : fracaso < 20 ? 'afectado' : fracaso < 50 ? 'miedo' : fracaso < 100 ? 'paralizado' : 'desvanecido';
       const texto = `${x.ficha.nombre} siente el Aura de combate de ${fuente.ficha.nombre} (Presencia ${base + dado100} [${base}+${dado100}] contra ${dificultad})`;
       // Repetir el control como afectado sólo puede mejorar: o lo supera o sigue igual.
       if (previo && estado !== 'resistio') {
@@ -342,11 +343,14 @@ function jugarAsalto(ctx: Contexto) {
   const desempate = new Map<Luchador, number>();
   const pifiados = new Set<Luchador>();
   const paraSorpresa = new Map<Luchador, number>();
+  // A igual resultado, actúa primero quien tenga mayor turno final (Core p.86).
+  const turnos = new Map<Luchador, number>();
   const tiradas = ctx.registro ? new Map<Luchador, string>() : null;
   for (const l of vivos) {
     desempate.set(l, ctx.rng.next());
     const t = tirarD100(ctx.rng, umbralPifiaTurno(l));
     const turno = turnoFinal(l);
+    turnos.set(l, turno);
     if (t.pifia) {
       pifiados.add(l);
       l.iniciativa = turno + t.natural;
@@ -361,7 +365,7 @@ function jugarAsalto(ctx: Contexto) {
   const orden = [...vivos].sort(
     (a, b) =>
       Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
-      b.ficha.turno - a.ficha.turno || desempate.get(b)! - desempate.get(a)!,
+      turnos.get(b)! - turnos.get(a)! || desempate.get(b)! - desempate.get(a)!,
   );
   log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`,
     () => ({ orden: orden.map((l) => nro(ctx, l)) }));
@@ -747,7 +751,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     if (aDistancia) {
       const metros = distancia(atk, def);
       const dif = dificultadDisparo(metros);
-      if (hab + tA.valor < dif) {
+      // Llega si el resultado final supera la dificultad (Core p.96).
+      if (hab + tA.valor <= dif) {
         log(ctx, () => `${etiquetaPara(def)}: ${textoTirada(hab, tA)} no llega a la dificultad ${dif} (Tabla 48).`);
         continue;
       }
@@ -892,7 +897,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: Lanzamiento) {
     l.pv -= vital;
     log(ctx, () => `  ${l.ficha.nombre} sacrifica ${vital} PV: +${vital} a la Proyección (Sacrificio Vital).`);
   }
-  const t = det ? DADO_FIJO : tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion));
+  const t = det ? DADO_FIJO : tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion, l.cap.ajustePifia));
   const habPara = (b: Luchador) => det?.valor ?? ataqueMagico(l, b) + vital;
   if (t.pifia) {
     // El ejemplar recién agregado (de un beneficio a un aliado puede haber uno por blanco).
@@ -975,7 +980,7 @@ function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: num
   def.ataquesRestantes = 0;
   const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : ''}`;
   def.stats.tecnicas[nombre] = (def.stats.tecnicas[nombre] ?? 0) + 1;
-  const t = tirar(ctx, umbralPifia(def.ficha.magia!.proyeccion));
+  const t = tirar(ctx, umbralPifia(def.ficha.magia!.proyeccion, def.cap.ajustePifia));
   const habDef = ataqueMagico(def, atk);
   const etiqueta = `${def.ficha.nombre} intercepta con ${nombre} [zeon ${g.zeon}; reserva ${def.magia!.reserva}]`;
   if (t.pifia) {
@@ -1074,8 +1079,8 @@ function percibirInvisibles(ctx: Contexto) {
     // Holograma (Core p.127): Advertir contra 240 o Buscar contra 140 para darse cuenta de que es una imagen.
     for (const x of ctx.luchadores) {
       if (!x.holograma || x.equipo === l.equipo || l.descubre.has(x)) continue;
-      const adv = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.advertir ?? 0)).valor;
-      const bus = (l.ficha.buscar ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.buscar ?? 0)).valor;
+      const adv = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.advertir ?? 0, l.cap.ajustePifia)).valor;
+      const bus = (l.ficha.buscar ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.buscar ?? 0, l.cap.ajustePifia)).valor;
       if (adv >= 240 || bus >= 140) {
         l.descubre.add(x);
         log(ctx, () => `${l.ficha.nombre} se da cuenta de que la imagen de ${x.ficha.nombre} es un holograma.`);
@@ -1085,7 +1090,7 @@ function percibirInvisibles(ctx: Contexto) {
       const dif = x.bono?.invisible;
       if (!dif || x.equipo === l.equipo || !activo(x) || l.percibe.has(x)) continue;
       const advertir = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l);
-      const t = tirar(ctx, umbralPifia(l.ficha.advertir ?? 0));
+      const t = tirar(ctx, umbralPifia(l.ficha.advertir ?? 0, l.cap.ajustePifia));
       const ve = !t.pifia && advertir + t.valor >= dif;
       if (ve) l.percibe.add(x);
       log(ctx, () => `${l.ficha.nombre} ${ve ? 'nota' : 'no nota'} a ${x.ficha.nombre}, invisible (Advertir ${textoTirada(advertir, t)} contra ${dif === Infinity ? 'nada' : dif}).`);
@@ -1134,7 +1139,7 @@ function efectoAnimico(ctx: Contexto, atk: Luchador, def: Luchador, a: NonNullab
  * alcanza, dado o recibido (interpretación).
  */
 function quemarAlTocar(ctx: Contexto, llamas: Luchador, quien: Luchador) {
-  const fracaso = tirarResistencia(ctx, quien, 2 * presenciaDe(llamas), `las llamas de ${llamas.ficha.nombre}`, 'RF', 5 * (quien.ficha.ta.CAL ?? 0) + resistenciaCalor(quien));
+  const { fracaso } = tirarResistencia(ctx, quien, 2 * presenciaDe(llamas), `las llamas de ${llamas.ficha.nombre}`, 'RF', 5 * (quien.ficha.ta.CAL ?? 0) + resistenciaCalor(quien));
   if (fracaso >= 2) perderPv(ctx, llamas, quien, Math.floor(fracaso / 2));
 }
 
@@ -1148,7 +1153,7 @@ function atrapar(ctx: Contexto, l: Luchador, atk: Luchador, ataqueTotal: number,
   const dif = dificultadAtrapar(o.ranura.proyectil);
   const base = (l.ficha.trucosDeManos ?? 0) - penAccion(l) - PEN_ATRAPAR_ADICIONAL * l.atrapadas;
   l.atrapadas++;
-  const t = tirar(ctx, umbralPifia(l.ficha.trucosDeManos ?? 0));
+  const t = tirar(ctx, umbralPifia(l.ficha.trucosDeManos ?? 0, l.cap.ajustePifia));
   const total = base + valorTirada(t);
   const contra = dif ?? ataqueTotal;
   const logra = !t.pifia && (dif === null ? total > contra : total >= contra);
@@ -1157,12 +1162,12 @@ function atrapar(ctx: Contexto, l: Luchador, atk: Luchador, ataqueTotal: number,
 }
 
 /**
- * Pifia con un arma de fuego (Core p.80-81): por debajo del umbral (80, +15 por cada +5 de calidad)
+ * Pifia con un arma de fuego (Core p.80-81): por debajo del umbral (80, el cañón 70; +15 por cada +5 de calidad)
  * se encasquilla; por encima, estalla. En los dos casos no la puede usar más en el combate.
  */
 function armaDeFuegoFalla(ctx: Contexto, l: Luchador, i: number, nivel: number) {
   const arma = l.ficha.armasDistancia![i];
-  const estalla = nivel >= umbralEstallido(arma.calidad);
+  const estalla = nivel >= umbralEstallido(arma.calidad, arma.nombre);
   l.proyectiles[i].inutil = estalla ? 'rota' : 'encasquillada';
   log(ctx, () => `  ¡${estalla ? 'Estalla' : 'Se encasquilla'} ${arma.nombre} de ${l.ficha.nombre}!`);
 }
@@ -1292,15 +1297,17 @@ function resolverDefensa(
       log(ctx, () => `${quienDefiende.ficha.nombre} defiende con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
     }
     const fija = det?.valor ?? kiDef?.defensaFija ?? 0;
-    const tD = fija ? DADO_FIJO : tirar(ctx, quienDefiende.cap.umbralDefensa);
+    // Con un escudo mágico tira su Proyección: la maestría es la de ella (Core p.10, p.17).
+    const umbralDef = conEscudo ? umbralPifia(quienDefiende.ficha.magia!.proyeccionDefensa ?? quienDefiende.ficha.magia!.proyeccion, quienDefiende.cap.ajustePifia) : quienDefiende.cap.umbralDefensa;
+    const tD = fija ? DADO_FIJO : tirar(ctx, umbralDef);
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
-    // La defensa final nunca es negativa.
-    const total = fija || Math.max(0, habDef + valorDef);
+    // Una pifia resta su nivel directamente de la defensa, sin mínimo (Core p.98), como en el pronóstico.
+    const total = fija || habDef + valorDef;
     resultado = habAtk + tA.valor - total;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
     const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${def.magia!.escudo!.conjuro.nombre}` : '';
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${habDef + valorDef < 0 ? ' (=0)' : ''}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
     if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(ctx, atk, quienDefiende, o.ranura, resultado <= 0);
   }
@@ -1543,32 +1550,30 @@ function efectosAlImpactar(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModK
   if (ki.impacto && activo(def)) impacto(ctx, atk, def, ki.impacto, ki.atraer);
 }
 
-/** RF del defensor contra una dificultad (las Resistencias no sufren negativos, Core p.232). Devuelve el fracaso (0 si resiste). */
-function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra = 0): number {
-  const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = rfDe(l) + extra;
-  const fracaso = dadoRf === 100 ? 0 : dificultad - (baseRf + dadoRf);
-  const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dificultad}`;
-  if (fracaso <= 0) log(ctx, () => `  ${l.ficha.nombre} resiste ${que} (${tirada}).`);
-  else log(ctx, () => `  ${l.ficha.nombre} falla la RF contra ${que} (${tirada}) por ${fracaso}.`);
-  return Math.max(0, fracaso);
+/** RF del defensor contra una dificultad (las Resistencias no sufren negativos, Core p.232). */
+function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra = 0): Resistencia {
+  return controlResistencia(ctx, l, 'RF', rfDe(l) + extra, dificultad, que);
+}
+
+/** Tira una Resistencia y lo narra (Core p.13). */
+function controlResistencia(ctx: Contexto, l: Luchador, cual: string, base: number, dificultad: number, que: string): Resistencia {
+  const dado = tirarD100Cerrada(ctx.rng);
+  const r = resultadoResistencia(base, dado, dificultad);
+  const tirada = `${cual} ${base + dado} [${base}+${dado}] contra ${dificultad}`;
+  if (!r.falla) log(ctx, () => `  ${l.ficha.nombre} resiste ${que} (${tirada}).`);
+  else log(ctx, () => `  ${l.ficha.nombre} falla la ${cual} contra ${que} (${tirada})${r.fracaso ? ` por ${r.fracaso}` : ''}.`);
+  return r;
 }
 
 /**
  * RM o RF contra un conjuro (las Resistencias no sufren negativos, Core p.232); con "RM o RF" usa la
  * mejor (interpretación). Un 100 natural siempre resiste. Devuelve el fracaso (0 si resiste).
  */
-function tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono = 0): number {
+function tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono = 0): Resistencia {
   const rf = rfDe(l);
   const rm = rmDe(l) + (l.bono?.resistencias ?? 0);
   const usa = cual === 'RF' || (cual === 'RM o RF' && rf > rm) ? 'RF' : 'RM';
-  const base = (usa === 'RF' ? rf : rm) + bono;
-  const dado = tirarD100Cerrada(ctx.rng);
-  const fracaso = dado === 100 ? 0 : dificultad - (base + dado);
-  const tirada = `${usa} ${base + dado} [${base}+${dado}] contra ${dificultad}`;
-  if (fracaso <= 0) log(ctx, () => `  ${l.ficha.nombre} resiste ${que} (${tirada}).`);
-  else log(ctx, () => `  ${l.ficha.nombre} falla la ${usa} contra ${que} (${tirada}) por ${fracaso}.`);
-  return Math.max(0, fracaso);
+  return controlResistencia(ctx, l, usa, (usa === 'RF' ? rf : rm) + bono, dificultad, que);
 }
 
 const NOMBRE_ESTADO: Record<EstadoSobrenatural['estado'], string> = {
@@ -1590,8 +1595,8 @@ function estadoSobrenatural(ctx: Contexto, atk: Luchador, def: Luchador, est: Es
   if (est.estado === 'ilusion') return;
   // Miedo, Terror y Fascinación afectan el ánimo: suma la Frialdad (Core p.54).
   const animo = est.estado === 'miedo' || est.estado === 'terror' || est.estado === 'fascinacion';
-  const fracaso = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado], animo ? frialdadDe(def) : 0);
-  if (!fracaso) return;
+  const { falla, fracaso } = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado], animo ? frialdadDe(def) : 0);
+  if (!falla) return;
   const f = def.ficha;
   switch (est.estado) {
     case 'dano':
@@ -1710,7 +1715,7 @@ function perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number) {
 
 /** Fascinación: cada vez que lo atacan repite la RF; si la supera, se libera (Dominus p.67). */
 function repetirFascinacion(ctx: Contexto, l: Luchador) {
-  if (!tirarRf(ctx, l, l.fascinado, 'la Fascinación')) l.fascinado = 0;
+  if (!tirarRf(ctx, l, l.fascinado, 'la Fascinación').falla) l.fascinado = 0;
 }
 
 /**
@@ -1721,7 +1726,7 @@ function interrupcion(ctx: Contexto, atk: Luchador, def: Luchador, dificultad: n
   const e = def.ki;
   if (!e) return;
   const dif = def.ficha.acumulacion ? Math.floor(dificultad / 5) : dificultad;
-  if (!tirarRf(ctx, def, dif, 'la Interrupción')) return;
+  if (!tirarRf(ctx, def, dif, 'la Interrupción').falla) return;
   e.acumulado = {};
   e.ganado = {};
   e.mantenidas.clear();
@@ -1848,7 +1853,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
   const baseRf = rfDe(def);
   const res = baseRf + dadoRf;
-  if (dadoRf === 100 || res >= dif) {
+  if (!resultadoResistencia(baseRf, dadoRf, dif).falla) {
     log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
     return;
   }
