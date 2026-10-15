@@ -6,6 +6,7 @@
 // (Dominus p.45), salvo la patada del Tae Kwon Do (p.36).
 
 import type { Ficha } from './modelo';
+import type { TipoAtaque } from './reglas';
 import { fuerzaPresaArma, gradoArteMarcial, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
@@ -98,6 +99,8 @@ export interface Estilos {
   bonoCriticoVital: number;
   /** Tabla de Ataque Inusual: crítico secundario sin el −10 (Dominus p.28). */
   criticoSecundarioLibre: boolean;
+  /** Tablas de daño que el estilo deja elegir sin penalizador: Dumah FIL o PEN (p.38), Kung Fu supremo PEN (p.31). */
+  tablasLibres: readonly TipoAtaque[];
   /** Emp arcano: cada defensa con éxito contra un arma permite un control para desarmar (p.39). */
   desarmaAlDefender: boolean;
   /** Godhand: sacrificar un ataque da +30 HA y +50 daño al primero del siguiente asalto (arcano +60/+100). */
@@ -281,6 +284,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     bonoCriticoEstilos,
     bonoCriticoVital: asakusen >= 3 ? 20 : 0,
     criticoSecundarioLibre: tiene(tablas, 'ataque inusual'),
+    tablasLibres: [...new Set<TipoAtaque>([...(g('Dumah') >= 1 ? ['FIL', 'PEN'] as const : []), ...(kungFu >= 3 ? ['PEN'] as const : [])])],
     desarmaAlDefender: emp >= 3,
     godhand: godhand >= 3 ? { ataque: 60, dano: 100 } : godhand >= 1 ? { ataque: 30, dano: 50 } : null,
     intangible: g('Velez') >= 3,

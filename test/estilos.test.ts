@@ -335,3 +335,15 @@ describe('Resistir el golpe (Core p.93): todo o nada hasta actuar', () => {
     expect(r.resistir(r.ctx, r.tanque, r.rival)).toBe(false);
   });
 });
+
+describe('opciones de estilo que la IA considera', () => {
+  it('Dumah ataca en FIL o PEN sin el penalizador del crítico secundario (Dominus p.38)', () => {
+    const d = luchador(ficha('Desarmado', arte('Dumah (Base)')));
+    const def = luchador(ficha('Def'), 'B');
+    expect(estilos(d.ficha, true).tablasLibres).toEqual(['FIL', 'PEN']);
+    expect(ataqueFinal(d, def, { tipo: 'FIL' })).toBe(ataqueFinal(d, def));
+    const sinEstilo = luchador(ficha('Desarmado'));
+    expect(ataqueFinal(sinEstilo, def, { tipo: 'FIL' })).toBeLessThan(ataqueFinal(sinEstilo, def));
+  });
+});
+

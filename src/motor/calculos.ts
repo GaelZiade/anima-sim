@@ -328,7 +328,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   const chico = o.maniobra === 'area' || ki?.area ? 0 : [0, 10, 20][rivalChico(atk, def)];
   const tipo = o.tipo ?? perfil.tipoAtaque;
   // Ataque elemental o sobrenatural (Ki): ataca en esa TA sin el penalizador del crítico secundario.
-  const secundario = tipo !== perfil.tipoAtaque && tipo !== ki?.elemento && !e.criticoSecundarioLibre ? PEN_CRITICO_SECUNDARIO : 0;
+  const secundario = tipo !== perfil.tipoAtaque && tipo !== ki?.elemento && !e.criticoSecundarioLibre && !((ranura.sinArmas || atk.cap.desarmado) && e.tablasLibres.includes(tipo)) ? PEN_CRITICO_SECUNDARIO : 0;
   // Ataque Final: +20, y cada punto de cansancio da +20 en vez de +15 (Dominus p.86).
   const porCansancio = atk.modo.ataqueFinal ? 20 : BONO_CANSANCIO;
   return (

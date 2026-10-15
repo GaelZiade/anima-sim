@@ -6,6 +6,7 @@ import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } 
 import {
   activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
+  perfilDe, proximaRanura,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
@@ -508,14 +509,23 @@ function elegirModos(
   const base = { seraphite: 0 as 0 | 1 | 3, berserker: false, ataqueFinal: l.modo.ataqueFinal || activarAtaqueFinal };
   let mejor = { modo: base, bonoVariableEn: null as Luchador['bonoVariableEn'], valor: -Infinity };
   const seraphites: (0 | 1 | 3)[] = e.seraphite === 3 ? [0, 1, 3] : e.seraphite === 1 ? [0, 1] : [0];
-  const bonos: Luchador['bonoVariableEn'][] = e.bonoVariable ? ['ataque', 'defensa', 'dano'] : [null];
+  // Kung Fu: el bono va al ataque, la defensa, el daño o el turno (Dominus p.31). El turno no cambia lo
+  // que pega ni lo que recibe en el asalto: vale por actuar antes y sorprender (`valorTurno`).
+  const bonos: Luchador['bonoVariableEn'][] = e.bonoVariable ? ['ataque', 'defensa', 'dano', 'turno'] : [null];
+  const conTurno = e.bonoVariable
+    ? conCambio(() => {
+      const previo = l.bonoVariableEn;
+      l.bonoVariableEn = null;
+      return () => { l.bonoVariableEn = previo; };
+    }, () => valorTurno(ctx, l, e.bonoVariable))
+    : 0;
   // Con una sola combinación posible no hace falta valorarla.
   if (seraphites.length === 1 && !e.berserker && !e.bonoVariable) mejor = { modo: { ...base, seraphite: 0, berserker: false }, bonoVariableEn: null, valor: 0 };
   else for (const seraphite of seraphites)
     for (const berserker of e.berserker ? [false, true] : [false])
       for (const bonoVariableEn of bonos) {
         const modo = { ...base, seraphite, berserker };
-        const valor = probar(modo, bonoVariableEn);
+        const valor = probar(modo, bonoVariableEn) + (bonoVariableEn === 'turno' ? conTurno : 0);
         if (valor > mejor.valor) mejor = { modo, bonoVariableEn, valor };
       }
 
@@ -906,16 +916,28 @@ function mejorManiobra(
     return golpes * (v - contra) + tempo;
   };
 
-  // Tipo de crítico: el principal o el secundario, el que más rinda (Tabla de Ataque Inusual).
+  // Tipo de crítico: el principal, el secundario del arma (Tabla de Ataque Inusual) o una tabla que el
+  // estilo deja elegir sin armas (Dumah, Kung Fu supremo): la que más rinda.
   let tipo: TipoAtaque | undefined = ki?.elemento || undefined;
-  const sec = ranura?.proyectil ? undefined : atk.ficha.arma?.critSecundario;
   // El golpe normal ya queda valorado: no se vuelve a calcular en la recorrida de maniobras.
   let vNormal: number | undefined;
-  if (!tipo && sec && sec !== atk.ficha.tipoAtaque) {
-    const vSec = valor('normal', sec);
-    const vPrincipal = valor('normal');
-    if (vSec > vPrincipal) tipo = sec;
-    vNormal = vSec > vPrincipal ? vSec : vPrincipal;
+  if (!tipo && !ranura?.proyectil) {
+    const principal = perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque;
+    const sinArmas = ranura?.sinArmas || atk.cap.desarmado;
+    // El crítico secundario es del arma: no vale para una patada.
+    const sec = !ranura?.sinArmas ? atk.ficha.arma?.critSecundario : undefined;
+    const otras = new Set<TipoAtaque>([...(sec ? [sec] : []), ...(sinArmas ? e.tablasLibres : [])]);
+    otras.delete(principal);
+    if (otras.size) {
+      vNormal = valor('normal');
+      for (const t of otras) {
+        const v = valor('normal', t);
+        if (v > vNormal) {
+          vNormal = v;
+          tipo = t;
+        }
+      }
+    }
   }
 
   const { opciones, area } = opcionesDeManiobra(ctx, atk, def, ki, esContra, soloNormal, aDistancia);
