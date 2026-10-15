@@ -8,7 +8,7 @@ import {
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
-import { absorcion, negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
+import { absorcion, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
@@ -1507,9 +1507,14 @@ export function intentaAtrapar(ctx: Contexto, def: Luchador, atk: Luchador, habA
   const arma = g.ranura.proyectil;
   if (arma?.fuego && trucos < 200) return false;
   nuevaDecision(ctx);
-  const dif = dificultadAtrapar(arma) ?? habAtk + 50;
+  // Como `atrapar` (combate.ts): Trucos de manos abierta, con su pifia, contra la dificultad del
+  // proyectil (la iguala) o, si no tiene, contra el resultado del ataque (lo supera).
+  const dif = dificultadAtrapar(arma);
   const base = trucos - penAccion(def) - PEN_ATRAPAR_ADICIONAL * def.atrapadas;
-  const p = Math.max(0, Math.min(1, (101 - (dif - base)) / 100));
+  const umbral = umbralPifia(trucos, def.cap.ajustePifia);
+  const p = dif === null
+    ? tabla(umbral, atk.cap.umbralAtaque, false).pImpacto(base - habAtk)
+    : tabla(umbral, 0, true).pImpacto(base - dif + 1);
   if (p <= 0) return false;
   const proyectil = arma?.clase ?? 'disparo';
   const hab = defensaFinal(def, atk, { proyectil, kiAtk: g.ki });
