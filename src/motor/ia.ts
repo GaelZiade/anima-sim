@@ -26,15 +26,40 @@ import {
 
 /**
  * Evalúa `f` con un cambio temporal en el estado (lo que haría un conjuro, una armadura…) y lo deshace
- * siempre, aunque `f` falle. `cambiar` aplica el cambio y devuelve cómo deshacerlo.
+ * siempre, aunque `f` falle. `cambiar` aplica el cambio y devuelve cómo deshacerlo. La memoria de la
+ * decisión se aparta mientras dura: `f` calcula todo con el estado cambiado, y al volver se recupera
+ * lo que ya se sabía del estado real.
  */
 export function conCambio<T>(cambiar: () => () => void, f: () => T): T {
+  const guardada = apartarMemoria();
   const deshacer = cambiar();
   try {
     return f();
   } finally {
     deshacer();
+    recuperarMemoria(guardada);
   }
+}
+
+type MemoriaGuardada = { memo: [Luchador, Map<Luchador, Base>][]; rodean: [Luchador, Luchador[]][]; caches: [unknown, unknown][][] };
+
+function apartarMemoria(): MemoriaGuardada {
+  const g: MemoriaGuardada = { memo: [...memo], rodean: [...rodean], caches: cachesDeDecision.map((c) => [...c]) };
+  memo.clear();
+  rodean.clear();
+  for (const c of cachesDeDecision) c.clear();
+  return g;
+}
+
+function recuperarMemoria(g: MemoriaGuardada) {
+  memo.clear();
+  for (const [k, v] of g.memo) memo.set(k, v);
+  rodean.clear();
+  for (const [k, v] of g.rodean) rodean.set(k, v);
+  cachesDeDecision.forEach((c, i) => {
+    c.clear();
+    for (const [k, v] of g.caches[i]) c.set(k, v);
+  });
 }
 
 /** Peso del daño recibido frente al causado. */
@@ -95,12 +120,12 @@ const rodean = new Map<Luchador, Luchador[]>();
 let ctxActual: Contexto | null = null;
 
 /** Cachés de otros módulos que valen lo que dura una decisión (el estado real no cambia en ella). */
-const cachesDeDecision: { clear(): void }[] = [];
+const cachesDeDecision: Map<unknown, unknown>[] = [];
 
 /** Una caché que se vacía con cada decisión nueva, como la de `base`. */
 export function cacheDeDecision<K, V>(): Map<K, V> {
   const m = new Map<K, V>();
-  cachesDeDecision.push(m);
+  cachesDeDecision.push(m as Map<unknown, unknown>);
   return m;
 }
 
@@ -469,11 +494,9 @@ function elegirModos(
   const probar = (modo: Luchador['modo'], bonoVariableEn: Luchador['bonoVariableEn']) => conCambio(() => {
     l.modo = modo;
     l.bonoVariableEn = bonoVariableEn;
-    nuevaDecision();
     return () => {
       l.modo = original.modo;
       l.bonoVariableEn = original.bonoVariableEn;
-      nuevaDecision();
     };
   }, () => {
     const v = valorDelAsalto(l, n, objetivos, entrantes);
