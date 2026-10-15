@@ -68,7 +68,7 @@ describe('qué conjuros conoce', () => {
   });
 });
 
-describe('Control del Espacio (Arcana p.27)', () => {
+describe('Control del Espacio (Arcana p.28)', () => {
   it('cuesta 10 de zeon más y deja afuera a los suyos', () => {
     const c = conjuro('Bola de Fuego');
     expect(costeConjuro(c, c.grados[1], true)).toBe(110);

@@ -6,7 +6,7 @@ import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueMagico, defensaEscudoMagico, defensaFinal } from '../src/motor/calculos';
 import { CATALOGO, conjurosDe, gradosPosibles } from '../src/motor/conjuros';
-import { actPorCansancio, alcanceMagico, danoAlAcumular, empezarAsaltoMagia, lanzar, maximoInnato, puedeLanzar, terminarAsaltoMagia } from '../src/motor/magia';
+import { actPorCansancio, alcanceMagico, danoAlAcumular, empezarAsaltoMagia, lanzar, maximoInnato, proyeccionDeterminada, puedeLanzar, terminarAsaltoMagia } from '../src/motor/magia';
 import { golpeDeConjuro } from '../src/motor/ia';
 import { absorcion } from '../src/motor/reglas';
 import { hojaAFicha } from '../src/hoja/ficha';
@@ -180,5 +180,28 @@ describe('parte 3: preparar, innata, cansancio y sacrificios (Core p.117-118, p.
     empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: conjuro('Descarga de Luz'), grado: 0 } });
     const siempre1 = { next: () => 0 } as unknown as Parameters<typeof danoAlAcumular>[2];
     expect(danoAlAcumular(l, 70, siempre1)?.tirada).toBe(141);
+  });
+});
+
+describe('choque de descargas y Proyección determinada (Core p.117, Arcana p.26)', () => {
+  it('con disparos paralelos, un mago intercepta la descarga de otro: chocan y se resuelven por la Tabla 57', () => {
+    const textos: string[] = [];
+    const a = mago({ magia: { zeon: 2000, act: 150, proyeccion: 150, vias: { Luz: 40 } } });
+    for (let semilla = 1; semilla <= 40; semilla++) {
+      const r = simularCombate([a], [{ ...a, id: 'b', nombre: 'Otro' }], { semilla, registrar: true, distanciaInicial: 20, escenario: { disparosParalelos: true }, maxAsaltos: 6 });
+      textos.push(...r.registro!.map((x) => x.texto));
+    }
+    expect(textos.some((x) => /intercepta con Descarga de Luz .*¡chocan!.*\(Tabla 57\)/.test(x))).toBe(true);
+    // Sin la opción no hay choques.
+    const sin = simularCombate([a], [{ ...a, id: 'b', nombre: 'Otro' }], { semilla: 1, registrar: true, distanciaInicial: 20, maxAsaltos: 6 });
+    expect(sin.registro!.some((x) => /intercepta/.test(x.texto))).toBe(false);
+  });
+
+  it('Proyección Mágica Determinada: cegado, proyecta con 140 fijo pagando 20 de zeon', () => {
+    const l = crearLuchador(mago({ magia: { zeon: 600, act: 50, proyeccion: 130, vias: { Luz: 40 }, proyeccionDeterminada: 2 } }), 'A', 0, 0);
+    expect(proyeccionDeterminada(l, 130)).toBeNull();
+    expect(proyeccionDeterminada(l, 30)).toEqual({ valor: 140, zeon: 20 });
+    expect(proyeccionDeterminada(l, 70)).toEqual({ valor: 140, zeon: 20 });
+    expect(proyeccionDeterminada(l, 100)).toBeNull();
   });
 });

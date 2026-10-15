@@ -13,7 +13,7 @@ import {
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
-import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
+import { negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
@@ -23,7 +23,7 @@ import {
 } from './ki';
 import type { Localizacion } from './reglas';
 import {
-  atributo, caracteristicasControl, dificultadPuntosPresion, esApuntado, esManiobraDeControl, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
+  atributo, bonoCaracteristica, caracteristicasControl, dificultadPuntosPresion, esApuntado, esManiobraDeControl, esNoLetal, ESTADOS_MUSHIN, localizacionApuntada, modificadorPorResultado,
   penManiobra, pGanaControl, type EstadoMushin, type Maniobra,
 } from './maniobras';
 
@@ -1827,7 +1827,7 @@ function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: Grado):
 /**
  * Blancos de un conjuro: con área, todos los del radio alrededor del objetivo, aliados incluidos (Core
  * p.157); "alrededor del brujo", todos los de su radio salvo él. Con Control del Espacio, sólo los
- * enemigos (Arcana p.27).
+ * enemigos (Arcana p.28).
  */
 export function blancosConjuro(ctx: Contexto, atk: Luchador, objetivo: Luchador, c: Conjuro, g: Grado, control: boolean): Luchador[] {
   const centro = c.efecto === 'consumirEsencia' ? atk : g.area ? objetivo : null;
@@ -2170,6 +2170,36 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   // Sin nada que valga la pena lanzar: espera acumulando, salvo que lo tengan trabado.
   if (!trabadoConAlguien(l) && enemigos(ctx, l).some((x) => distancia(l, x) <= alcance)) return { esperar: true };
   return null;
+}
+
+/**
+ * Interceptar una descarga con un conjuro de ataque (Core p.117): con el que más daño base tenga de los
+ * que le alcanzan, si su Proyección probablemente llega a 50 del ataque y su descarga no queda muy por
+ * debajo (en 1d100 + daño + Poder, perder por más de 50 la deja pasar).
+ */
+export function interceptarCon(ctx: Contexto, l: Luchador, atk: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): Lanzamiento | null {
+  const e = l.magia!;
+  if (perfil(l) === 'bestia') return null;
+  const poder = bonoCaracteristica(atributo(l, 'POD'));
+  const poderAtk = atkEsMago ? bonoCaracteristica(atributo(atk, 'POD')) : 0;
+  let mejor: Lanzamiento | null = null;
+  let mejorDano = -1;
+  for (const c of e.conjuros) {
+    if (!c.tipos.includes('ataque') || c.accion !== 'activa' || c.efecto) continue;
+    for (const i of gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia)) {
+      const g = c.grados[i];
+      // Usando la magia innata, intercepta con un innato; si no, con lo acumulado.
+      const alcanza = e.innato ? g.zeon <= maximoInnato(l.ficha.magia!.act) && !e.mantenidos.some((x) => x.innato) : g.zeon <= e.acumulado;
+      if (!alcanza || (g.dano ?? 0) <= mejorDano) continue;
+      mejor = { conjuro: c, grado: i, objetivo: atk, ...(e.innato ? { innato: true } : {}) };
+      mejorDano = g.dano ?? 0;
+    }
+  }
+  if (!mejor) return null;
+  // P(su Proyección llega a resultado − 50) con la tabla de tiradas abiertas.
+  const hab = ataqueMagico(l, atk);
+  const pLlega = tabla(umbralPifia(l.ficha.magia!.proyeccion), 0, true).pImpacto(hab - (resultado - 50) + 1);
+  return pLlega >= 0.5 && mejorDano + poder >= baseAtk + poderAtk - 50 ? mejor : null;
 }
 
 /**

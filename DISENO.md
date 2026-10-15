@@ -449,8 +449,8 @@ Reglas generales que se agregaron:
 | Todo conjuro pide un control de Proyección: con pifia falla aunque gaste el zeon | Core p.118 |
 | Tabla 76, En llamas: todo ataque de calor que daña tira 1d100 + el daño; prendido (100), ardiendo (180, 10 PV/asalto), en llamas (240, 25), calcinado (300, 50, sin armadura); la TA contra calor resta 2 por punto; crece 10 por asalto si no se apaga; apagarse: 1d100 + Destreza o Agilidad restado; acumulación: el resultado /5 y el daño ×5 | Core p.236-237 |
 | Ira: se lanza al ataque (no hace defensa total ni huye) | Core p.232 |
-| Control del Espacio: elige los blancos de sus conjuros de área, por 10 de zeon más | Arcana p.27 |
-| Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño | Arcana p.28 |
+| Control del Espacio: elige los blancos de sus conjuros de área, por 10 de zeon más | Arcana p.28 |
+| Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño | Arcana p.30 |
 | Conjuro Especialista: +1 a la Inteligencia para el grado de ese conjuro | Arcana p.30 |
 | Sub-vías: se conocen si son las elegidas para esa vía y la vía llega a su nivel | Arcana p.32 |
 | RM sin planilla: Presencia + bono de POD (Presencia sin planilla: RF − bono de CON) | Core p.12 |

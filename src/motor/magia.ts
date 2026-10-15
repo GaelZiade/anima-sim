@@ -212,6 +212,30 @@ export function terminarAsaltoMagia(l: Luchador) {
   else e.acumulado -= Math.floor(e.ganado / 2);
 }
 
+/** Proyección Mágica Determinada por esferas: habilidad final fija y su zeon (Arcana p.26). */
+const DETERMINADA: readonly { valor: number; zeon: number }[] = [
+  { valor: 120, zeon: 10 }, { valor: 140, zeon: 20 }, { valor: 180, zeon: 40 }, { valor: 240, zeon: 60 }, { valor: 280, zeon: 80 },
+];
+
+/**
+ * Proyección Mágica Determinada (Arcana p.26): en vez de tirar, una habilidad final fija pagando zeon de
+ * la reserva (sin acumularlo). Conviene cuando su Proyección con la tirada media (unos 55) no llega:
+ * cegado o con muchos negativos. Devuelve el nivel que conviene, o null.
+ */
+export function proyeccionDeterminada(l: Luchador, habilidad: number): { valor: number; zeon: number } | null {
+  const e = l.magia;
+  const n = l.ficha.magia?.proyeccionDeterminada ?? 0;
+  if (!e || !n) return null;
+  let mejor: { valor: number; zeon: number } | null = null;
+  for (const d of DETERMINADA.slice(0, n)) if (d.valor > habilidad + 55 && d.zeon <= zeonLibre(e)) mejor = d;
+  return mejor;
+}
+
+/** Paga la Proyección Determinada: de la reserva, sin acumular. */
+export function pagarDeterminada(l: Luchador, d: { zeon: number }) {
+  l.magia!.reserva -= d.zeon;
+}
+
 /** El conjuro preparado está listo para lanzarse. */
 export function preparadoListo(e: EstadoMagia): Preparado | null {
   const p = e.preparado;
@@ -233,12 +257,12 @@ function estaMantenido(e: EstadoMagia, c: Conjuro): boolean {
   return c.blanco !== 'aliado' && e.mantenidos.some((x) => x.conjuro === c);
 }
 
-/** Zeon extra por elegir los blancos de un conjuro de área con Control del Espacio (Arcana p.27). */
+/** Zeon extra por elegir los blancos de un conjuro de área con Control del Espacio (Arcana p.28). */
 export const ZEON_CONTROL_DEL_ESPACIO = 10;
 
 /**
  * Conjuro ofensivo de área que alcanza a todos los de adentro: con Control del Espacio puede elegir a
- * quiénes (Arcana p.27).
+ * quiénes (Arcana p.28).
  */
 export function deArea(c: Conjuro, g: Grado): boolean {
   return !!g.area || (!!g.radio && (c.efecto === 'flash' || c.efecto === 'consumirEsencia'));

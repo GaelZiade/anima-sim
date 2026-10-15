@@ -13,7 +13,7 @@ import {
   enAlcance, inmuneAlGolpe, metrosTotales, modControl, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, alcanceMaximo, type ZonaArmadura,
 } from './calculos';
 import {
-  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
+  atributo, bonoCaracteristica, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
   esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin,
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
@@ -21,7 +21,7 @@ import * as ia from './ia';
 import { GRADOS, type Conjuro } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, dejarDeMantener, empezarAsaltoMagia, lanzar, mantenidoCon, presenciaDe, rmDe, romperEscudo,
-  terminarAsaltoMagia, terminarMantenidos, estadoLlamas, danoLlamas, actPorCansancio,
+  terminarAsaltoMagia, terminarMantenidos, estadoLlamas, danoLlamas, actPorCansancio, pagarDeterminada, proyeccionDeterminada,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
@@ -744,7 +744,14 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
         disparoParalelo(ctx, blanco, atk);
         if (!activo(atk) || !activo(blanco)) continue;
       }
-      const r = resolverDefensa(ctx, atk, blanco, hab, tA, opcionesAtk, etiquetaPara(blanco));
+      // Una técnica de Ki a distancia es una descarga: un mago la puede interceptar (Core p.117).
+      let opciones: Golpe = opcionesAtk;
+      if (g === 0 && !arma && aDistancia && ki?.distancia && blanco === def) {
+        const choque = interceptar(ctx, atk, blanco, hab + tA.valor, danoBase(atk, blanco, false, ranura, ki), false);
+        if (choque === 'anulado' || choque === 'pierde') continue;
+        if (choque !== null && choque !== 1) opciones = { ...opcionesAtk, factorDano: choque };
+      }
+      const r = resolverDefensa(ctx, atk, blanco, hab, tA, opciones, etiquetaPara(blanco));
       if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
       if (r.contra !== null) {
         contras.push({ quien: r.defensor, bono: r.contra });
@@ -844,7 +851,14 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
   const sobre = c.efecto === 'bendicion' && x.blancos?.length ? ` sobre ${x.blancos.map((b) => b.ficha.nombre).join(', ')}`
     : c.efecto === 'curar' && obj ? ` sobre ${obj.ficha.nombre}` : '';
   const etiqueta = (b: Luchador) => `${l.ficha.nombre} lanza ${nombre} contra ${b.ficha.nombre}${enAlcance(l, b) ? '' : ` desde ${distancia(l, b).toFixed(0)} m`} ${zeon}`;
-  const t = tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion));
+  // Proyección Mágica Determinada: un valor fijo pagando zeon, si le conviene (Arcana p.26).
+  const det = obj && (c.tipos.includes('ataque') || c.tipos.includes('animico')) ? proyeccionDeterminada(l, ataqueMagico(l, obj)) : null;
+  if (det) {
+    pagarDeterminada(l, det);
+    log(ctx, () => `${l.ficha.nombre} proyecta con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
+  }
+  const t = det ? DADO_FIJO : tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion));
+  const habPara = (b: Luchador) => det?.valor ?? ataqueMagico(l, b);
   if (t.pifia) {
     // El ejemplar recién agregado (de un beneficio a un aliado puede haber uno por blanco).
     const m = [...l.magia!.mantenidos].reverse().find((x) => x.conjuro === c);
@@ -879,16 +893,71 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
   l.stats.ataquesHechos++;
   const animico = c.tipos.includes('animico') ? { conjuro: c, grado: x.grado } : undefined;
   const contras: { quien: Luchador; bono: number }[] = [];
+  // Choque de descargas (Core p.117): el blanco puede interceptar un conjuro de ataque con el suyo.
+  let factor = 1;
+  if (!animico && c.tipos.includes('ataque')) {
+    const choque = interceptar(ctx, l, obj, habPara(obj) + t.valor, g.dano ?? 0, true);
+    if (choque === 'anulado' || choque === 'pierde') return;
+    if (choque !== null) factor = choque;
+  }
   for (const b of ia.blancosConjuro(ctx, l, obj, c, g, !!x.control)) {
     if (!activo(b) || !activo(l)) continue;
     const golpe: Golpe = {
       maniobra: 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
+      ...(factor !== 1 ? { factorDano: factor } : {}),
     };
-    const r = resolverDefensa(ctx, l, b, ataqueMagico(l, b), t, golpe, etiqueta(b));
+    const r = resolverDefensa(ctx, l, b, habPara(b), t, golpe, etiqueta(b));
     if (r.contra !== null) contras.push({ quien: r.defensor, bono: r.contra });
   }
   l.sorprendeA.clear();
   for (const k of contras) ofrecerContra(ctx, k.quien, l, k.bono);
+}
+
+/**
+ * Choque de descargas (Core p.117, Tabla 57). Con disparos paralelos (sin haber actuado y con menos
+ * de 25 de diferencia de turno), un mago que recibe una descarga puede interceptarla con un conjuro de
+ * ataque: si su Proyección llega a 50 de la del atacante, chocan. Cada uno tira 1d100 + el daño base
+ * + su bono de Poder (sólo los magos): hasta 50 de diferencia se anulan; de 51 a 100, la ganadora pasa
+ * con la mitad de daño; más, entera. Devuelve qué pasa con la descarga del atacante: null si no hubo
+ * choque, 'anulado', 'pierde' (la del defensor lo alcanza a él) o el factor de daño con que pasa.
+ */
+function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): 'anulado' | 'pierde' | number | null {
+  if (!ctx.opciones.disparosParalelos || !def.magia || def.haActuado || def === ctx.turnoDe || !puedeActuar(def) || def.ataquesRestantes <= 0) return null;
+  if (Math.abs(def.iniciativa - atk.iniciativa) >= 25) return null;
+  const x = ia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago);
+  if (!x) return null;
+  const c = x.conjuro;
+  const g = lanzar(def, c, x.grado, x.innato ? { innato: true } : {}, false);
+  def.haActuado = true;
+  def.ataquesRestantes = 0;
+  const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : ''}`;
+  def.stats.tecnicas[nombre] = (def.stats.tecnicas[nombre] ?? 0) + 1;
+  const t = tirar(ctx, umbralPifia(def.ficha.magia!.proyeccion));
+  const habDef = ataqueMagico(def, atk);
+  const etiqueta = `${def.ficha.nombre} intercepta con ${nombre} [zeon ${g.zeon}; reserva ${def.magia!.reserva}]`;
+  if (t.pifia) {
+    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${t.natural}): el conjuro falla.`);
+    return null;
+  }
+  const suyo = habDef + t.valor;
+  const golpeDef: Golpe = { maniobra: 'normal', esContra: false, tipo: c.ta, ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(c, g), aDistancia: !enAlcance(def, atk) };
+  if (suyo < resultado - 50) {
+    // No llega a interceptarla: es un disparo paralelo común.
+    log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} no llega a 50 de ${resultado}; no chocan.`);
+    resolverDefensa(ctx, def, atk, habDef, t, golpeDef, `${def.ficha.nombre} lanza ${nombre} contra ${atk.ficha.nombre}`);
+    return activo(atk) ? null : 'anulado';
+  }
+  const poder = (l: Luchador, mago: boolean) => (mago ? bonoCaracteristica(atributo(l, 'POD')) : 0);
+  const dA = tirarD100Cerrada(ctx.rng), dD = tirarD100Cerrada(ctx.rng);
+  const totA = dA + baseAtk + poder(atk, atkEsMago);
+  const totD = dD + (g.dano ?? 0) + poder(def, true);
+  const dif = Math.abs(totA - totD);
+  const factor = dif > 100 ? 1 : dif > 50 ? 0.5 : 0;
+  log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} contra ${resultado} → ¡chocan! ${atk.ficha.nombre} ${totA} [${dA}+${baseAtk}${atkEsMago ? `+${poder(atk, true)}` : ''}] contra ${def.ficha.nombre} ${totD} [${dD}+${g.dano ?? 0}+${poder(def, true)}]: ${factor === 0 ? 'se anulan' : `${totA > totD ? atk.ficha.nombre : def.ficha.nombre} pasa${factor === 0.5 ? ' con la mitad de daño' : ''}`} (Tabla 57).`);
+  if (factor === 0) return 'anulado';
+  if (totA > totD) return factor;
+  resolverDefensa(ctx, def, atk, habDef, t, { ...golpeDef, ...(factor !== 1 ? { factorDano: factor } : {}) }, `  La descarga de ${def.ficha.nombre} sigue hacia ${atk.ficha.nombre}`);
+  return 'pierde';
 }
 
 /** Curar Heridas: recupera PV sin pasar de los suyos (Core p.187). */
@@ -983,7 +1052,7 @@ function zonasMagicas(ctx: Contexto) {
 
 /**
  * Lo que hace un conjuro anímico al alcanzar (Core p.122): RM contra su dificultad (con Romper
- * Resistencias, +5 o +10 por cada 50% de daño, Arcana p.28); el fracaso decide el efecto.
+ * Resistencias, +5 o +10 por cada 50% de daño, Arcana p.30); el fracaso decide el efecto.
  */
 function efectoAnimico(ctx: Contexto, atk: Luchador, def: Luchador, a: NonNullable<Golpe['animico']>, porcentaje: number) {
   const g = a.conjuro.grados[a.grado];
@@ -1122,6 +1191,8 @@ interface Golpe {
   aDistancia?: boolean;
   /** Conjuro anímico: si alcanza con un resultado de daño, RM en vez de daño (Core p.122). */
   animico?: { conjuro: Conjuro; grado: number };
+  /** Multiplica el daño base (una descarga que pasa un choque con la mitad, Tabla 57). */
+  factorDano?: number;
 }
 
 function resolverDefensa(
@@ -1190,8 +1261,14 @@ function resolverDefensa(
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
   } else {
-    // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53).
-    const fija = kiDef?.defensaFija ?? 0;
+    // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53). Con el escudo mágico,
+    // la Proyección Mágica Determinada hace lo mismo pagando zeon (Arcana p.26).
+    const det = conEscudo ? proyeccionDeterminada(quienDefiende, habDef) : null;
+    if (det) {
+      pagarDeterminada(quienDefiende, det);
+      log(ctx, () => `${quienDefiende.ficha.nombre} defiende con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
+    }
+    const fija = det?.valor ?? kiDef?.defensaFija ?? 0;
     const tD = fija ? DADO_FIJO : tirar(ctx, quienDefiende.cap.umbralDefensa);
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
@@ -1328,6 +1405,7 @@ function resolverDefensa(
 
   // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
   let base = baseTrasEscudo >= 0 ? baseTrasEscudo : danoBase(atk, def, o.esContra, o.ranura, o.ki);
+  if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
   if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
   // apuntado, la de la zona.

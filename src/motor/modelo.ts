@@ -123,15 +123,15 @@ export interface MagiaFicha {
   libres?: string[];
   /** Sub-vía elegida para cada vía: "Fuego" → "Guerra" (Arcana p.32). */
   subvias?: Record<string, string>;
-  /** Control del Espacio: elige a quién alcanzan sus conjuros de área, por 10 de zeon más (Arcana p.27). */
+  /** Control del Espacio: elige a quién alcanzan sus conjuros de área, por 10 de zeon más (Arcana p.28). */
   controlDelEspacio?: boolean;
-  /** Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño (Arcana p.28). */
+  /** Romper Resistencias: +5 (arcano +10) a la RM de sus anímicos por cada 50% de daño (Arcana p.30). */
   romperResistencias?: number;
   /** Conjuros con Conjuro Especialista: +1 a la Inteligencia para su grado (Arcana p.30). */
   especialista?: string[];
   /** Esferas de Explotación de la Energía Física: +25 / +40 al ACT por punto de cansancio (Arcana p.27). */
   explotacion?: number;
-  /** Esferas de Proyección Mágica Determinada: proyectar con 120, 140… pagando zeon (Arcana p.24). */
+  /** Esferas de Proyección Mágica Determinada: proyectar con 120, 140… pagando zeon (Arcana p.26). */
   proyeccionDeterminada?: number;
 }
 
