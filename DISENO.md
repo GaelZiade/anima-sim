@@ -972,7 +972,9 @@ ataque (Advertir), Acción adicional, Recuperar acción, Previsión, Transporte 
 área, Aumentar rotura y entereza, Incremento de movimiento y de habilidad, Capacidad incrementada,
 Armas físicas de Ki, Espejismo, Choque físico (descargas), las Ilusiones, Regeneración de escudos y
 pantallas, Ataque continuo y Combo, Proyección y Estela de destrucción, y la Transmisión del Ki.
-Las técnicas a distancia todavía no miran la línea de visión (llega con los proyectiles).
+Ninguna técnica de las planillas de la mesa usa alguno (verificado el 15/10/2026: `efectosDe` no
+deja efectos desconocidos). Las técnicas a distancia miran la línea de visión y la cobertura, como
+los proyectiles.
 
 Velocidad: con Ki la IA evalúa cada técnica con cada maniobra. Tras las optimizaciones exactas (huella
 idéntica) Kael simula unos 1.500 combates/s contra unos 3.300 sin Ki (`npm run bench -- Kael`).
