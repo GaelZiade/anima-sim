@@ -6,7 +6,7 @@ import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type 
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
   absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, haySorpresa, localizar, nivelCritico, penPifiaTurno,
-  umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
+  umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia, type TipoAtaque,
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
@@ -920,6 +920,160 @@ function escudoRecibe(ctx: Contexto, golpe: number, ataqueTotal: number, esc: Es
   return pasa;
 }
 
+/** Algo que hace que un golpe no llegue al defensor antes de que se defienda (y lo narra). */
+type EvitaElGolpe = (ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, tipo: TipoAtaque, etiqueta: string) => boolean;
+
+/** Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69). */
+const intangible: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
+  if (!def.ki?.activo.intangible || tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) return false;
+  log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
+  return true;
+};
+
+/**
+ * Holograma: quien no lo descubrió puede pegarle a la imagen (la mitad de las veces, interpretación); un
+ * golpe de energía la deshace (Core p.127).
+ */
+const holograma: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
+  if (!def.holograma || atk.descubre.has(def) || ctx.rng.next() >= 0.5) return false;
+  log(ctx, () => `${etiqueta}: ¡ataca a la imagen! El golpe la atraviesa.`);
+  if (tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) {
+    const m = mantenidoDe(def, 'holograma');
+    if (m) dejarDeMantener(def, m);
+    log(ctx, () => `  La imagen se deshace.`);
+  }
+  return true;
+};
+
+/** En este orden: lo que evita el golpe sin defensa. Uno nuevo (un poder psíquico, una ilusión) se agrega acá. */
+const EVITAN_EL_GOLPE: readonly EvitaElGolpe[] = [intangible, holograma];
+
+/**
+ * La defensa gana (resultado 0 o menos): absorber Ki de la técnica, Reflectar, el desarme de Emp
+ * arcano y la contra que le corresponde.
+ */
+function defensaGana(
+  ctx: Contexto, atk: Luchador, quienDefiende: Luchador, o: Golpe, kiDef: ModKi | undefined, resultado: number, ataqueTotal: number,
+): ResultadoDefensa {
+  // Absorción de Ki: con una defensa que permita contraatacar absorbe Ki de la técnica (Dominus p.64).
+  if (kiDef?.absorcionKi && resultado < 0 && o.costeTecnica && quienDefiende.ki) {
+    const absorbe = recuperarKi(quienDefiende, Math.min(kiDef.absorcionKi, o.costeTecnica));
+    if (absorbe) log(ctx, () => `  ${quienDefiende.ficha.nombre} absorbe ${absorbe} de Ki de la técnica [reserva ${quienDefiende.ki!.reserva}].`);
+  }
+  // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
+  // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
+  if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
+    reflectar(MOTOR, ctx, quienDefiende, atk, ataqueTotal + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
+    return { defensor: quienDefiende, contra: null, impacto: false };
+  }
+  // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
+  if (quienDefiende.cap.est.desarmaAlDefender && !atk.cap.desarmado && activo(atk)) {
+    const c = caracteristicasControl('desarmar', quienDefiende, atk);
+    // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
+    if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
+  }
+  // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
+  // Ataque indirecto (Ki): no se puede contraatacar (Dominus p.52).
+  return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra && !o.ki?.indirecto ? bonoContraataque(resultado) : null, impacto: false };
+}
+
+/**
+ * El golpe entra: maniobras de control, daño contra la armadura, efectos sobrenaturales de la técnica,
+ * Engatillar, Destrucción por Ki, puntos de presión, Absorción de energía y el fuego.
+ */
+function golpeQueEntra(
+  ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, resultado: number, baseTrasEscudo: number, tipoGolpe: TipoAtaque,
+  resiste: boolean, avisar: () => void,
+): ResultadoDefensa {
+  const m = o.maniobra;
+  const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
+
+  if (esManiobraDeControl(m)) {
+    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0);
+    else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
+    if (m === 'desarmar') {
+      avisar();
+      return { defensor: def, contra: null, impacto: true };
+    }
+  }
+
+  // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
+  let base = baseTrasEscudo >= 0 ? baseTrasEscudo : danoBase(atk, def, o.esContra, o.ranura, o.ki);
+  if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
+  if (def.bono?.inmuneFuego) base = Math.max(0, base - reduccionFuego(def, tipoGolpe));
+  if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
+  // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
+  // apuntado, la de la zona.
+  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura, o.ki);
+  const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
+  const frena = barreraFrena(def, atk, base, o.ki);
+  let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
+  // Sangre de Aeon: daño de su elemento a la mitad.
+  if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
+  // Un área contra un ser con acumulación: el doble de daño (Core p.99).
+  if (areaDoblaDano(atk, def, m, o.area, o.ki)) dano *= 2;
+  // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
+  // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
+  const ki = o.ki;
+  if (ki && (ki.impacto || ki.marca || ki.interrumpe || ki.estados.length || ki.danoReducido) && !esManiobraDeControl(m)) {
+    const habriaDanado = dano;
+    if (ki.danoReducido) dano = Math.floor(dano * (1 - ki.danoReducido));
+    const porcentajeContacto = porcentajeDano(resultado, absorcion(0));
+    efectosAlImpactar(MOTOR, ctx, atk, def, ki, habriaDanado, porcentajeContacto);
+    if (!activo(def)) {
+      avisar();
+      return { defensor: def, contra: null, impacto: true };
+    }
+  }
+
+  // Engatillar: si el ataque habría dañado, no daña y deja al rival amenazado (Core p.92).
+  if (m === 'engatillar') {
+    if (dano > 0) {
+      def.amenazadoPor = atk;
+      log(ctx, () => `  ${def.ficha.nombre} queda amenazado por ${atk.ficha.nombre}.`);
+    } else log(ctx, () => `  No logra engatillarlo.`);
+    avisar();
+    return { defensor: def, contra: null, impacto: true };
+  }
+  // Destrucción por Ki: basta con alcanzarlo, aunque el golpe no dañe (Core p.104).
+  if (m === 'destruccionKi') {
+    destruccionPorKi(MOTOR, ctx, atk, def, o.kiDestruccion ?? 0, resiste);
+    avisar();
+    return { defensor: def, contra: null, impacto: true };
+  }
+  // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
+  if (m === 'puntosPresion') {
+    if (dano > 0) puntosDePresion(MOTOR, ctx, atk, def, dano, o.estadoMushin ?? null);
+    else log(ctx, () => `  No alcanza los puntos de presión.`);
+    avisar();
+    return { defensor: def, contra: null, impacto: true };
+  }
+  // Absorción de energía: el daño plenamente energético se puede pagar con Ki, 1 cada 5 (Dominus p.20).
+  let absorbido = false;
+  if (dano > 0 && (tipo === 'ENE' || o.ki?.sobrenatural)) {
+    const ki = ia.kiParaAbsorber(def, dano);
+    if (ki > 0) {
+      def.ki!.reserva -= ki;
+      const antes = dano;
+      dano = Math.max(0, dano - 5 * ki);
+      absorbido = true;
+      log(ctx, () => `  ${def.ficha.nombre} absorbe ${antes - dano} de daño con ${ki} de Ki (Absorción de energía) [reserva ${def.ki!.reserva}].`);
+    }
+  }
+  if (dano > 0) {
+    aplicarDano(ctx, atk, def, dano, resiste, m, o.ki);
+    // Daño por calor: 1d100 (cerrada) + el daño en la Tabla 76 (Core p.236).
+    if (tipo === 'CAL' && activo(def)) prender(MOTOR, ctx, atk, def, tirarD100Cerrada(ctx.rng) + dano);
+  } else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
+  else if (!esManiobraDeControl(m) && !absorbido) {
+    log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
+    // La armadura evitó el daño: puede romperse (Core p.93).
+    if (ctx.opciones.rotura) roturaDeArmadura(MOTOR, ctx, atk, def, o.ranura, zonaDe(m));
+  }
+  avisar();
+  return { defensor: def, contra: null, impacto: true };
+}
+
 function resolverDefensa(
   ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
@@ -929,23 +1083,9 @@ function resolverDefensa(
   const quienDefiende = proteccion?.quien ?? def;
   // Fascinación: al verse en peligro repite la RF (Dominus p.67).
   if (def.fascinado) repetirFascinacion(MOTOR, ctx, def);
-  // Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69).
   const tipoGolpe = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  if (!proteccion && def.ki?.activo.intangible && tipoGolpe !== 'ENE' && !atk.cap.danaEnergia && !o.ki?.danaEnergia) {
-    log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
-    return { defensor: def, contra: null, impacto: false };
-  }
-  // Holograma: quien no lo descubrió puede pegarle a la imagen (la mitad de las veces, interpretación); un
-  // golpe de energía la deshace (Core p.127).
-  if (!proteccion && def.holograma && !atk.descubre.has(def) && ctx.rng.next() < 0.5) {
-    log(ctx, () => `${etiqueta}: ¡ataca a la imagen! El golpe la atraviesa.`);
-    if (tipoGolpe === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) {
-      const m = mantenidoDe(def, 'holograma');
-      if (m) dejarDeMantener(def, m);
-      log(ctx, () => `  La imagen se deshace.`);
-    }
-    return { defensor: def, contra: null, impacto: false };
-  }
+  // Lo que hace que el golpe no llegue, antes de defenderse (intangible, holograma…).
+  if (!proteccion && EVITAN_EL_GOLPE.some((evita) => evita(ctx, atk, def, o, tipoGolpe, etiqueta))) return { defensor: def, contra: null, impacto: false };
   if (proteccion?.apartar) quienDefiende.ataquesRestantes--;
   const resiste = !proteccion && !def.ficha.acumulacion && ia.resistir(ctx, def, atk);
   // Haima: sacrifica PV para crear una sombra de sangre que recibe el golpe (Dominus p.88).
@@ -1052,28 +1192,8 @@ function resolverDefensa(
     }
   }
 
-  if (resultado <= 0) {
-    // Absorción de Ki: con una defensa que permita contraatacar absorbe Ki de la técnica (Dominus p.64).
-    if (kiDef?.absorcionKi && resultado < 0 && o.costeTecnica && quienDefiende.ki) {
-      const absorbe = recuperarKi(quienDefiende, Math.min(kiDef.absorcionKi, o.costeTecnica));
-      if (absorbe) log(ctx, () => `  ${quienDefiende.ficha.nombre} absorbe ${absorbe} de Ki de la técnica [reserva ${quienDefiende.ki!.reserva}].`);
-    }
-    // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
-    // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
-    if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
-      reflectar(MOTOR, ctx, quienDefiende, atk, habAtk + tA.valor + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
-      return { defensor: quienDefiende, contra: null, impacto: false };
-    }
-    // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
-    if (quienDefiende.cap.est.desarmaAlDefender && !atk.cap.desarmado && activo(atk)) {
-      const c = caracteristicasControl('desarmar', quienDefiende, atk);
-      // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
-      if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
-    }
-    // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
-    // Ataque indirecto (Ki): no se puede contraatacar (Dominus p.52).
-    return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra && !o.ki?.indirecto ? bonoContraataque(resultado) : null, impacto: false };
-  }
+  if (resultado <= 0) return defensaGana(ctx, atk, quienDefiende, o, kiDef, resultado, habAtk + tA.valor);
+
 
   // Conjuro anímico (Core p.122): alcanza si logra un resultado de daño contra la TA de energía; en
   // vez de dañar, el blanco hace la RM. No lo deja a la defensiva: no lo golpea (interpretación).
@@ -1122,93 +1242,7 @@ function resolverDefensa(
     } else if (resiste) log(ctx, () => `  ${def.ficha.nombre} resistió el golpe: sigue pudiendo actuar.`);
   };
   liberarAmenazados(ctx, def);
-  const m = o.maniobra;
-  const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
-
-  if (esManiobraDeControl(m)) {
-    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0);
-    else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
-    if (m === 'desarmar') {
-      avisar();
-      return { defensor: def, contra: null, impacto: true };
-    }
-  }
-
-  // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
-  let base = baseTrasEscudo >= 0 ? baseTrasEscudo : danoBase(atk, def, o.esContra, o.ranura, o.ki);
-  if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
-  if (def.bono?.inmuneFuego) base = Math.max(0, base - reduccionFuego(def, tipoGolpe));
-  if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
-  // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
-  // apuntado, la de la zona.
-  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura, o.ki);
-  const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  const frena = barreraFrena(def, atk, base, o.ki);
-  let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
-  // Sangre de Aeon: daño de su elemento a la mitad.
-  if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
-  // Un área contra un ser con acumulación: el doble de daño (Core p.99).
-  if (areaDoblaDano(atk, def, m, o.area, o.ki)) dano *= 2;
-  // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
-  // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
-  const ki = o.ki;
-  if (ki && (ki.impacto || ki.marca || ki.interrumpe || ki.estados.length || ki.danoReducido) && !esManiobraDeControl(m)) {
-    const habriaDanado = dano;
-    if (ki.danoReducido) dano = Math.floor(dano * (1 - ki.danoReducido));
-    const porcentajeContacto = porcentajeDano(resultado, absorcion(0));
-    efectosAlImpactar(MOTOR, ctx, atk, def, ki, habriaDanado, porcentajeContacto);
-    if (!activo(def)) {
-      avisar();
-      return { defensor: def, contra: null, impacto: true };
-    }
-  }
-
-  // Engatillar: si el ataque habría dañado, no daña y deja al rival amenazado (Core p.92).
-  if (m === 'engatillar') {
-    if (dano > 0) {
-      def.amenazadoPor = atk;
-      log(ctx, () => `  ${def.ficha.nombre} queda amenazado por ${atk.ficha.nombre}.`);
-    } else log(ctx, () => `  No logra engatillarlo.`);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Destrucción por Ki: basta con alcanzarlo, aunque el golpe no dañe (Core p.104).
-  if (m === 'destruccionKi') {
-    destruccionPorKi(MOTOR, ctx, atk, def, o.kiDestruccion ?? 0, resiste);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
-  if (m === 'puntosPresion') {
-    if (dano > 0) puntosDePresion(MOTOR, ctx, atk, def, dano, o.estadoMushin ?? null);
-    else log(ctx, () => `  No alcanza los puntos de presión.`);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Absorción de energía: el daño plenamente energético se puede pagar con Ki, 1 cada 5 (Dominus p.20).
-  let absorbido = false;
-  if (dano > 0 && (tipo === 'ENE' || o.ki?.sobrenatural)) {
-    const ki = ia.kiParaAbsorber(def, dano);
-    if (ki > 0) {
-      def.ki!.reserva -= ki;
-      const antes = dano;
-      dano = Math.max(0, dano - 5 * ki);
-      absorbido = true;
-      log(ctx, () => `  ${def.ficha.nombre} absorbe ${antes - dano} de daño con ${ki} de Ki (Absorción de energía) [reserva ${def.ki!.reserva}].`);
-    }
-  }
-  if (dano > 0) {
-    aplicarDano(ctx, atk, def, dano, resiste, m, o.ki);
-    // Daño por calor: 1d100 (cerrada) + el daño en la Tabla 76 (Core p.236).
-    if (tipo === 'CAL' && activo(def)) prender(MOTOR, ctx, atk, def, tirarD100Cerrada(ctx.rng) + dano);
-  } else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
-  else if (!esManiobraDeControl(m) && !absorbido) {
-    log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
-    // La armadura evitó el daño: puede romperse (Core p.93).
-    if (ctx.opciones.rotura) roturaDeArmadura(MOTOR, ctx, atk, def, o.ranura, zonaDe(m));
-  }
-  avisar();
-  return { defensor: def, contra: null, impacto: true };
+  return golpeQueEntra(ctx, atk, def, o, resultado, baseTrasEscudo, tipoGolpe, resiste, avisar);
 }
 
 // --------------------------------------------------------------------------- efectos sobrenaturales (Ki)
