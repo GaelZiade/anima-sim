@@ -446,6 +446,8 @@ export interface Luchador {
   godhandListo: boolean;
   godhandPreparado: boolean;
   ataqueFinalUsado: boolean;
+  /** Camuflar ataque: quiénes ya vieron sus técnicas camufladas, y quiénes ya conocen el truco (Dominus p.52). */
+  camuflajeConocido: Map<Luchador, 'visto' | 'superado'>;
   /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.86). */
   maniobraEspecialVista: Set<Luchador>;
   /** Kardad supremo: ya repitió este asalto un control fallado al defenderse (Dominus p.37). */

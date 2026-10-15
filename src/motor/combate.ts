@@ -44,6 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
+  nivelMenos,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -81,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -660,7 +661,7 @@ function gastarCansancio(l: Luchador, puntos: number) {
 export interface Ataque {
   esContra: boolean;
   bono: number;
-  /** Técnica de Ki ya elegida (un ataque a distancia, que la IA decidió antes de moverse). */
+  /** Técnica de Ki ya elegida (p. ej. un ataque a distancia que la IA decidió antes de moverse): se usa tal cual. */
   tecnica?: Tecnica | null;
   /** Disparo o lanzamiento: qué arma a distancia de la ficha y su penalizador por recarga o cadencia. */
   proyectil?: { arma: number; pen: number };
@@ -741,9 +742,15 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
 
   const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${arma && m === 'normal' ? (arma.clase === 'disparo' ? 'dispara' : 'lanza') : NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' || m === 'lineas' ? '' : ' a'} ${b.ficha.nombre}${arma ? ` con ${arma.nombre}` : ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${distancia(atk, b).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
 
-  // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55). Si
-  // una contra lo pone a la defensiva, no sigue.
-  const golpes = 1 + (ki?.ataquesAdicionales ?? 0);
+  // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55); los
+  // limitados, sin los demás efectos de la técnica. Si una contra lo pone a la defensiva, no sigue. El
+  // cansancio sólo vale en el primero, salvo con Bono de cansancio añadido (Dominus p.56).
+  const conEfectos = 1 + (ki?.ataquesAdicionales ?? 0);
+  const golpes = conEfectos + (ki?.adicionalesLimitados ?? 0);
+  const kiBase = atk.ki?.activo;
+  const opcionesLimitado = { ...opcionesAtk, ki: kiBase, tipo: kiBase?.elemento || plan.tipo, cansancio: 0, costeTecnica: 0 };
+  const habLimitado = golpes > conEfectos ? ataqueFinal(atk, def, opcionesLimitado) : 0;
+  const habSinCansancio = golpes > 1 && cAtk && !ki?.cansancioAnadido ? fijo || ataqueFinal(atk, def, { ...opcionesAtk, cansancio: 0 }) : habAtk;
   // Un proyectil no pasa de un resultado final de 280, salvo que extienda su Ki al arma (Core p.95).
   const conTope = !!arma && !superaTope(atk.ficha);
   for (let g = 0; g < golpes; g++) {
@@ -759,7 +766,9 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
     }
-    const hab = conTope ? Math.min(habAtk, TOPE_PROYECTIL - tA.valor) : habAtk;
+    const limitado = g >= conEfectos;
+    const habGolpe = limitado ? habLimitado : g > 0 ? habSinCansancio : habAtk;
+    const hab = conTope ? Math.min(habGolpe, TOPE_PROYECTIL - tA.valor) : habGolpe;
     // Un disparo tiene que llegar: su ataque final debe superar la dificultad por distancia (Tabla 48).
     if (aDistancia) {
       const metros = distancia(atk, def);
@@ -776,6 +785,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     const blancos = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
     const contras: { quien: Luchador; bono: number }[] = [];
     let impactoCombinado = false;
+    let cortaCombo = false;
     for (const blanco of blancos) {
       if (!activo(blanco) || !activo(atk)) continue;
       // Disparos paralelos (opcional, Core p.95): quien recibe un disparo sin haber actuado y con menos
@@ -785,7 +795,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
         if (!activo(atk) || !activo(blanco)) continue;
       }
       // Una técnica de Ki a distancia es una descarga: un mago la puede interceptar (Core p.117).
-      let opciones: Golpe = opcionesAtk;
+      let opciones: Golpe = limitado ? opcionesLimitado : opcionesAtk;
       if (g === 0 && !arma && aDistancia && ki?.distancia && blanco === def) {
         const choque = interceptar(MOTOR, ctx, atk, blanco, hab + tA.valor, danoBase(atk, blanco, false, ranura, ki), false);
         if (choque === 'anulado' || choque === 'pierde') continue;
@@ -793,8 +803,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       }
       // Un área de Ki se centra en el blanco elegido (Dominus p.58).
       if (ki?.area) opciones = { ...opciones, centroArea: { ...def.pos } };
+      // Camuflar ataque: si no lo advierte, se defiende con el penalizador de Sorpresa (Dominus p.52).
+      if (g === 0 && !limitado && ki?.camuflar) camuflar(ctx, atk, blanco, ki.camuflar);
       const r = resolverDefensa(ctx, atk, blanco, hab, tA, opciones, etiquetaPara(blanco));
       if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
+      if (blanco === def && !r.impacto) cortaCombo = true;
       if (r.contra !== null) {
         contras.push({ quien: r.defensor, bono: r.contra });
         // Parar la maniobra de Ataque en área la intercepta: los demás no tienen que defenderse.
@@ -808,7 +821,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     // La sorpresa vale sólo para su primera acción (Core p.86): se gasta al resolverla, después de
     // que el sorprendido se defendió con su −90 y antes de cualquier contra.
     atk.sorprendeA.clear();
-    for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
+    // Ataque continuo: no se le puede contraatacar hasta el último golpe (Dominus p.56).
+    const ultimo = g === golpes - 1 || (ki?.combo && cortaCombo && g < conEfectos);
+    if (!ki?.continuo || ultimo) for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
+    // Combo: si el blanco se defendió con éxito, la cadena se corta (Dominus p.56).
+    if (ki?.combo && cortaCombo && g < conEfectos) break;
   }
   atk.sorprendeA.clear();
   if (arma) {
@@ -1517,6 +1534,23 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
   // Enuth arcano: todo ataque que dañe obliga a un control de inconsciencia (Dominus p.43).
   else if (enuthArcano && activo(def)) critico(ctx, atk, def, danoPleno, resistia, 'inconsciencia');
   verificarCaida(ctx, atk, def);
+}
+
+/**
+ * Camuflar ataque (Dominus p.52): Advertir contra la dificultad; si falla, se defiende de este golpe con
+ * el penalizador de Sorpresa. Quien ya lo presenció o lo sufrió baja un nivel la dificultad, y quien lo
+ * superó una vez conoce el truco y no le vuelve a afectar.
+ */
+function camuflar(ctx: Contexto, atk: Luchador, blanco: Luchador, dificultad: number) {
+  const conocido = atk.camuflajeConocido.get(blanco);
+  if (conocido === 'superado') return;
+  const dif = conocido === 'visto' ? nivelMenos(dificultad) : dificultad;
+  const advertir = (blanco.ficha.advertir ?? 0) + (blanco.bono?.advertir ?? 0) - penAccion(blanco);
+  const t = tirar(ctx, umbralPifia(blanco.ficha.advertir ?? 0, blanco.cap.ajustePifia));
+  const advierte = !t.pifia && advertir + t.valor >= dif;
+  atk.camuflajeConocido.set(blanco, advierte ? 'superado' : 'visto');
+  if (!advierte) atk.sorprendeA.add(blanco);
+  log(ctx, () => `  ${blanco.ficha.nombre} ${advierte ? 'advierte' : 'no advierte'} el ataque camuflado (Advertir ${textoTirada(advertir, t)} contra ${dif}).`);
 }
 
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */

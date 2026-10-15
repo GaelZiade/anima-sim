@@ -10,14 +10,14 @@ import {
   golpeAPuntoVulnerable,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
-import { absorcion, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
+import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
-  asaltosParaJuntar, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  asaltosParaJuntar, combinar, nivelMenos, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
@@ -802,6 +802,15 @@ function valorEstadoMushin(estado: EstadoMushin, def: Luchador, amen: number, fa
   }
 }
 
+/** Chance de que `def` advierta el ataque camuflado de `atk` (Dominus p.52), como `camuflar` en el motor. */
+function pAdvierteCamuflaje(atk: Luchador, def: Luchador, dificultad: number): number {
+  const conocido = atk.camuflajeConocido.get(def);
+  if (conocido === 'superado') return 1;
+  const dif = conocido === 'visto' ? nivelMenos(dificultad) : dificultad;
+  const advertir = (def.ficha.advertir ?? 0) + (def.bono?.advertir ?? 0) - penAccion(def);
+  return tabla(umbralPifia(def.ficha.advertir ?? 0, def.cap.ajustePifia), 0, true).pImpacto(advertir - dif + 1);
+}
+
 /** Enemigos al alcance que un ataque en área alcanzaría, empezando por el elegido. */
 export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchador[] {
   const otros = enemigos(ctx, atk).filter((e) => e !== def && enAlcance(atk, e));
@@ -825,6 +834,8 @@ export function elegirManiobra(
     if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal, true, ranura).plan, tecnica };
     return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal, true, ranura).plan;
   }
+  // Una técnica ya elegida (por quien llama) se usa: sólo se elige la maniobra.
+  if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal).plan, tecnica };
   const comun = !esContra && bono === 0 && !soloNormal;
   const base = comun
     ? sinTecnica(ctx, atk, def)
@@ -858,7 +869,9 @@ function mejorManiobra(
   // Un proyectil a bocajarro se defiende como un golpe; de lejos, con la Tabla 49 (Core p.96).
   const lejos = !enAlcance(atk, def);
   const proyectil = aDistancia && lejos ? ranura?.proyectil?.clase ?? 'disparo' : undefined;
-  const habDef = ki?.sobrenatural || ki?.area || proyectil ? defensaFinal(def, atk, { kiAtk: ki, proyectil }) : defensaFinal(def, atk);
+  // Camuflar ataque: si no lo advierte se defiende con −90 (Dominus p.52); se cuenta por su chance.
+  const habDef = (ki?.sobrenatural || ki?.area || proyectil ? defensaFinal(def, atk, { kiAtk: ki, proyectil }) : defensaFinal(def, atk)) +
+    (ki?.camuflar ? (1 - pAdvierteCamuflaje(atk, def, ki.camuflar)) * MOD_SORPRESA_DEFENSA : 0);
   // Tope de 280 de los proyectiles (Core p.95): se aproxima topeando la habilidad en 280 − 50.
   const tope = ranura?.proyectil && !superaTope(atk.ficha) ? TOPE_PROYECTIL - 50 : Infinity;
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
@@ -975,10 +988,15 @@ function mejorManiobra(
       if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen, fallo, (pen) => valorNegativo(atk, def, pen, golpesSiguientes, 2 * fallo));
     }
     // Ataque adicional (Ki): cada golpe vale lo mismo y arriesga su contra; el asalto se le quita
-    // una vez, si lo impacta alguno (Dominus p.55).
+    // una vez, si lo impacta alguno (Dominus p.55). Con Combo cada golpe sigue sólo si el anterior
+    // impactó; con Ataque continuo sólo queda la contra del último; los limitados valen como un ataque
+    // común (Dominus p.56).
     const golpes = 1 + (ki?.ataquesAdicionales ?? 0);
-    const tempo = pierdeElAsalto(def) ? (1 - Math.pow(1 - p.pImpacto, golpes)) * amen : 0;
-    return golpes * (v - contra) + tempo;
+    const efectivos = ki?.combo && p.pImpacto < 1 ? (1 - Math.pow(p.pImpacto, golpes)) / (1 - p.pImpacto) : golpes;
+    const contras = ki?.continuo ? Math.min(1, efectivos) : efectivos;
+    const tempo = pierdeElAsalto(def) ? (1 - Math.pow(1 - p.pImpacto, efectivos)) * amen : 0;
+    const limitados = ki?.adicionalesLimitados ? ki.adicionalesLimitados * Math.max(0, valorAtaque(atk, def, {})) : 0;
+    return efectivos * v - contras * contra + tempo + limitados;
   };
 
   // Tipo de crítico: el principal, el secundario del arma (Tabla de Ataque Inusual) o una tabla que el

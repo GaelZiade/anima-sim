@@ -34,6 +34,16 @@ export interface ModKi {
   area: number;
   eleccionBlanco: boolean;
   ataquesAdicionales: number;
+  /** Ataque continuo: no se le puede contraatacar hasta el último golpe (Dominus p.56). */
+  continuo: boolean;
+  /** Combo (desventaja): cada golpe adicional tiene que impactar para seguir la cadena (Dominus p.56). */
+  combo: boolean;
+  /** Bono de cansancio añadido: el cansancio vale en todos los golpes, no sólo en el primero (Dominus p.56). */
+  cansancioAnadido: boolean;
+  /** Ataque adicional limitado: golpes extra sin penalizador y sin los demás efectos (Dominus p.56). */
+  adicionalesLimitados: number;
+  /** Camuflar ataque: dificultad de Advertir para no defenderse con Sorpresa (Dominus p.52). */
+  camuflar: number;
   defensasAdicionales: number;
   turno: number;
   /** Armadura: TA contra todo, como capa adicional (Dominus p.60). */
@@ -106,7 +116,7 @@ export interface EstadoSobrenatural {
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
   dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, area: 0,
-  eleccionBlanco: false, ataquesAdicionales: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
+  eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
   interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
@@ -183,7 +193,9 @@ const CATALOGO: Record<string, DefEfecto> = {
   'multiplicador al dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('multDano') },
   'sustitucion de dano': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('danoFijo') },
   'sustitucion de dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('danoFijo') },
-  'ataque adicional': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('ataquesAdicionales') },
+  'ataque adicional': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { SUMAR('ataquesAdicionales')(m, v); opcionesDeAdicionales(m, o); } },
+  'ataque adicional limitado': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { SUMAR('adicionalesLimitados')(m, v); opcionesDeAdicionales(m, o); } },
+  'camuflar ataque': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.camuflar = Math.max(m.camuflar, v || dificultadDeTexto(o)); } },
   'defensa adicional': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('defensasAdicionales') },
   'incrementar turno': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('turno') },
   'ataque con area': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.area = Math.max(m.area, v); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
@@ -218,6 +230,38 @@ const CATALOGO: Record<string, DefEfecto> = {
   'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('distancia') },
   'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('distancia') },
 };
+
+/** Ventajas y desventajas de Ataque adicional (Dominus p.56). */
+function opcionesDeAdicionales(m: ModKi, o: string[]) {
+  if (hay(o, /continuo/)) m.continuo = true;
+  if (hay(o, /combo/)) m.combo = true;
+  if (hay(o, /cansancio/)) m.cansancioAnadido = true;
+}
+
+/** Niveles de dificultad (Core p.48), del más fácil al más difícil. */
+export const DIFICULTADES: readonly [nombre: RegExp, valor: number][] = [
+  [/rutinari/, 20], [/facil/, 40], [/media/, 80], [/muy dificil/, 140], [/dificil/, 120], [/absurd/, 180],
+  [/casi imposible/, 240], [/imposible/, 280], [/inhuman/, 320], [/zen/, 440],
+];
+
+function dificultadDeTexto(o: string[]): number {
+  for (const x of o) {
+    const n = normalizarRasgo(x);
+    for (const [re, v] of DIFICULTADES) if (re.test(n)) return v;
+  }
+  return 0;
+}
+
+/** La dificultad un nivel por debajo (Media → Fácil…); para quien ya conoce el truco (Dominus p.52). */
+export function nivelMenos(dificultad: number): number {
+  const valores = [...new Set(DIFICULTADES.map(([, v]) => v))].sort((a, b) => a - b);
+  let previo = 0;
+  for (const v of valores) {
+    if (v >= dificultad) return previo;
+    previo = v;
+  }
+  return previo;
+}
 
 function hay(opciones: string[], re: RegExp): boolean {
   return opciones.some((x) => re.test(normalizarRasgo(x)));

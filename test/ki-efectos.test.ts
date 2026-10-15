@@ -1,8 +1,9 @@
 // Efectos sobrenaturales y desventajas de las técnicas de Ki (Dominus cap. 5, p.51-74).
 
 import { describe, expect, it } from 'vitest';
-import type { Ficha, Tecnica } from '../src/motor/modelo';
-import { crearLuchador, simularCombate } from '../src/motor/combate';
+import type { Contexto, Ficha, Tecnica } from '../src/motor/modelo';
+import { atacar, crearLuchador, simularCombate } from '../src/motor/combate';
+import { crearRng } from '../src/motor/rng';
 import { defensaFinal } from '../src/motor/calculos';
 import { efectosDe, ejecutar, empezarAsalto, puedeEjecutar, repertorio, type DecisionKi } from '../src/motor/ki';
 import { leerEfectosTecnica } from '../src/hoja/ficha';
@@ -165,5 +166,48 @@ describe('Técnicas a distancia (Dominus p.57, Core p.96)', () => {
     const t = r.registro!.map((x) => x.texto);
     expect(t.some((x) => x.startsWith('Maestro ataca a Rival con Rayo de luz'))).toBe(true);
     expect(t.some((x) => x.includes('no tiene a Maestro a su alcance'))).toBe(t.some((x) => /Maestro ataca a Rival con Rayo.*→ -/.test(x)));
+  });
+});
+
+describe('efectos de acción y camuflaje (Dominus p.52-56)', () => {
+  it('lectura: Ataque adicional con Ataque continuo y Combo, limitado y Camuflar ataque', () => {
+    const ef = efectosDe(tecnica('Ráfaga', 'Ataque adicional (+2, Ataque continuo, Combo, Bono de cansancio añadido), Ataque adicional limitado (+1), Camuflar ataque (Dificil (120))'));
+    expect(ef.accion).toMatchObject({ ataquesAdicionales: 2, continuo: true, combo: true, cansancioAnadido: true, adicionalesLimitados: 1, camuflar: 120 });
+    expect(ef.desconocidos).toEqual([]);
+    expect(efectosDe(tecnica('C', 'Camuflar ataque (Absurdo)')).accion.camuflar).toBe(180);
+  });
+
+  it('Combo corta la cadena si el rival se defiende; sin Combo siguen todos los golpes', () => {
+    const golpesCon = (efectos: string, semilla: number) => {
+      const t = tecnica('Cadena', efectos, { DES: 1 });
+      const atk = crearLuchador(maestro([t], { ataque: 60 }), 'A', 0, 0);
+      const def = crearLuchador(rival({ defensa: 400 }), 'B', 1, 0);
+      for (const l of [atk, def]) {
+        l.ataquesDeclarados = 1;
+        l.planAtaques = [{ pen: 0, sinArmas: false }];
+        l.ataquesRestantes = 1;
+      }
+      def.ataquesRestantes = 0; // sin contras: que nada más corte la serie
+      atk.ki!.acumulado = { DES: 5 };
+      const ctx: Contexto = {
+        opciones: {}, rng: crearRng(semilla), luchadores: [atk, def], asalto: 1, registro: [],
+        ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+      };
+      atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: t });
+      return ctx.registro!.filter((e) => e.texto.includes('con Cadena') && !e.texto.includes('pifia')).length;
+    };
+    for (let s = 1; s <= 5; s++) {
+      expect(golpesCon('Ataque adicional (+4, Combo)', s)).toBeLessThanOrEqual(1);
+      expect(golpesCon('Ataque adicional (+4)', s)).toBeGreaterThanOrEqual(1);
+    }
+    expect([1, 2, 3, 4, 5].reduce((n, s) => n + golpesCon('Ataque adicional (+4)', s), 0)).toBeGreaterThan(10);
+  });
+
+  it('Camuflar ataque: quien no lo advierte se defiende con Sorpresa; quien lo superó, ya no', () => {
+    const camuflado = maestro([tecnica('Sombra', 'Habilidad de ataque (+10), Camuflar ataque (Imposible (280))', { DES: 1 })]);
+    const t = textos([camuflado], [rival({ advertir: 10 })], 3);
+    expect(t.some((x) => x.includes('no advierte el ataque camuflado'))).toBe(true);
+    const atento = textos([camuflado], [rival({ advertir: 400 })], 3);
+    expect(atento.filter((x) => x.includes('advierte el ataque camuflado') && !x.includes('no advierte')).length).toBeLessThanOrEqual(1);
   });
 });
