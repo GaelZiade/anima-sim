@@ -44,6 +44,12 @@ export interface ModKi {
   adicionalesLimitados: number;
   /** Camuflar ataque: dificultad de Advertir para no defenderse con Sorpresa (Dominus p.52). */
   camuflar: number;
+  /** Acción adicional: acciones activas del asalto que no suman el −25 (Dominus p.56-57). */
+  accionesAdicionales: number;
+  /** Recuperar acción: a la defensiva, vuelve a poder hacer acciones activas (Dominus p.57). */
+  recuperaAccion: boolean;
+  /** Previsión: cuánto del −90 de la Sorpresa por turno anula contra un rival, 45 o 90 (Dominus p.57). */
+  prevision: number;
   defensasAdicionales: number;
   turno: number;
   /** Armadura: TA contra todo, como capa adicional (Dominus p.60). */
@@ -116,7 +122,8 @@ export interface EstadoSobrenatural {
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
   dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, area: 0,
-  eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
+  eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0,
+  accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
   interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
@@ -195,6 +202,10 @@ const CATALOGO: Record<string, DefEfecto> = {
   'sustitucion de dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('danoFijo') },
   'ataque adicional': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { SUMAR('ataquesAdicionales')(m, v); opcionesDeAdicionales(m, o); } },
   'ataque adicional limitado': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { SUMAR('adicionalesLimitados')(m, v); opcionesDeAdicionales(m, o); } },
+  'accion adicional': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('accionesAdicionales') },
+  'recuperar accion': { tipo: 'accion', clase: 'variable', aplicar: (m) => { m.recuperaAccion = true; } },
+  // A mitad: −45 en vez de −90; Completo: anula la Sorpresa.
+  'prevision': { tipo: 'asalto', clase: 'variable', aplicar: (m, _v, o) => { m.prevision = Math.max(m.prevision, hay(o, /complet/) ? 90 : 45); } },
   'camuflar ataque': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.camuflar = Math.max(m.camuflar, v || dificultadDeTexto(o)); } },
   'defensa adicional': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('defensasAdicionales') },
   'incrementar turno': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('turno') },

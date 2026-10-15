@@ -10,7 +10,7 @@ import {
   golpeAPuntoVulnerable,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
-import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
+import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, PEN_ACCION_ACTIVA, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
@@ -1901,8 +1901,9 @@ export function elegirTecnicaDefensa(
 }
 
 /**
- * Técnica que sube el turno, a ejecutar antes de la iniciativa (Core p.105), o null. Vale lo que
- * gana actuando antes que cada rival (lo deja sin asalto si lo impacta) y la chance de sorprenderlo.
+ * Técnica de asalto variable a ejecutar antes de la iniciativa (Core p.105), o null: subir el turno
+ * (actuar antes y sorprender), Intangibilidad, Acción adicional (sin el −25 si tiene que moverse o
+ * levantarse) y Previsión (menos Sorpresa del rival que más chance tiene de sorprenderlo).
  */
 export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
   if (!l.ki || perfil(l) === 'bestia') return null;
@@ -1912,16 +1913,45 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
   for (const t of repertorio(l.ficha)) {
     const ef = efectosDe(t);
     const bono = ef.asalto.turno;
-    if ((!bono && !ef.asalto.intangible) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
+    const sube = ef.asalto;
+    if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
     // Intangibilidad (Dominus p.69): le ahorra lo que le pegarían este asalto quienes no dañan energía.
     let intangible = 0;
     if (ef.asalto.intangible)
       for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) intangible += lambda(l) * amenaza(e, l);
-    const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible - costoTecnica(l, rivalPrincipal(ctx, l), t);
+    const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible + valorAccionAdicional(ctx, l, sube.accionesAdicionales) +
+      valorPrevision(ctx, l, sube.prevision) - costoTecnica(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
     }
+  }
+  return mejor;
+}
+
+/** Acción adicional (Dominus p.56-57): el −25 que se ahorra en sus ataques si tiene que levantarse o moverse con acción activa. */
+function valorAccionAdicional(ctx: Contexto, l: Luchador, libres: number): number {
+  if (!libres) return 0;
+  let mejor = 0;
+  for (const e of enemigos(ctx, l)) {
+    if (!alcanzable(l, e)) continue;
+    const activas = (l.derribado ? 1 : 0) + (necesitaMovimientoActivo(l, e) ? 1 : 0);
+    if (!activas) continue;
+    mejor = Math.max(mejor, valorAtaque(l, e, { bono: PEN_ACCION_ACTIVA * Math.min(libres, activas) }) - valorAtaque(l, e, {}));
+  }
+  return mejor * Math.max(1, l.ataquesDeclarados || 1);
+}
+
+/** Previsión (Dominus p.57): contra el rival con más chance de sorprenderlo, lo que se ahorra de su golpe. */
+function valorPrevision(ctx: Contexto, l: Luchador, anula: number): number {
+  if (!anula) return 0;
+  let mejor = 0;
+  for (const e of enemigos(ctx, l)) {
+    if (e.haActuado || !alcanzable(e, l)) continue;
+    const p = pIniciativa(e, l, turnoFinal(e) - turnoFinal(l), e.cap.est.diferenciaSorpresa);
+    const b = base(e, l);
+    const ahorro = danoEsperado(e, l, b.hab, b.def + MOD_SORPRESA_DEFENSA) - danoEsperado(e, l, b.hab, b.def + MOD_SORPRESA_DEFENSA + anula);
+    mejor = Math.max(mejor, lambda(l) * p * ahorro);
   }
   return mejor;
 }
@@ -1944,6 +1974,28 @@ function valorTurno(ctx: Contexto, l: Luchador, bono: number): number {
       (p(dif + bono, sorpresa) - p(dif, sorpresa)) * conSorpresa;
   }
   return valor;
+}
+
+/**
+ * Recuperar acción (Dominus p.57): a la defensiva, la técnica que le devuelve las acciones activas, si
+ * lo que rinden los ataques que le quedan supera lo que cuesta ejecutarla.
+ */
+export function recuperarAccion(ctx: Contexto, l: Luchador): Tecnica | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  nuevaDecision(ctx);
+  const rival = rivalPrincipal(ctx, l);
+  const atacar = mejorAtaque(ctx, l) * l.ataquesRestantes;
+  let mejor: Tecnica | null = null;
+  let mejorNeto = 0;
+  for (const t of repertorio(l.ficha)) {
+    if (!efectosDe(t).accion.recuperaAccion || !puedeEjecutar(l, t)) continue;
+    const neto = atacar - costoTecnica(l, rival, t);
+    if (neto > mejorNeto) {
+      mejor = t;
+      mejorNeto = neto;
+    }
+  }
+  return mejor;
 }
 
 /** El mejor rival para valorar una técnica de ataque: al que más le pega hoy. */

@@ -446,6 +446,12 @@ export interface Luchador {
   godhandListo: boolean;
   godhandPreparado: boolean;
   ataqueFinalUsado: boolean;
+  /** Camuflar ataque: a quiénes les toca defenderse de este golpe con el penalizador de Sorpresa (Dominus p.52). */
+  camufladoA: Set<Luchador>;
+  /** Previsión (Ki): el rival contra el que la usa este asalto, si alguno lo sorprende (Dominus p.57). */
+  previsionContra: Luchador | null;
+  /** Recibió un crítico este asalto: Recuperar acción no le sirve (Dominus p.57). */
+  criticoEnAsalto: boolean;
   /** Camuflar ataque: quiénes ya vieron sus técnicas camufladas, y quiénes ya conocen el truco (Dominus p.52). */
   camuflajeConocido: Map<Luchador, 'visto' | 'superado'>;
   /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.86). */

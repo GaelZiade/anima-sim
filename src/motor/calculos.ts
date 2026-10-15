@@ -311,6 +311,17 @@ function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolea
  * Da su +20 contra `def` si `def` no la presenció ni sufrió y no la supera por 60 de habilidad base
  * (Dominus p.86).
  */
+/**
+ * Penalizador de Sorpresa a la defensa de `def` contra `atk`: por turno (Core p.86), menos lo que anule
+ * Previsión contra ese rival (Dominus p.57), o por un ataque camuflado que no advirtió (Dominus p.52).
+ */
+export function sorpresaDefensa(def: Luchador, atk: Luchador): number {
+  let pen = 0;
+  if (atk.sorprendeA.has(def)) pen = MOD_SORPRESA_DEFENSA + (def.previsionContra === atk ? Math.min(-MOD_SORPRESA_DEFENSA, def.ki?.activo.prevision ?? 0) : 0);
+  if (atk.camufladoA.has(def)) pen = Math.min(pen, MOD_SORPRESA_DEFENSA);
+  return pen;
+}
+
 export function puedeManiobraEspecial(atk: Luchador, def: Luchador): boolean {
   return atk.cap.est.maniobraEspecial && !atk.maniobraEspecialVista.has(def) && def.ficha.defensa < atk.ficha.ataque + 60;
 }
@@ -327,7 +338,9 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
   const pen = o.esContra && e.contrasIlimitadas ? 0 : (declarados - 1) * atk.cap.penPorAtaque + ranura.pen;
   // Cada acción activa distinta hecha antes en el asalto resta 25, acumulable (Core p.87).
   // En carga correr no cuenta como acción activa (Core p.90).
-  const activa = PEN_ACCION_ACTIVA * (atk.accionesActivas + (o.conMovimientoActivo && !atk.movioActivo && !atk.cargando ? 1 : 0));
+  // Acción adicional (Ki): esas acciones activas no restan (Dominus p.56-57).
+  const libres = Math.max(ki?.accionesAdicionales ?? 0, atk.ki?.activo.accionesAdicionales ?? 0);
+  const activa = PEN_ACCION_ACTIVA * Math.max(0, atk.accionesActivas + (o.conMovimientoActivo && !atk.movioActivo && !atk.cargando ? 1 : 0) - libres);
   // Enemigo pequeño −10, diminuto −20; desaparece con un Ataque en área (Core p.91).
   const chico = o.maniobra === 'area' || ki?.area ? 0 : [0, 10, 20][rivalChico(atk, def)];
   const tipo = o.tipo ?? perfil.tipoAtaque;
@@ -469,7 +482,7 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     // Parar a un enemigo diminuto: −10 (Tabla 43).
     (campo === 'parada' && rivalChico(def, atk) === 2 ? 10 : 0) +
     ((def.ficha.tipoDefensa ?? 'parada') === 'parada' ? est.parada : est.esquiva) +
-    (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) -
+    sorpresaDefensa(def, atk) -
     (def.previenePendiente.has(atk) ? PEN_PREVER_SORPRESA : 0) +
     (total ? e.bonoDefensaTotal : 0) + BONO_CANSANCIO * (o.cansancio ?? 0) +
     propioDefensa(def) +
@@ -873,7 +886,7 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
   const m = def.ficha.magia!;
   return (m.proyeccionDefensa ?? m.proyeccion) - Math.max(0, penAccion(def)) +
     conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
-    (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
+    sorpresaDefensa(def, atk) +
     (def.amenazadoPor === atk ? AMENAZADO.parada : 0) - (def.fascinado ? PEN_FASCINACION : 0) -
     // Con acumulación de daño, −80 a la Proyección para usar un escudo mágico (Core p.99).
     (def.ficha.acumulacion ? 80 : 0);

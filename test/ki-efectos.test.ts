@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import type { Contexto, Ficha, Tecnica } from '../src/motor/modelo';
 import { atacar, crearLuchador, simularCombate } from '../src/motor/combate';
 import { crearRng } from '../src/motor/rng';
-import { defensaFinal } from '../src/motor/calculos';
+import { ataqueFinal, defensaFinal, sorpresaDefensa } from '../src/motor/calculos';
+import { recuperarAccion } from '../src/motor/ia';
 import { efectosDe, ejecutar, empezarAsalto, puedeEjecutar, repertorio, type DecisionKi } from '../src/motor/ki';
 import { leerEfectosTecnica } from '../src/hoja/ficha';
 
@@ -153,7 +154,7 @@ describe('Técnicas a distancia (Dominus p.57, Core p.96)', () => {
   });
 
   it('el defensor sufre la Tabla 49, salvo con un escudo de energía', () => {
-    const l = crearLuchador(maestro([]), 'A', 0, 0);
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')]), 'A', 0, 0);
     const e = crearLuchador(rival(), 'B', 20, 0);
     expect(defensaFinal(e, l) - defensaFinal(e, l, { proyectil: true })).toBe(80);
     e.escudoKi = 100;
@@ -209,5 +210,52 @@ describe('efectos de acción y camuflaje (Dominus p.52-56)', () => {
     expect(t.some((x) => x.includes('no advierte el ataque camuflado'))).toBe(true);
     const atento = textos([camuflado], [rival({ advertir: 400 })], 3);
     expect(atento.filter((x) => x.includes('advierte el ataque camuflado') && !x.includes('no advierte')).length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('acción y reacción (Dominus p.56-57)', () => {
+  it('lectura de Acción adicional, Recuperar acción y Previsión', () => {
+    const ef = efectosDe(tecnica('Reflejos', 'Accion adicional (+2), Prevision (Completo)'));
+    expect(ef.asalto).toMatchObject({ accionesAdicionales: 2, prevision: 90 });
+    expect(efectosDe(tecnica('P', 'Prevision (A mitad)')).asalto.prevision).toBe(45);
+    expect(efectosDe(tecnica('R', 'Recuperar accion')).accion.recuperaAccion).toBe(true);
+    expect(ef.desconocidos).toEqual([]);
+  });
+
+  it('Acción adicional: esas acciones activas no restan −25', () => {
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')]), 'A', 0, 0);
+    const r = crearLuchador(rival(), 'B', 1, 0);
+    l.accionesActivas = 1;
+    const con25 = ataqueFinal(l, r);
+    l.ki!.activo = { ...l.ki!.activo, accionesAdicionales: 1 };
+    expect(ataqueFinal(l, r)).toBe(con25 + 25);
+  });
+
+  it('Previsión: −45 o nada contra quien lo sorprende por turno; no contra un ataque camuflado', () => {
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')]), 'A', 0, 0);
+    const r = crearLuchador(rival(), 'B', 1, 0);
+    r.sorprendeA.add(l);
+    expect(sorpresaDefensa(l, r)).toBe(-90);
+    l.ki!.activo = { ...l.ki!.activo, prevision: 45 };
+    l.previsionContra = r;
+    expect(sorpresaDefensa(l, r)).toBe(-45);
+    l.ki!.activo = { ...l.ki!.activo, prevision: 90 };
+    expect(sorpresaDefensa(l, r)).toBe(0);
+    r.camufladoA.add(l);
+    expect(sorpresaDefensa(l, r)).toBe(-90);
+  });
+
+  it('Recuperar acción: la IA la usa a la defensiva si atacar rinde más que el Ki', () => {
+    const t = tecnica('Volver', 'Recuperar accion', { DES: 1 });
+    const l = crearLuchador(maestro([t]), 'A', 0, 0);
+    const r = crearLuchador(rival(), 'B', 1, 0);
+    l.ataquesRestantes = 1;
+    l.aLaDefensiva = true;
+    l.ki!.acumulado = { DES: 2 };
+    const ctx: Contexto = {
+      opciones: {}, rng: crearRng(1), luchadores: [l, r], asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+    expect(recuperarAccion(ctx, l)).toBe(t);
   });
 });

@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -251,6 +251,8 @@ function jugarAsalto(ctx: Contexto) {
     l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
     l.planResistir = null;
     l.repitioControl = false;
+    l.previsionContra = null;
+    l.criticoEnAsalto = false;
     // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
     l.godhandListo = l.godhandPreparado;
     l.godhandPreparado = false;
@@ -387,6 +389,8 @@ function jugarAsalto(ctx: Contexto) {
         haySorpresa(paraSorpresa.get(a)! - paraSorpresa.get(b)!, a.cap.est.diferenciaSorpresa)
       ) {
         a.sorprendeA.add(b);
+        // Previsión: vale contra uno solo de los que lo sorprenden (Dominus p.57).
+        if (b.ki?.activo.prevision && !b.previsionContra) b.previsionContra = a;
         log(ctx, () => `${a.ficha.nombre} sorprende a ${b.ficha.nombre} (${paraSorpresa.get(a)! - paraSorpresa.get(b)!} de diferencia).`);
       }
 
@@ -424,6 +428,17 @@ function jugarAsalto(ctx: Contexto) {
 }
 
 function turno(ctx: Contexto, l: Luchador) {
+  // Recuperar acción (Ki): a la defensiva, si no recibió un crítico, ejecuta la técnica y vuelve a
+  // poder actuar; no le da ataques que ya no tenga (Dominus p.57).
+  if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0 && !l.criticoEnAsalto) {
+    const t = ia.recuperarAccion(ctx, l);
+    if (t) {
+      ejecutar(l, t);
+      l.stats.tecnicas[t.nombre] = (l.stats.tecnicas[t.nombre] ?? 0) + 1;
+      l.aLaDefensiva = false;
+      log(ctx, () => `${l.ficha.nombre} usa ${t.nombre} [Ki ${textoKi(l)}] y recupera la acción.`);
+    }
+  }
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0)
     log(ctx, () => `${l.ficha.nombre} está a la defensiva: no puede actuar este asalto.`);
   if (puedeActuar(l) && ctx.opciones.huida && !l.bono?.ira && ia.quiereHuir(ctx, l)) {
@@ -821,6 +836,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     // La sorpresa vale sólo para su primera acción (Core p.86): se gasta al resolverla, después de
     // que el sorprendido se defendió con su −90 y antes de cualquier contra.
     atk.sorprendeA.clear();
+    atk.camufladoA.clear();
     // Ataque continuo: no se le puede contraatacar hasta el último golpe (Dominus p.56).
     const ultimo = g === golpes - 1 || (ki?.combo && cortaCombo && g < conEfectos);
     if (!ki?.continuo || ultimo) for (const c of contras) ofrecerContra(ctx, c.quien, atk, c.bono);
@@ -1549,7 +1565,7 @@ function camuflar(ctx: Contexto, atk: Luchador, blanco: Luchador, dificultad: nu
   const t = tirar(ctx, umbralPifia(blanco.ficha.advertir ?? 0, blanco.cap.ajustePifia));
   const advierte = !t.pifia && advertir + t.valor >= dif;
   atk.camuflajeConocido.set(blanco, advierte ? 'superado' : 'visto');
-  if (!advierte) atk.sorprendeA.add(blanco);
+  if (!advierte) atk.camufladoA.add(blanco);
   log(ctx, () => `  ${blanco.ficha.nombre} ${advierte ? 'advierte' : 'no advierte'} el ataque camuflado (Advertir ${textoTirada(advertir, t)} contra ${dif}).`);
 }
 
@@ -1578,6 +1594,7 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
 function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, o: OpcionesCritico = {}) {
   const { bonoKi = 0, nivelFijo } = o;
   atk.stats.criticosCausados++;
+  def.criticoEnAsalto = true;
   if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
   const apuntado = localizacionApuntada(m);
   // Un crítico que no viene del arma del atacante (el choque de un Impacto) no suma sus bonos (Dominus p.12).
