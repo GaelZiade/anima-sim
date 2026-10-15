@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { golpeAPuntoVulnerable, puedeManiobraEspecial, absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { bonoCriticoDe, golpeAPuntoVulnerable, puedeManiobraEspecial, absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { caracteristicasControl, penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
@@ -349,6 +349,18 @@ describe('decisiones del usuario (15/10/2026)', () => {
     const otro = crearLuchador(ficha('O', {}, { atributos: { FUE: 8, DES: 6, AGI: 6, POD: 12 } }), 'B', 1, 0);
     expect(caracteristicasControl('derribo', velez, otro)).toEqual({ atk: 12, def: 8 });
     expect(caracteristicasControl('derribo', otro, velez)).toEqual({ atk: 8, def: 12 });
+  });
+
+  it('Ojos de la Muerte: apuntar a las líneas (−10, +40 al crítico) y sólo ceguera parcial contra invisibles (Dominus p.78)', () => {
+    const ojos = crearLuchador(ficha('O', { ventajas: ['Los Ojos de la Muerte'] }), 'A', 0, 0);
+    const comun = crearLuchador(ficha('C'), 'A', 0, 0);
+    const invisible = crearLuchador(ficha('I'), 'B', 1, 0);
+    invisible.bono = { invisible: 120 } as unknown as typeof invisible.bono;
+    expect(penManiobra(ojos, 'lineas', false)).toBe(10);
+    expect(penManiobra(comun, 'lineas', false)).toBe(Infinity);
+    expect(bonoCriticoDe(ojos, 'lineas') - bonoCriticoDe(ojos, 'normal')).toBe(40);
+    expect(cegueraContra(ojos, invisible).nivel).toBe(1);
+    expect(cegueraContra(comun, invisible).nivel).toBe(2);
   });
 });
 

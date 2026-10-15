@@ -669,7 +669,7 @@ const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
   normal: 'ataca', derribo: 'intenta derribar', presa: 'intenta apresar', desarmar: 'intenta desarmar',
   area: 'ataca en área', cabeza: 'apunta a la cabeza de', corazon: 'apunta al corazón de',
   inutilizar: 'intenta inutilizar', inconsciencia: 'intenta dejar inconsciente', combinado: 'hace un ataque combinado',
-  engatillar: 'intenta engatillar', puntosPresion: 'ataca los puntos de presión de',
+  engatillar: 'intenta engatillar', puntosPresion: 'ataca los puntos de presión de', lineas: 'apunta a las líneas existenciales de',
   destruccionKi: 'usa Destrucción por Ki contra',
 };
 
@@ -738,7 +738,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.godhandListo = false;
   atk.previenePendiente.delete(def);
 
-  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${arma && m === 'normal' ? (arma.clase === 'disparo' ? 'dispara' : 'lanza') : NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' ? '' : ' a'} ${b.ficha.nombre}${arma ? ` con ${arma.nombre}` : ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${distancia(atk, b).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
+  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${arma && m === 'normal' ? (arma.clase === 'disparo' ? 'dispara' : 'lanza') : NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' || m === 'lineas' ? '' : ' a'} ${b.ficha.nombre}${arma ? ` con ${arma.nombre}` : ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${distancia(atk, b).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
 
   // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55). Si
   // una contra lo pone a la defensiva, no sigue.

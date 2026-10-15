@@ -1000,6 +1000,7 @@ function opcionesDeManiobra(
     if (e.mushin) opciones.push('puntosPresion');
   }
   if (e.leo && atk.balas > 0 && !aDistancia) opciones.push('combinado');
+  if (e.criticoAutomatico && !soloNormal && !def.ficha.acumulacion) opciones.push('lineas');
   // Destrucción por Ki es un ataque propio: no se combina con una técnica que mejore el golpe.
   const golpeConTecnica = !!ki && (ki.ataque > 0 || ki.dano > 0 || ki.multDano > 1 || ki.danoFijo > 0 || ki.area > 0 || ki.ataqueFijo > 0);
   if (!soloNormal && !aDistancia && !golpeConTecnica && habilidadesKi(atk.ficha).destruccion && (atk.ki?.reserva ?? 0) >= 1) opciones.push('destruccionKi');

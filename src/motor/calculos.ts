@@ -229,6 +229,9 @@ export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): 
   const valor = (c: Ceguera) => (c.nivel ? CEGUERA[c.nivel].ataque * c.factor : 0);
   const peor = casos.reduce((a, b) => (valor(b) < valor(a) ? b : a));
   if (peor.nivel === 2 && l.cap.est.deteccionKi) return { nivel: 1, factor: 1, localiza: true };
+  // Ojos de la Muerte ve las líneas de los invisibles: contra ellos, sólo ceguera parcial (Dominus p.78).
+  if (peor.nivel === 2 && l.cap.est.criticoAutomatico && (invisible || rival.bono?.invisible) && propia !== 'absoluta' && cegueraPorOscuridad(l).nivel < 2)
+    return { nivel: 1, factor: 1, localiza: false };
   return peor;
 }
 
@@ -940,6 +943,8 @@ export function bonoCriticoDe(atk: Luchador, m: Maniobra, bonoKi = 0): number {
   const e = atk.cap.est;
   const vital = m === 'cabeza' || m === 'corazon';
   const enuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-  return atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + enuth + bonoKi;
+  // Ojos de la Muerte apuntando a las líneas existenciales: +40 al nivel del crítico (Dominus p.78).
+  const lineas = m === 'lineas' ? 40 : 0;
+  return atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + enuth + lineas + bonoKi;
 }
 

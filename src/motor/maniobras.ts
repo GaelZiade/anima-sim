@@ -20,7 +20,9 @@ export type Maniobra =
   /** Leo (Ars Magnus): golpe con la hoja (−20) y, si alcanza el cuerpo, disparo a bocajarro. */
   | 'combinado'
   /** Destrucción por Ki (Core p.104): un toque que obliga a una RF contra la Presencia; daña el fracaso. */
-  | 'destruccionKi';
+  | 'destruccionKi'
+  /** Ojos de la Muerte: apunta a las líneas existenciales, −10 y +40 al nivel del crítico (Dominus p.78). */
+  | 'lineas';
 
 /**
  * Tabla 45: ataques apuntados que interesan en combate. Inutilizar apunta a la pantorrilla (−10): es
@@ -87,6 +89,7 @@ export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean): number
     case 'combinado': return e.leo ? 20 : Infinity;
     // Basta con alcanzarlo con la habilidad de ataque: sin penalizador (Core p.104).
     case 'destruccionKi': return 0;
+    case 'lineas': return e.criticoAutomatico ? 10 : Infinity;
   }
 }
 
