@@ -55,11 +55,21 @@ export interface Preparado {
   esperando: number;
 }
 
-/** Un conjuro de efecto activo sobre alguien: de quién viene y qué le da. */
+/**
+ * Un beneficio sobrenatural activo sobre alguien: de quién viene, qué lo da y qué le da. Es la entrada
+ * única de los bonos sobrenaturales (conjuros hoy; poderes psíquicos o técnicas mañana): todo lo que
+ * calcula ataque, defensa, turno, TA o Resistencias ya lee la suma (`l.bono`).
+ */
 export interface Bendicion {
   fuente: Luchador;
-  conjuro: Conjuro;
+  /** Lo que lo da (un conjuro, un poder…): el mismo origen de la misma fuente no se acumula. */
+  origen: OrigenBono;
   bono: BonoMagico;
+}
+
+/** Cualquier cosa con nombre que dé un beneficio. */
+export interface OrigenBono {
+  readonly nombre: string;
 }
 
 export interface EstadoMagia {
@@ -366,16 +376,16 @@ export function dejarDeMantener(l: Luchador, x: Mantenido) {
   e.mantenidos = e.mantenidos.filter((m) => m !== x);
 }
 
-/** Le pone el beneficio de un conjuro; el mismo conjuro de la misma fuente no se acumula. */
-export function bendecir(l: Luchador, fuente: Luchador, c: Conjuro, bono: BonoMagico) {
-  l.bendiciones = l.bendiciones.filter((b) => !(b.fuente === fuente && b.conjuro === c));
-  l.bendiciones.push({ fuente, conjuro: c, bono });
+/** Le pone un beneficio; el mismo origen de la misma fuente no se acumula. */
+export function bendecir(l: Luchador, fuente: Luchador, origen: OrigenBono, bono: BonoMagico) {
+  l.bendiciones = l.bendiciones.filter((b) => !(b.fuente === fuente && b.origen === origen));
+  l.bendiciones.push({ fuente, origen, bono });
   sumarBendiciones(l);
 }
 
-export function quitarBendicion(l: Luchador, fuente: Luchador, c: Conjuro) {
+export function quitarBendicion(l: Luchador, fuente: Luchador, origen: OrigenBono) {
   const antes = l.bendiciones.length;
-  l.bendiciones = l.bendiciones.filter((b) => !(b.fuente === fuente && b.conjuro === c));
+  l.bendiciones = l.bendiciones.filter((b) => !(b.fuente === fuente && b.origen === origen));
   if (l.bendiciones.length !== antes) sumarBendiciones(l);
 }
 
@@ -388,12 +398,12 @@ function sumarBendiciones(l: Luchador) {
     l.bono = null;
     return;
   }
-  const porConjuro = new Map<Conjuro, BonoMagico>();
+  const porConjuro = new Map<OrigenBono, BonoMagico>();
   for (const b of l.bendiciones) {
-    const previo = porConjuro.get(b.conjuro);
+    const previo = porConjuro.get(b.origen);
     const peso = (x: BonoMagico) => (x.dano ?? 0) + (x.danoArma ?? 0) + (x.ta ?? 0) + (x.turno ?? 0) + (x.toda ?? 0) + (x.resistencias ?? 0) +
       (x.inmuneFuego ?? 0) + Math.min(1000, x.invisible ?? 0) + (x.advertir ?? 0) - (x.tamano ?? 0) + (x.frialdad ?? 0);
-    if (!previo || peso(b.bono) > peso(previo)) porConjuro.set(b.conjuro, b.bono);
+    if (!previo || peso(b.bono) > peso(previo)) porConjuro.set(b.origen, b.bono);
   }
   const t: Required<Omit<BonoMagico, 'tipoArma'>> & Pick<BonoMagico, 'tipoArma'> = {
     ataque: 0, toda: 0, dano: 0, turno: 0, ta: 0, resistencias: 0, ira: false, cuerpoFuego: false, resCalor: 0, danoArma: 0,

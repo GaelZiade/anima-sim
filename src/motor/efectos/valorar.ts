@@ -169,7 +169,7 @@ export function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conju
  */
 export function aliadosEnRadio(ctx: Contexto, l: Luchador, c: Conjuro, radio: number, ya: readonly Lanzamiento[] = []): Luchador[] {
   return ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x) && distancia(l, x) <= radio &&
-    !x.bendiciones.some((b) => b.fuente === l && b.conjuro === c) &&
+    !x.bendiciones.some((b) => b.fuente === l && b.origen === c) &&
     !ya.some((y) => y.conjuro === c && y.blancos?.includes(x)));
 }
 
