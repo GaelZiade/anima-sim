@@ -7,7 +7,7 @@ import type { HojaJson } from '../src/hoja/hojaAJson';
 import { disposicionAbierta, simularCombate, type ResultadoCombate } from '../src/motor/combate';
 import { estilos } from '../src/motor/estilos';
 import type { Celda } from '../src/motor/mapa';
-import type { Evento, Ficha, FotoLuchador, OpcionesEscenario, Perfil } from '../src/motor/modelo';
+import type { Evento, Ficha, OpcionesEscenario, Perfil } from '../src/motor/modelo';
 import type { ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import abel from '../ejemplos/arquetipos-abel.json';
 import tiradores from '../ejemplos/tiradores.json';
@@ -16,6 +16,9 @@ import ejemploEstilos from '../ejemplos/estilos.json';
 import grupo from '../ejemplos/grupo.json';
 import { correrEnParalelo, type Corrida } from './paralelo';
 import { Tablero, type FichaTablero, type Pincel } from './tablero';
+import { $, crear, numeroDe } from './dom';
+import { armarCasillas, CASILLAS, casillasMarcadas, leerOpciones, mostrarOpciones, type OpcionesGuardadas } from './opciones';
+import { celdasDe, duracionDe, resaltarTiradas, textoEstado } from './narracion';
 import { conEstado, ESTADOS_INICIALES, fichaDesdeHoja, numerarCopias, type EscenarioJson } from '../src/escenario';
 
 type Entrada =
@@ -55,31 +58,6 @@ interface Estado {
   opciones?: OpcionesGuardadas;
 }
 
-/** Lo que se elige en el diálogo de "Simular muchos" (también vale para ver en vivo). */
-interface OpcionesGuardadas {
-  combates: number;
-  hilos: number;
-  semilla: number;
-  oscuridad: string;
-  faseLunar: string;
-  cuerdas?: string;
-  sinManiobras?: string;
-  casillas: Record<string, boolean>;
-}
-
-type OpcionSiNo = { [K in keyof OpcionesEscenario]-?: OpcionesEscenario[K] extends boolean | undefined ? K : never }[keyof OpcionesEscenario];
-
-/** Reglas que se prenden o apagan: una fila acá arma la casilla, la guarda y la pasa al motor. */
-const CASILLAS: readonly { id: OpcionSiNo; texto: string }[] = [
-  { id: 'rotura', texto: 'Rotura de armas y armaduras' },
-  { id: 'huida', texto: 'Se puede huir' },
-  { id: 'espacioReducido', texto: 'Espacio reducido' },
-  { id: 'armasEnfundadas', texto: 'Armas enfundadas' },
-  { id: 'desequilibrio', texto: 'Desequilibrio de atributos (Dominus)' },
-  { id: 'escasaVisibilidad', texto: 'Escasa visibilidad: niebla, humo (−20 a los proyectiles)' },
-  { id: 'disparosParalelos', texto: 'Disparos paralelos (opcional, Core p.95)' },
-];
-
 /**
  * Genéricos: los arquetipos de Abel y las fichas de los ejemplos. Las copias de una misma ficha en
  * los ejemplos ("Guardia 1", "Guardia 2"…) quedan una sola, sin el número.
@@ -111,20 +89,7 @@ const PERFILES: [Perfil | '', string][] = [
 const GUARDADO = 'anima-sim:estado';
 const MAPA_INICIAL: MapaGuardado = { ancho: 20, alto: 12, bloqueadas: [] };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const numeroDe = (id: string) => Number(($(id) as HTMLInputElement).value);
-const marcado = (id: string) => ($(id) as HTMLInputElement).checked;
-
-/** Elemento con propiedades (`className`, `onclick`, `style` como texto…) e hijos. */
-function crear<K extends keyof HTMLElementTagNameMap>(etiqueta: K, props: Record<string, unknown> = {}, ...hijos: (Node | string)[]) {
-  const el: HTMLElementTagNameMap[K] = Object.assign(document.createElement(etiqueta), props);
-  el.append(...hijos);
-  return el;
-}
-
-$('casillas').replaceChildren(...CASILLAS.map(({ id, texto }) =>
-  crear('label', {}, crear('input', { type: 'checkbox', id }), ` ${texto}`)));
-
+armarCasillas();
 
 // ---------- Estado ----------
 
@@ -194,7 +159,7 @@ function escenarioActual() {
   // Si una ficha se repite, las copias se numeran (lo mismo que la consola).
   [a.fichas, b.fichas] = numerarCopias(a.fichas, b.fichas);
   const opciones: OpcionesEscenario = {
-    ...Object.fromEntries(CASILLAS.map((c) => [c.id, marcado(c.id)])),
+    ...casillasMarcadas(),
     ...(maniobras ? { sinManiobras: maniobras === 'todos' ? true : maniobras } : {}),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
@@ -613,15 +578,12 @@ async function simular() {
   }
 }
 
-/** Marca las tiradas abiertas y las pifias del registro para verlas de un vistazo. */
-function resaltarTiradas(texto: string): (Node | string)[] {
-  return texto.split(/(\((?:abierta|pifia)[^)]*\)|¡pifia!)/).map((parte, i) => {
-    if (i % 2 === 0) return parte;
-    return crear('span', { className: parte.includes('abierta') ? 'abierta' : 'pifia' }, parte);
-  });
-}
-
 // ---------- En vivo ----------
+
+/** Cuánto dura cada línea con la velocidad elegida. */
+function duracion(e: Evento): number {
+  return duracionDe(e, Number(($('velocidad') as HTMLSelectElement).value) || 1);
+}
 
 /** Un combate para ver sobre el mapa, línea por línea. */
 interface Funcion {
@@ -674,28 +636,6 @@ function verEnVivo() {
   irA(0);
   reproducir(true);
   $('panelMapa').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-/** Paredes y terreno infranqueable del mapa con que se jugó. */
-function celdasDe(r: ResultadoCombate): { paredes: Set<string>; terreno: Set<string> } {
-  const paredes = new Set<string>(), terreno = new Set<string>();
-  r.mapa.muro.forEach((v, i) => v && (r.mapa.pared[i] ? paredes : terreno).add(`${i % r.mapa.ancho},${Math.floor(i / r.mapa.ancho)}`));
-  return { paredes, terreno };
-}
-
-/** Metros de un recorrido. */
-function metros(celdas: Celda[]): number {
-  let m = 0;
-  for (let i = 1; i < celdas.length; i++) m += Math.hypot(celdas[i].x - celdas[i - 1].x, celdas[i].y - celdas[i - 1].y);
-  return m;
-}
-
-/** Cuánto dura cada línea, según lo que pasa en ella. Un recorrido tarda según su largo. */
-function duracion(e: Evento): number {
-  const vel = Number(($('velocidad') as HTMLSelectElement).value) || 1;
-  const base = e.camino ? 500 + 140 * metros(e.camino.celdas)
-    : e.texto.startsWith('Iniciativa') ? 1600 : e.ataque ? 1500 : e.texto.startsWith('  ') ? 900 : 1100;
-  return Math.min(4000, base) / vel;
 }
 
 function irA(k: number) {
@@ -781,20 +721,6 @@ function irA(k: number) {
       ...(quien ? [' · Turno de ', crear('span', { className: `marca ${quien.equipo.toLowerCase()}` }), ` ${quien.ficha.nombre}`] : [])),
     crear('span', { className: 'cartel-linea' }, ...resaltarTiradas(texto)));
   $('posicion').textContent = `${k + 1} / ${registro.length}`;
-}
-
-const NOMBRE_ESTADO_FINAL: Record<FotoLuchador['estado'], string> = {
-  activo: '', caido: 'caído', inconsciente: 'inconsciente', muerto: 'muerto', huido: 'huyó',
-};
-
-/** Lo que se sabe de un luchador en una línea: PV, cómo terminó, sus estados, Ki y zeon. */
-function textoEstado(nombre: string, pvMax: number, s: FotoLuchador | undefined, pv: number): string {
-  const partes = [`${nombre}: ${s?.pv ?? pv}/${pvMax} PV`];
-  if (s && s.estado !== 'activo') partes.push(NOMBRE_ESTADO_FINAL[s.estado]);
-  if (s?.marcas) partes.push(...s.marcas);
-  if (s?.ki !== undefined) partes.push(`Ki ${s.ki}`);
-  if (s?.zeon !== undefined) partes.push(`zeon ${s.zeon}`);
-  return partes.join(' · ');
 }
 
 function reproducir(si: boolean) {
@@ -910,30 +836,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------- Opciones ----------
-
-function leerOpciones(): OpcionesGuardadas {
-  return {
-    combates: Math.max(1, Math.round(numeroDe('combates')) || 10000),
-    hilos: Math.max(1, Math.round(numeroDe('hilos')) || 1),
-    semilla: Math.max(1, Math.round(numeroDe('semilla')) || 1),
-    oscuridad: $<HTMLSelectElement>('oscuridad').value,
-    faseLunar: $<HTMLSelectElement>('faseLunar').value,
-    cuerdas: $<HTMLSelectElement>('cuerdas').value,
-    sinManiobras: $<HTMLSelectElement>('sinManiobras').value,
-    casillas: Object.fromEntries(CASILLAS.map(({ id }) => [id, marcado(id)])),
-  };
-}
-
-function mostrarOpciones(o: OpcionesGuardadas) {
-  ($('combates') as HTMLInputElement).value = String(o.combates);
-  ($('hilos') as HTMLInputElement).value = String(o.hilos);
-  ($('semilla') as HTMLInputElement).value = String(o.semilla);
-  $<HTMLSelectElement>('oscuridad').value = o.oscuridad;
-  $<HTMLSelectElement>('faseLunar').value = o.faseLunar;
-  $<HTMLSelectElement>('cuerdas').value = o.cuerdas ?? '';
-  $<HTMLSelectElement>('sinManiobras').value = o.sinManiobras ?? '';
-  for (const { id } of CASILLAS) ($(id) as HTMLInputElement).checked = !!o.casillas[id];
-}
 
 const dialogo = $<HTMLDialogElement>('dialogoSimular');
 // "Simular muchos…" abre las opciones con los últimos valores; "Simular" las guarda y corre.
