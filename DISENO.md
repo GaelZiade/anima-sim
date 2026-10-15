@@ -267,8 +267,9 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   `Evento.orden`). Cada ataque dibuja una flecha de quien ataca a quien defiende, roja si impacta,
   gris si falla (punteada si pifia) y dorada si es una contra, con el defensor rodeado del mismo
   color (`Evento.ataque`); el daño aparece flotando sobre quien lo recibe (`Evento.dano`). Barras
-  de PV, borde punteado a la defensiva, cruz si cayó. Cada línea guarda la foto de todos
-  (`Evento.foto`).
+  de PV, borde punteado a la defensiva, cruz si cayó (quien huyó deja de verse), un punto violeta si
+  tiene algún estado encima. Cada línea guarda la foto de todos (`Evento.foto`: lugar, PV, estados
+  visibles, Ki y zeon); la barra de iniciativa los muestra al pasar el mouse.
   Controles: reproducir/pausa (espacio), línea anterior o siguiente (flechas), desde el principio y
   velocidad; clic en una línea de la narración salta ahí.
 - **Publicación:** `.github/workflows/pages.yml` la construye y la publica en GitHub Pages en cada
@@ -280,6 +281,12 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   dados: abiertas con cada d100 (`170+159 (abierta: 93+66)`), pifias con el natural y el nivel,
   y críticos con daño + d100 contra RF + d100. Abiertas y pifias se resaltan en color. Los dados
   de una abierta sólo se guardan cuando abre (`TiradaD100.dados`), para no costar en Monte Carlo.
+
+- **Archivos:** `main.ts` (estado, eventos, en vivo), `dom.ts`, `opciones.ts` (las casillas de reglas
+  salen de una tabla: agregar una regla opcional es una fila), `narracion.ts` (funciones puras del
+  registro), `tablero.ts` (canvas: el fondo va en una capa aparte, los colores se leen una vez y el
+  tamaño sólo se toca si cambia), `paralelo.ts` y el worker. Lo guardado espera 400 ms al último
+  cambio (y se guarda ya al cerrar la página).
 
 El contenedor de desarrollo queda para tests, simulaciones largas y mediciones.
 
@@ -385,6 +392,14 @@ diez lugares.
 - **IA:** `ia.ts` (cuerpo a cuerpo, Ki, distancia), `ia-magia.ts` (turno de magia, escudos) y
   `efectos/valorar.ts` (lo que comparten las valoraciones de conjuros). Las hipótesis ("¿y si lo
   bendigo?") se prueban con `conCambio`, que siempre deshace.
+- **La IA valora con las reglas del motor, no con copias:** `pierdeElAsalto` (tempo),
+  `puedeContraatacar` y `riesgoContra` (la contra), `costoTecnica`/`netoTecnica` (una técnica),
+  `asaltosParaJuntar` (Ki), `pIniciativa` (actuar antes, sorprender), `mejorAtaque`, y el umbral de
+  crítico en `preparar`. Una regla nueva que cambie alguna de esas cosas se pone ahí y la ven todas
+  las decisiones. `mejorManiobra` está en piezas (`opcionesDeManiobra`, `valorAtaqueArea`,
+  `mejorDestruccionKi`).
+- **Lo que se ve de un luchador** (`estadoVisible` en `condiciones.ts`): una fila por estado; la
+  página y el registro lo muestran solos.
 - **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
 
 Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de

@@ -216,3 +216,36 @@ Kaito contra Teseo, Kiran y cuatro soldados 52 → 64; el resto, sin cambios apr
    `areaDoblaDano` en `calculos.ts`, en el motor y en el pronóstico.
 4. **Dolor:** quedan dos reglas distintas: el estado Dolor (Dominus p.67) dura el combate; el de la
    tabla del Mushin arcano es dolor de la técnica y baja 5 por asalto, como el de los críticos.
+
+## 8. Tercera tanda: la IA contra el motor, y la página (15/10/2026)
+
+La IA tiene que valorar cada regla como la aplica el motor; donde hacía su propia cuenta, se la
+reemplazó por la del motor o por una función compartida. Lo que cambia de resultado está medido
+abajo; lo puramente estructural mantiene la huella idéntica.
+
+| # | Qué estaba mal | Qué dice el manual (y el motor) | Dónde |
+|---|---|---|---|
+| 36 | **Efectos de las técnicas de Ki** valorados como si siempre se aplicaran | Marca, Interrupción y los Estados de ataque piden que el golpe dañe; los de contacto, alcanzar contra TA 0 (Dominus p.68); la marca sólo mejora si es mayor; la Interrupción usa el daño sin reducir y la acumulación entre cinco (Dominus p.69); nada en maniobras de control | `ia.ts` (`valorEfectosKi`) |
+| 37 | **Tempo** (impactar a quien no actuó le quita el asalto) contado también contra Seraphite arcano y contra quien resiste el golpe | Seraphite arcano sigue actuando (Dominus p.40); resistir el golpe conserva la acción (Core p.93). Un criterio: `pierdeElAsalto` | `ia.ts`, `efectos/valorar.ts` |
+| 38 | **Ataques adicionales de Ki** no se valoraban | Más golpes con los mismos efectos (Dominus p.55): cada uno vale y arriesga su contra; el asalto se le quita una vez | `ia.ts` (`mejorManiobra`) |
+| 39 | **Cuándo critica**: el pronóstico ignoraba Ojos de la Muerte y que con Ojos todo el cuerpo de un ser con acumulación es vulnerable; el punto vulnerable se calculaba aparte | Ojos y el crítico automático critican en cuanto dañan (Dominus p.78, p.71); punto vulnerable con 1/10 de los PV (Core p.97). `preparar` calcula el umbral para todas las valoraciones | `calculos.ts` |
+| 40 | **Enuth arcano**: el control de inconsciencia de cada golpe que daña no se valoraba | Dominus p.43 | `ia.ts` |
+| 41 | **Destrucción por Ki** con un bucle propio y sin la chance de crítico | Pierde el fracaso de la RF en PV (Core p.104), que critica como cualquier daño. `fallaResistencia` | `ia.ts` |
+| 42 | **La contra** se valoraba como un golpe común, y sin las contras ilimitadas de Selene arcano | El bono de la contra y los modificadores de contraataque cuentan (Core p.89); Selene arcano contraataca sin gastar ataques (Dominus p.39). `puedeContraatacar` y `riesgoContra` reemplazan ocho cuentas | `ia.ts`, `efectos/valorar.ts` |
+| 43 | **Atrapar un proyectil**: una recta sobre un d100 cerrado | Trucos de manos abierta, con su pifia, contra la dificultad o el ataque (Core p.94) | `ia.ts` (`intentaAtrapar`) |
+| 44 | **Cuánto tarda en juntar el Ki** de una técnica: dos estimaciones distintas entre sí y del motor | Cada asalto suma la acumulación entera (−1 cada 20 de negativo); si no la ejecuta, lo ganado queda en la mitad (Core p.102). `asaltosParaJuntar` | `ki.ts`, `ia.ts` |
+| 45 | **Neto de una técnica** a veces sin las desventajas o sin el ataque especializado | Desventajas (Dominus p.71-74), ataque especializado (Dominus p.72): `costoTecnica`, `sirveContra`, `netoTecnica` | `ia.ts` |
+| 46 | **Área de Ki**: los aliados del radio pesaban distinto que el daño propio; de lejos se defendía como cuerpo a cuerpo | Aliados con λ; de lejos, como de un proyectil (Dominus p.57-58) | `ia.ts` (`valorAreaKi`) |
+| 47 | **Reflectar** sumaba la contra y no el bono de contraataque | Devuelve el ataque con la habilidad final más el bono de contra, y cuenta como su contra (Dominus p.71) | `ia.ts` (`elegirTecnicaDefensa`) |
+
+**Página:** quien huyó se dibujaba como caído; los estados (derribado, en llamas, ceguera,
+parálisis, miedo…) no se veían; la regla "sin maniobras" de un escenario se perdía al cargarlo. Ahora
+la foto de cada línea lleva los estados (`estadoVisible`), Ki y zeon.
+
+**Efecto medido** (500 combates): sin cambios fuera del ruido (Stéphan contra Teseo 86 → 89; grupo
+63 ± 2).
+
+**Queda como está, a propósito:** `conCambio` no vacía la memoria de la decisión (las hipótesis de
+hoy no la leen; si una nueva la leyera, tiene que llamar a `nuevaDecision`, como `elegirAumento`). De
+quién habla cada línea en la página se busca por nombre en el texto, no con un dato del evento.
+

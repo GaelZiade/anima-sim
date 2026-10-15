@@ -3,6 +3,17 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 15/10/2026: auditoría, tercera tanda (la IA como el motor, la página)
+
+- **IA** (AUDITORIA.md 8, correcciones 36 a 47): efectos de Ki, tempo, ataques adicionales, cuándo
+  critica (Ojos de la Muerte, crítico automático, punto vulnerable: ahora en el pronóstico), Enuth
+  arcano, Destrucción por Ki, la contra (con su bono; Selene arcano), atrapar proyectiles, Ki por
+  juntar, neto de las técnicas, área de Ki y Reflectar: todo valorado como lo aplica el motor, con
+  funciones compartidas en vez de cuentas repetidas.
+- **Página:** estados, Ki y zeon de cada luchador en cada línea; quien huye deja el tablero; selector
+  de maniobras; canvas y guardado sin trabas; `main.ts` en módulos.
+- **Medición** (500): sin cambios fuera del ruido.
+
 ## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)
 
 - **Decisiones** (AUDITORIA.md 7): ACT a la mitad en el momento de hacer otra cosa; Ataque en área

@@ -143,7 +143,7 @@ fichas/         planillas reales de la mesa
 Tabla 43 entera con la Tabla 1 del Dominus), combate con proyectiles (arcos, ballestas, armas de
 fuego, arrojadizas) y línea de visión, Ki completo (técnicas con sus efectos sobrenaturales,
 Combinables, Forzar, desventajas, técnicas a distancia, habilidades activas del Ki, Límites, Leo),
-auditoría contra los manuales, mapa en grilla con paredes y terreno infranqueable, página con compendio, editor de mapa,
+auditoría contra los manuales (tres tandas: reglas, estructura, y la IA valorando con las mismas reglas que el motor), mapa en grilla con paredes y terreno infranqueable, página con compendio, editor de mapa,
 Monte Carlo en paralelo y combate en vivo animado.
 
 **Personajes de la mesa** (`fichas/`): Kaito, Teseo, Kiran, Kael, Isana (tao), Stéphan, Rita (planilla
