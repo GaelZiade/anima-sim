@@ -9,7 +9,7 @@ import {
   penPifiaTurno, umbralPifia, porcentajeDano,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
+  absorcionContra, activo, ALCANCE, danoAEscudo, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
   defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil,
   visionEntre, PEN_COBERTURA, type ZonaArmadura,
@@ -1310,7 +1310,7 @@ function resolverDefensa(
   // (Core p.100, Dominus p.11, p.66).
   let baseTrasEscudo = -1;
   if (resultado <= 0 && quienDefiende.escudoKi > 0 && !quienDefiende.ficha.acumulacion) {
-    const golpe = danoBase(atk, quienDefiende, o.esContra, o.ranura, o.ki) + 10 * (o.ki?.reduccionTA ?? 0);
+    const golpe = danoAEscudo(atk, quienDefiende, o.esContra, o.ranura, o.ki, o.tipo);
     if (golpe >= 40) {
       if (golpe < quienDefiende.escudoKi) {
         quienDefiende.escudoKi -= golpe;
@@ -1331,7 +1331,7 @@ function resolverDefensa(
     const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
     const sobrenatural = atk.cap.danaEnergia || !!o.ki?.danaEnergia || !!o.ki?.sobrenatural || tipoG === 'ENE';
     if (!esc.conjuro.escudoSoloSobrenatural || sobrenatural) {
-      const golpe = danoBase(atk, def, o.esContra, o.ranura, o.ki) + 10 * (o.ki?.reduccionTA ?? 0);
+      const golpe = danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo);
       if (golpe < esc.resistencia) {
         esc.resistencia -= golpe;
         log(ctx, () => `  ${esc.conjuro.nombre} de ${def.ficha.nombre} aguanta (le quedan ${esc.resistencia}).`);

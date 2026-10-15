@@ -11,8 +11,9 @@ import {
   actDe, actPara, actPorCansancio, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
   preparadoListo, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
 } from './magia';
-import { rfCritico,
-  activo, ataqueMagico, defensaEscudoMagico, ALCANCE, defensaFinal, distancia, danoBase, danoEsperado, pronostico, puedeActuar,
+import {
+  danoAEscudo, rfCritico, activo, ataqueMagico, defensaEscudoMagico, ALCANCE, defensaFinal, distancia, danoEsperado, pronostico,
+  puedeActuar,
 } from './calculos';
 import { tabla } from './probabilidades';
 import { umbralPifia, type TipoAtaque } from './reglas';
@@ -329,7 +330,7 @@ export function escudoMagicoAlDefender(ctx: Contexto, def: Luchador, atk: Luchad
   const fisica = danoEsperado(atk, def, habAtk, defensaFinal(def, atk, { kiAtk: g.ki }), { ki: g.ki, tipo: g.tipo, ranura: g.ranura });
   let otros = 0;
   for (const x of enemigos(ctx, def)) if (x !== atk && !x.haActuado && puedeActuar(x) && alcanzable(x, def)) otros += 1;
-  const golpe = danoBase(atk, def, false, g.ranura, g.ki);
+  const golpe = danoAEscudo(atk, def, false, g.ranura, g.ki, g.tipo);
   let mejor: Lanzamiento | null = null;
   let mejorNeto = 0;
   for (const c of e.conjuros) {

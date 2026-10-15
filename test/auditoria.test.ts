@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, ataqueMagico, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, ataqueFinal, ataqueMagico, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, type TipoAtaque } from '../src/motor/reglas';
@@ -206,5 +206,18 @@ describe('segunda auditoría: magia y negativos (Core p.232)', () => {
     const antes = ataqueMagico(l, def);
     l.bono = { toda: 20 } as typeof l.bono;
     expect(ataqueMagico(l, def)).toBe(antes);
+  });
+});
+
+describe('segunda auditoría: daño a los escudos (Dominus p.13, p.60)', () => {
+  it('+10 por cada TA que resta el ataque (la calidad del arma también) y +200 con Sin armadura', () => {
+    const def = crearLuchador(ficha('Escudado'), 'B', 1, 0);
+    const comun = crearLuchador(ficha('Común'), 'A', 0, 0);
+    const bueno = crearLuchador(ficha('Calidad', {}, { arma: { nombre: 'Espada larga', calidad: 10 } }), 'A', 0, 0);
+    const r = { pen: 0, sinArmas: false };
+    expect(bueno.cap.reduccionTA).toBe(2);
+    const base = danoAEscudo(comun, def, false, r);
+    expect(danoAEscudo(bueno, def, false, r) - danoBase(bueno, def, false, r)).toBe(10 * bueno.cap.reduccionTA);
+    expect(danoAEscudo(comun, def, false, r, { ...SIN_KI, sinArmadura: true })).toBe(base + 200);
   });
 });

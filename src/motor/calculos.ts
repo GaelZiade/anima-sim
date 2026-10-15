@@ -454,6 +454,27 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
 }
 
 /**
+ * Cuánta TA le resta el ataque: la calidad del arma (un proyectil, la suya), Hakyoukuken y Destruir
+ * armadura del Ki, que se acumulan (Dominus p.60).
+ */
+function reduccionTA(def: Luchador, atk: Luchador, r: Ranura, t: TipoAtaque, zona: ZonaArmadura, ki?: ModKi): number {
+  // Un proyectil resta la TA por su propia calidad, no por la del arma cuerpo a cuerpo.
+  return atk.cap.reduccionTA - (r.sinArmas || r.proyectil ? atk.cap.reduccionTAArma : 0) +
+    (r.proyectil ? Math.floor((r.proyectil.calidad ?? 0) / 5) : 0) +
+    reduccionHakyoukuken(def, atk, t, zona) + (ki?.reduccionTA ?? 0);
+}
+
+/**
+ * Daño que le hace un golpe a un escudo sobrenatural (mágico, psíquico o de energía): su daño base, +10
+ * por cada punto de TA que reste el ataque, venga de donde venga, y +200 si es Sin armadura (Dominus
+ * p.13, p.60).
+ */
+export function danoAEscudo(atk: Luchador, def: Luchador, esContra: boolean, ranura: Ranura, ki?: ModKi, tipo?: TipoAtaque): number {
+  const t = tipo ?? perfilDe(atk, ranura).tipoAtaque;
+  return danoBase(atk, def, esContra, ranura, ki) + 10 * Math.max(0, reduccionTA(def, atk, ranura, t, 'cuerpo', ki)) + (ki?.sinArmadura ? 200 : 0);
+}
+
+/**
  * TA del defensor menos lo que le resta el ataque; no baja de 0. Derribo, Presa y Desarmar se
  * resuelven siempre contra TA 0 (Core p.91).
  */
@@ -467,10 +488,7 @@ export function absorcionContra(
   const r = ranura ?? proximaRanura(atk);
   const t = tipo ?? perfilDe(atk, r).tipoAtaque;
   const zona = zonaDe(maniobra);
-  // Un proyectil resta la TA por su propia calidad, no por la del arma cuerpo a cuerpo.
-  const reduccion = atk.cap.reduccionTA - (r.sinArmas || r.proyectil ? atk.cap.reduccionTAArma : 0) +
-    (r.proyectil ? Math.floor((r.proyectil.calidad ?? 0) / 5) : 0) +
-    reduccionHakyoukuken(def, atk, t, zona) + (ki?.reduccionTA ?? 0);
+  const reduccion = reduccionTA(def, atk, r, t, zona, ki);
   let ta = taZona(def.ficha, zona, t);
   // Armadura de energía mayor apagada (TA 2) o arcana subida a TA 6 (Dominus p.19).
   if (t === 'ENE') ta = Math.max(0, ta + ajusteTaEnergia(def));
