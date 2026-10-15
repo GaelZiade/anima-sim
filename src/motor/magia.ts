@@ -7,7 +7,6 @@ import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { umbralPifia } from './reglas';
-import { normalizarRasgo } from './rasgos';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
 export interface Mantenido {

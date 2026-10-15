@@ -100,7 +100,6 @@ export const MOD_POSICION: Record<Posicion, { ataque: number; defensa: number }>
 };
 
 export const MOD_SORPRESA_DEFENSA = -90;
-export const BONO_DEFENSA_TOTAL = 30;
 export const PEN_RESISTIR_GOLPE = 80;
 export const PEN_ACCION_ACTIVA = 25;
 export const BONO_CANSANCIO = 15;

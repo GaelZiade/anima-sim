@@ -365,12 +365,12 @@ export interface Luchador {
   /** Paralización inducida (Mushin arcano), aparte de la de una presa, y asaltos que le quedan. */
   paralisisInducida: 0 | 1 | 2 | 3;
   paralisisTurnos: number;
+  /** PV recuperados con Curación por Ki (no pasan de la mitad del daño sufrido, Core p.104). */
+  curado: number;
   /**
    * Aura de combate de un rival (Dominus p.21, Tabla 9): el control ya hecho y su resultado. Quien lo
    * superó no lo repite en el combate; afectado lo repite cada 5 asaltos.
    */
-  /** PV recuperados con Curación por Ki (no pasan de la mitad del daño sufrido, Core p.104). */
-  curado: number;
   aura: { fuente: Luchador; estado: 'resistio' | 'afectado' | 'miedo' | 'paralizado'; asalto: number } | null;
   /** Marcas de Ki que le pusieron: bono al ataque de quien lo marcó (Dominus p.70). */
   marcas: Map<Luchador, number>;

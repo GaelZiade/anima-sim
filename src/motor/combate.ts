@@ -6,11 +6,11 @@ import { textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
   absorcion, bonoContraataque, bonoFrialdad, danoFinal, dificultadDisparo, esCritico, esMaestro, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia,
-  porcentajeDano, type Localizacion, type TipoAtaque,
+  porcentajeDano, type TipoAtaque,
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
-  enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, alcanceMaximo, type ZonaArmadura,
+  enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, type ZonaArmadura,
 } from './calculos';
 import {
   atributo, bonoCaracteristica, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,

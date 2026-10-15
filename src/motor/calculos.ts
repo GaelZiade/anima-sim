@@ -52,15 +52,15 @@ export function puedeActuar(l: Luchador): boolean {
   return l.estado === 'activo' && !l.aLaDefensiva && !l.defensaTotal && !l.fascinado;
 }
 
-/**
- * Negativo a toda acción: dolor, críticos y agotamiento. Dos rasgos que dividen a la mitad no se
- * acumulan; Exhausto e Inmunidad se compensan. Berserker y Esencia de vacío ignoran dolor y cansancio.
- */
 /** Legado de la Luna: +5 llena, +10 menguante, +15 creciente, +20 nueva, +30 eclipse (Dominus p.79). */
 const BONO_LUNAR = { llena: 5, menguante: 10, creciente: 15, nueva: 20, eclipse: 30 } as const;
 const PEN_MIEDO = 60;
 const PEN_DOLOR = { leve: 20, normal: 40, extremo: 80 } as const;
 
+/**
+ * Negativo a toda acción: dolor, críticos y agotamiento. Dos rasgos que dividen a la mitad no se
+ * acumulan; Exhausto e Inmunidad se compensan. Berserker y Esencia de vacío ignoran dolor y cansancio.
+ */
 export function penAccion(l: Luchador): number {
   const c = l.cap;
   const max = l.ficha.cansancio ?? l.ficha.constitucion;
@@ -348,7 +348,6 @@ export interface OpcionesDefensa {
   ki?: ModKi;
 }
 
-/** Ataques intangibles (Velez arcano): sólo se paran si se puede parar energía. */
 /**
  * Velez arcano o un Ataque sobrenatural de Ki (Dominus p.64): sólo lo para quien para energía; con un
  * escudo de energía sí se puede.

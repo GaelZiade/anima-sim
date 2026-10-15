@@ -628,16 +628,6 @@ function valorEstadoMushin(estado: EstadoMushin, def: Luchador, amen: number): n
   }
 }
 
-/** P(X − Y > k) con X, Y uniformes en 1..100 (d100 sin abierta). */
-function pDiferenciaD100(kReal: number): number {
-  // X − Y es entero: X − Y > k equivale a X − Y > ⌊k⌋ (y evita recursión infinita con fracciones).
-  const k = Math.floor(kReal);
-  if (k >= 99) return 0;
-  if (k < -99) return 1;
-  if (k >= 0) return ((99 - k) * (100 - k)) / 2 / 10000;
-  return 1 - pDiferenciaD100(-k - 1);
-}
-
 /** Enemigos al alcance que un ataque en área alcanzaría, empezando por el elegido. */
 export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchador[] {
   nuevaDecision(ctx);
