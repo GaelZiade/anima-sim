@@ -3,6 +3,7 @@ import type { TamanoArma, TipoAtaque } from './reglas';
 import type { Capacidades, LocalizacionArmadura, Ranura } from './rasgos';
 import type { EstadoKi } from './ki';
 import type { Bendicion, EstadoMagia } from './magia';
+import type { Condicion, TipoCondicion } from './condiciones';
 import type { BonoMagico } from './conjuros';
 import type { Celda, Mapa, MapaListo } from './mapa';
 
@@ -362,9 +363,11 @@ export interface Luchador {
   apresando: Luchador | null;
   /** Lo desarmaron: pelea con su perfil sin armas. */
   desarmado: boolean;
-  /** Paralización inducida (Mushin arcano), aparte de la de una presa, y asaltos que le quedan. */
-  paralisisInducida: 0 | 1 | 2 | 3;
-  paralisisTurnos: number;
+  /**
+   * Condiciones con duración (condiciones.ts): ceguera de un destello o de un estado, parálisis inducida
+   * (Mushin, Aura, estados), aparte de la de una presa.
+   */
+  condiciones: Partial<Record<TipoCondicion, Condicion>>;
   /** PV recuperados con Curación por Ki (no pasan de la mitad del daño sufrido, Core p.104). */
   curado: number;
   /**
@@ -408,8 +411,6 @@ export interface Luchador {
   /** Conjuros de efecto que lo benefician (de quién vienen) y su suma (null sin ninguno). */
   bendiciones: Bendicion[];
   bono: BonoMagico | null;
-  /** Asaltos que le quedan cegado por un efecto pasajero (Flash Cegador). */
-  cegado: number;
   /** Tabla 76: En llamas (Core p.236). 0 si no arde; si no, el nivel en la tabla. */
   llamas: number;
   /** Este asalto intentó apagarse: las llamas no crecen. */

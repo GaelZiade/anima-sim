@@ -7,6 +7,7 @@ import { atacar, crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, defensaFinal, turnoFinal } from '../src/motor/calculos';
 import { modEstados } from '../src/motor/maniobras';
 import { crearRng } from '../src/motor/rng';
+import { imponer } from '../src/motor/condiciones';
 
 function ficha(nombre: string, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -91,8 +92,7 @@ describe('parálisis (Tabla 43)', () => {
   it('no se suman: vale la peor entre la de una presa y la inducida', () => {
     const l: Luchador = crearLuchador(ficha('Preso'), 'A', 0, 0);
     l.paralisis = 1;
-    l.paralisisInducida = 2;
-    l.paralisisTurnos = 3;
+    imponer(l, 'paralisis', { nivel: 2, asaltos: 3 });
     expect(modEstados(l).ataque).toBe(-80);
   });
 });

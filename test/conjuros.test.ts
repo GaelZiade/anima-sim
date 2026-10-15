@@ -11,6 +11,7 @@ import { GRIMORIO } from '../src/motor/grimorio';
 import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
 import { blancosConjuro } from '../src/motor/efectos';
 import { golpeDeConjuro } from '../src/motor/magia';
+import { imponer } from '../src/motor/condiciones';
 
 const conjuro = (n: string) => CATALOGO.find((c) => c.nombre === n)!;
 const abel: Ficha[] = JSON.parse(readFileSync(new URL('../ejemplos/arquetipos-abel.json', import.meta.url), 'utf8')).fichas;
@@ -177,7 +178,7 @@ describe('anímicos y automáticos', () => {
     }
     expect(visto).toBe(true);
     const l = crearLuchador(soldado, 'A', 0, 0);
-    l.cegado = 2;
+    imponer(l, 'ceguera', { nivel: 2, asaltos: 2, destello: true });
     expect(cegueraContra(l, crearLuchador(soldado, 'B', 1, 0)).nivel).toBe(2);
   });
 

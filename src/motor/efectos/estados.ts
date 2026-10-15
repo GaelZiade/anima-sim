@@ -5,6 +5,7 @@
 import type { Atributo, Contexto, Luchador } from '../modelo';
 import { fichaConAumento, recuperarKi, type NombreEstado } from '../ki';
 import { activo } from '../calculos';
+import { condicion, imponer } from '../condiciones';
 import type { Motor } from './tipos';
 
 /** Cómo se nombra cada estado en el registro. */
@@ -65,16 +66,15 @@ export function aplicarEstado(
       m.log(ctx, () => `  ${def.ficha.nombre} queda con Miedo (−60 a toda acción).`);
       return;
     case 'ceguera':
-      m.cambiarFicha(def, { ...f, estados: { ...f.estados, ceguera: 'absoluta' } });
+      imponer(def, 'ceguera', { nivel: 2, asaltos: Infinity });
       m.log(ctx, () => `  ${def.ficha.nombre} queda ciego.`);
       return;
     case 'paralisisParcial':
     case 'paralisisTotal': {
       const grado = estado === 'paralisisParcial' ? 2 : 3;
-      if (def.paralisisTurnos <= 0 || def.paralisisInducida <= grado) {
-        def.paralisisInducida = grado;
-        def.paralisisTurnos = Math.max(def.paralisisTurnos, fracaso);
-      }
+      // Una parálisis más fuerte que todavía dura no se pisa.
+      const previa = condicion(def, 'paralisis');
+      if (!previa || previa.nivel <= grado) imponer(def, 'paralisis', { nivel: grado, asaltos: Math.max(previa?.asaltos ?? 0, fracaso) });
       m.log(ctx, () => `  ${def.ficha.nombre} queda en ${grado === 2 ? 'parálisis parcial' : 'parálisis completa'} ${fracaso} asaltos.`);
       return;
     }

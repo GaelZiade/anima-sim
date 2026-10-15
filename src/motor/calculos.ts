@@ -13,6 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
 import { ajusteTaEnergia, type ModKi } from './ki';
+import { condicion } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
 
@@ -193,7 +194,8 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
  */
 export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
   // Cegado por un destello: el asalto previo a recuperar la vista, sólo ceguera parcial (Core p.233).
-  const destello = l.cegado > 1 ? 'absoluta' : l.cegado === 1 ? 'parcial' : undefined;
+  const c = condicion(l, 'ceguera');
+  const destello = !c ? undefined : c.destello && c.asaltos === 1 ? 'parcial' : c.nivel >= 2 ? 'absoluta' : 'parcial';
   const propia = destello === 'absoluta' || l.ficha.estados?.ceguera === 'absoluta' ? 'absoluta' : destello ?? l.ficha.estados?.ceguera;
   const casos: Ceguera[] = [
     propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,

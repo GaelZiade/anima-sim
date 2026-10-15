@@ -20,6 +20,7 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
+import { imponer, nivelCondicion, pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
@@ -71,11 +72,11 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
     movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
     derribado: false, paralisis: 0, apresadoPor: null, apresando: null, desarmado: false,
-    paralisisInducida: 0, paralisisTurnos: 0, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
+    condiciones: {}, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, cegado: 0, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -128,8 +129,7 @@ function aplicarAuras(ctx: Contexto, vivos: Luchador[]) {
       x.aura = { fuente, estado, asalto: ctx.asalto };
       if (estado === 'paralizado') {
         // "Incapaz apenas de moverse": paralización parcial (Core p.233), mientras dure el combate.
-        x.paralisisInducida = Math.max(x.paralisisInducida, 2) as 2 | 3;
-        x.paralisisTurnos = Infinity;
+        imponer(x, 'paralisis', { nivel: Math.max(nivelCondicion(x, 'paralisis'), 2), asaltos: Infinity });
       }
       const efecto = { resistio: 'lo resiste', afectado: `falla por ${fracaso}: queda afectado, −10 a toda acción`,
         miedo: `falla por ${fracaso}: siente miedo, −60 a toda acción`, paralizado: `falla por ${fracaso}: queda paralizado` }[estado];
@@ -396,8 +396,8 @@ function jugarAsalto(ctx: Contexto) {
     if (l.apresadoPor && !l.haActuado) zafarse(ctx, l);
     l.penDolor = Math.max(0, l.penDolor - 5);
     l.penTecnica = Math.max(0, l.penTecnica - 10);
-    if (l.paralisisTurnos > 0 && --l.paralisisTurnos === 0) l.paralisisInducida = 0;
-    if (l.cegado > 0 && --l.cegado === 0) log(ctx, () => `${l.ficha.nombre} vuelve a ver.`);
+    // Condiciones con duración: un asalto menos (parálisis inducida, ceguera).
+    if (pasarAsalto(l).includes('ceguera')) log(ctx, () => `${l.ficha.nombre} vuelve a ver.`);
     arder(ctx, l);
     if (!activo(l)) continue;
     sangreDeOrochi(ctx, l);
@@ -1781,8 +1781,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
     if (estado === 'dolor') def.penDolor += 40;
     else if (estado === 'dolorExtremo') def.penDolor += 80;
     else if (estado === 'paralisisMenor' || estado === 'paralisisParcial') {
-      def.paralisisInducida = estado === 'paralisisMenor' ? 1 : 2;
-      def.paralisisTurnos = fallo;
+      imponer(def, 'paralisis', { nivel: estado === 'paralisisMenor' ? 1 : 2, asaltos: fallo });
     } else if (estado === 'paralisisCompleta' || estado === 'coma') caer(ctx, atk, def, 'inconsciente');
     else if (estado === 'muerte') caer(ctx, atk, def, 'muerto');
     log(ctx, () => `  Además sufre ${estado}.`);

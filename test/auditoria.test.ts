@@ -10,6 +10,7 @@ import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/moto
 import { umbralEstallido } from '../src/motor/proyectiles';
 import { SIN_KI } from '../src/motor/ki';
 import { actDe, hacerOtraAccion } from '../src/motor/magia';
+import { imponer } from '../src/motor/condiciones';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -227,9 +228,9 @@ describe('segunda auditoría: estados (Core p.233)', () => {
   it('cegado por un destello: ceguera parcial el asalto previo a recuperar la vista', () => {
     const l = crearLuchador(ficha('Cegado'), 'A', 0, 0);
     const r = crearLuchador(ficha('Rival'), 'B', 1, 0);
-    l.cegado = 2;
+    imponer(l, 'ceguera', { nivel: 2, asaltos: 2, destello: true });
     expect(cegueraContra(l, r).nivel).toBe(2);
-    l.cegado = 1;
+    imponer(l, 'ceguera', { nivel: 2, asaltos: 1, destello: true });
     expect(cegueraContra(l, r).nivel).toBe(1);
   });
 

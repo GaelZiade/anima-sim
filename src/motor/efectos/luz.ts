@@ -4,6 +4,7 @@
 
 import { activo, distancia } from '../calculos';
 import type { Grado } from '../conjuros';
+import { condicion, imponer } from '../condiciones';
 import { golpeDeConjuro, mantenidoCon, RANURA_MAGIA, ZEON_CONTROL_DEL_ESPACIO } from '../magia';
 import { atributo, pGanaControl } from '../maniobras';
 import type { Contexto, Luchador } from '../modelo';
@@ -25,7 +26,9 @@ export const flash: ManejadorEfecto = {
       if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo)) continue;
       const asaltos = Math.floor(m.tirarRf(ctx, b, g.rf ?? 0, 'el Flash Cegador').fracaso / 10);
       if (asaltos > 0) {
-        b.cegado = Math.max(b.cegado, asaltos);
+        // Un ciego por un estado (todo el combate) sigue así; si no, la ceguera del destello más larga.
+        const previa = condicion(b, 'ceguera');
+        if (!previa || previa.destello) imponer(b, 'ceguera', { nivel: 2, asaltos: Math.max(previa?.asaltos ?? 0, asaltos), destello: true });
         m.log(ctx, () => `  ${b.ficha.nombre} queda ciego ${asaltos} asalto${asaltos > 1 ? 's' : ''}.`);
       }
     }
@@ -35,7 +38,7 @@ export const flash: ManejadorEfecto = {
     const control = !!l.ficha.magia?.controlDelEspacio && ctx.luchadores.some((x) => x !== l && x.equipo === l.equipo && activo(x) && distancia(l, x) <= (g.radio ?? 0));
     let v = 0;
     for (const b of ctx.luchadores) {
-      if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo) || b.cegado > 1) continue;
+      if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo) || (condicion(b, 'ceguera')?.asaltos ?? 0) > 1) continue;
       const f = fallaResistencia(resistencias(b).rf, g.rf ?? 0);
       const asaltos = Math.min(3, Math.floor(f.fracaso / 10));
       const rival = b.equipo === l.equipo ? enemigos(ctx, b)[0] : l;
