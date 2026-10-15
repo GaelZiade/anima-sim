@@ -393,14 +393,21 @@ function declararSinKi(ctx: Contexto, l: Luchador): Omit<Declaracion, 'acumularK
  * seguro en la primera acción enfrentada contra él. Conviene si P(sorpresa) × lo que cuesta el −90
  * supera lo que cuesta el −40 (Dominus p.14).
  */
+/**
+ * P(que la iniciativa de `a` supere la de `b` por `umbral` o más) si sus turnos difieren en `dif`: la
+ * diferencia de dos d100 abiertas, como un ataque, cada una con el umbral de pifia del turno
+ * (aproximado: la tabla trata la pifia de `b` como la de defensa). Con `umbral` 1, actuar antes; con
+ * su diferencia de sorpresa, sorprenderlo (combate.ts, Core p.86).
+ */
+function pIniciativa(a: Luchador, b: Luchador, dif: number, umbral: number): number {
+  return tabla(umbralPifiaTurno(a), umbralPifiaTurno(b), false).pImpacto(dif - umbral + 1);
+}
+
 function preverSorpresa(l: Luchador, entrantes: { e: Luchador; peso: number }[]): Luchador[] {
   if (perfil(l) === 'bestia') return [];
   const elegidos: Luchador[] = [];
   for (const { e } of entrantes) {
-    // P(iniciativa de e − la suya ≥ umbral): la diferencia de dos d100 abiertas, como un ataque, cada
-    // una con el umbral de pifia del turno (aproximado: la tabla trata su pifia como la de defensa).
-    const t = tabla(umbralPifiaTurno(e), umbralPifiaTurno(l), false);
-    const pSorpresa = t.pImpacto(turnoFinal(e) - turnoFinal(l) - e.cap.est.diferenciaSorpresa + 1);
+    const pSorpresa = pIniciativa(e, l, turnoFinal(e) - turnoFinal(l), e.cap.est.diferenciaSorpresa);
     const atk = ataqueFinal(e, l);
     const def = defensaFinal(l, e);
     const dano = (pen: number) => danoEsperado(e, l, atk, def - pen);
@@ -685,26 +692,26 @@ export function elegirManiobra(
     if (tecnica) return { ...mejorManiobra(ctx, atk, def, esContra, bono, vistaPrevia(atk, tecnica), soloNormal, true, ranura).plan, tecnica };
     return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal, true, ranura).plan;
   }
-  const base = mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal);
+  const comun = !esContra && bono === 0 && !soloNormal;
+  const base = comun
+    ? sinTecnica(ctx, atk, def)
+    : mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), soloNormal);
   if (!atk.ki) return base.plan;
   let mejor = base;
   let mejorNeto = base.valor;
   let elegida: Tecnica | undefined;
   for (const tec of tecnicasPara(atk, 'ataque', esContra)) {
     const ki = vistaPrevia(atk, tec);
-    // Ataque especializado contra otra defensa: no tendría ningún efecto (Dominus p.72).
-    if (ki.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) continue;
+    if (!sirveContra(ki, def)) continue;
     const r = mejorManiobra(ctx, atk, def, esContra, bono, ki, soloNormal);
-    const neto = r.valor - precioKi(atk) * costeKi(tec) - costoDesventajas(atk, def, tec);
+    const neto = r.valor - costoTecnica(atk, def, tec);
     if (neto > mejorNeto) {
       mejor = r;
       mejorNeto = neto;
       elegida = tec;
     }
   }
-  // Si es un ataque común, el valor sin técnica es el mismo que el que `convieneGuardar` necesita.
-  const sinTecnica = !esContra && bono === 0 && !soloNormal ? base.valor : undefined;
-  if (!elegida || convieneGuardar(ctx, atk, def, elegida, mejorNeto - base.valor, sinTecnica)) return base.plan;
+  if (!elegida || convieneGuardar(ctx, atk, def, elegida, mejorNeto - base.valor)) return base.plan;
   return { ...mejor.plan, tecnica: elegida };
 }
 
@@ -1161,17 +1168,12 @@ function convieneRecuperar(l: Luchador): boolean {
  * sobrante a la reserva y empieza de cero. Conviene esperar si lo que gana con la otra, descontado
  * por los asaltos que faltan, supera lo que gana ahora en todos esos asaltos.
  */
-function convieneGuardar(
-  ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number, conocido?: number,
-): boolean {
-  // El ataque sin técnica sólo hace falta si alguna está a 1-3 asaltos.
-  let sinTecnica = conocido;
+function convieneGuardar(ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number): boolean {
   for (const t of repertorio(l.ficha)) {
     if (t === elegida || efectosDe(t).clase !== 'ataque' || enUso(l.ki!, t)) continue;
     const faltan = asaltosQueFaltan(l, t);
     if (faltan < 1 || faltan > 3) continue;
-    sinTecnica ??= mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
-    const otra = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica - precioKi(l) * costeKi(t);
+    const otra = netoTecnica(ctx, l, rival, t);
     if (otra * Math.pow(0.8, faltan) > ganancia * (1 + faltan)) return true;
   }
   return false;
@@ -1291,6 +1293,37 @@ function costoDesventajas(l: Luchador, rival: Luchador | null, t: Tecnica): numb
   return c;
 }
 
+/** Lo que cuesta ejecutar `t`: su Ki y sus desventajas. */
+function costoTecnica(l: Luchador, rival: Luchador | null, t: Tecnica): number {
+  return precioKi(l) * costeKi(t) + costoDesventajas(l, rival, t);
+}
+
+/** Un ataque especializado contra otra defensa no tiene ningún efecto (Dominus p.72). */
+function sirveContra(ki: ModKi, def: Luchador): boolean {
+  return !ki.soloContra || (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') === ki.soloContra;
+}
+
+/** Su ataque común contra `e` sin técnica: la referencia con que se compara cada técnica en la decisión. */
+const sinTecnicaMemo = cacheDeDecision<Luchador, Map<Luchador, { plan: PlanAtaque; valor: number }>>();
+function sinTecnica(ctx: Contexto, l: Luchador, e: Luchador): { plan: PlanAtaque; valor: number } {
+  let m = sinTecnicaMemo.get(l);
+  if (!m) sinTecnicaMemo.set(l, (m = new Map()));
+  let r = m.get(e);
+  if (!r) m.set(e, (r = mejorManiobra(ctx, l, e, false, 0, modDeAccion(l, 'ataque', false), false)));
+  return r;
+}
+
+function valorSinTecnica(ctx: Contexto, l: Luchador, e: Luchador): number {
+  return sinTecnica(ctx, l, e).valor;
+}
+
+/** Lo que gana un ataque común contra `e` con la técnica `t` frente a uno sin técnica, neto de su costo. */
+function netoTecnica(ctx: Contexto, l: Luchador, e: Luchador, t: Tecnica): number {
+  const ki = vistaPrevia(l, t);
+  if (!sirveContra(ki, e)) return -Infinity;
+  return mejorManiobra(ctx, l, e, false, 0, ki, false).valor - valorSinTecnica(ctx, l, e) - costoTecnica(l, e, t);
+}
+
 /** Lo que hace con un arma a distancia en su turno (Core p.94-96). */
 export type AccionDistancia =
   | { tipo: 'disparar'; arma: number; objetivo: Luchador; disparos: number; pen: number; recargaFalta: number }
@@ -1355,9 +1388,8 @@ function gananciaTecnica(ctx: Contexto, l: Luchador, e: Luchador): number {
   if (!l.ki) return 0;
   const tecnicas = tecnicasPara(l, 'ataque');
   if (!tecnicas.length) return 0;
-  const sin = mejorManiobra(ctx, l, e, false, 0, modDeAccion(l, 'ataque', false), false).valor;
   let mejor = 0;
-  for (const t of tecnicas) mejor = Math.max(mejor, mejorManiobra(ctx, l, e, false, 0, vistaPrevia(l, t), false).valor - precioKi(l) * costeKi(t) - sin);
+  for (const t of tecnicas) mejor = Math.max(mejor, netoTecnica(ctx, l, e, t));
   return mejor;
 }
 
@@ -1517,7 +1549,7 @@ export function contraKiADistancia(ctx: Contexto, l: Luchador, atk: Luchador): {
   const bono = vision === 'cobertura' ? -PEN_COBERTURA : 0;
   let mejor: { tecnica: Tecnica | null; valor: number } | null = null;
   for (const [t, k] of opciones) {
-    const v = mejorManiobra(ctx, l, atk, true, bono, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, atk, t) : 0);
+    const v = mejorManiobra(ctx, l, atk, true, bono, k, false, true).valor - (t ? costoTecnica(l, atk, t) : 0);
     if (v > 0 && (!mejor || v > mejor.valor)) mejor = { tecnica: t, valor: v };
   }
   return mejor ? { tecnica: mejor.tecnica } : null;
@@ -1568,7 +1600,7 @@ export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchad
     const cuerpo = alcanzable(l, e) ? valorAtaque(l, e, {}) : 0;
     for (const [t, k] of opciones) {
       if (k.distancia + 1e-6 < d) continue;
-      const v = mejorManiobra(ctx, l, e, false, bono, k, false, true).valor - (t ? precioKi(l) * costeKi(t) + costoDesventajas(l, e, t) : 0);
+      const v = mejorManiobra(ctx, l, e, false, bono, k, false, true).valor - (t ? costoTecnica(l, e, t) : 0);
       if (v > cuerpo && (!mejor || v > mejor.valor)) mejor = { objetivo: e, tecnica: t, valor: v };
     }
   }
@@ -1606,7 +1638,7 @@ export function estadosAutomaticos(ctx: Contexto, l: Luchador): { tecnica: Tecni
         }
       }
     if (!blancos.length) continue;
-    const neto = valor - precioKi(l) * costeKi(t) - costoDesventajas(l, blancos[0], t);
+    const neto = valor - costoTecnica(l, blancos[0], t);
     if (!mejor || neto > mejor.valor) mejor = { tecnica: t, blancos, valor: neto };
   }
   if (!mejor || mejor.valor <= 0) return null;
@@ -1655,7 +1687,7 @@ export function elegirTecnicaDefensa(
     const ef = efectosDe(t);
     const ganancia = sinTecnica - costo(vistaPrevia(def, t));
     const deAsalto = ef.asalto.ta || ef.asalto.parada || ef.asalto.esquiva || ef.asalto.escudo || ef.asalto.pantalla ? otros : 0;
-    const neto = ganancia * (1 + deAsalto) - precioKi(def) * costeKi(t) - costoDesventajas(def, atk, t);
+    const neto = ganancia * (1 + deAsalto) - costoTecnica(def, atk, t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
@@ -1682,7 +1714,7 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
     let intangible = 0;
     if (ef.asalto.intangible)
       for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) intangible += lambda(l) * amenaza(e, l);
-    const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible - precioKi(l) * costeKi(t) - costoDesventajas(l, rivalPrincipal(ctx, l), t);
+    const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible - costoTecnica(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
@@ -1700,13 +1732,13 @@ function valorTurno(ctx: Contexto, l: Luchador, bono: number): number {
   let valor = 0;
   for (const e of enemigos(ctx, l)) {
     if (!alcanzable(l, e) && !alcanzable(e, l)) continue;
-    const tb = tabla(umbralPifiaTurno(l), umbralPifiaTurno(e), false);
     const dif = propio - turnoFinal(e);
-    const sorpresa = (s: number) => tb.pImpacto(s - l.cap.est.diferenciaSorpresa + 1);
+    const p = (d: number, umbral: number) => pIniciativa(l, e, d, umbral);
     const b = base(l, e);
     const conSorpresa = danoEsperado(l, e, b.hab, b.def - 90) - b.golpe;
-    valor += (tb.pImpacto(dif + bono) - tb.pImpacto(dif)) * amenaza(e, l) * 0.5 +
-      (sorpresa(dif + bono) - sorpresa(dif)) * conSorpresa;
+    const sorpresa = l.cap.est.diferenciaSorpresa;
+    valor += (p(dif + bono, 1) - p(dif, 1)) * amenaza(e, l) * 0.5 +
+      (p(dif + bono, sorpresa) - p(dif, sorpresa)) * conSorpresa;
   }
   return valor;
 }
@@ -1720,8 +1752,7 @@ function rivalPrincipal(ctx: Contexto, l: Luchador): Luchador | null {
 
 /** Lo que gana un ataque contra `rival` con estos efectos de Ki, frente a uno sin técnica. */
 function gananciaAtaque(ctx: Contexto, l: Luchador, rival: Luchador, ki: ModKi): number {
-  return mejorManiobra(ctx, l, rival, false, 0, ki, false).valor -
-    mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor;
+  return mejorManiobra(ctx, l, rival, false, 0, ki, false).valor - valorSinTecnica(ctx, l, rival);
 }
 
 /**
@@ -1790,10 +1821,8 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
     const candidatas = repertorio(l.ficha).filter(
       (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosDesdeCero(l, t) >= 2,
     );
-    const sinTecnica = candidatas.length ? mejorManiobra(ctx, l, rival, false, 0, modDeAccion(l, 'ataque', false), false).valor : 0;
     for (const t of candidatas) {
-      const ganancia = mejorManiobra(ctx, l, rival, false, 0, vistaPrevia(l, t), false).valor - sinTecnica;
-      const ritmo = (ganancia - precioKi(l) * costeKi(t)) / asaltosDesdeCero(l, t);
+      const ritmo = netoTecnica(ctx, l, rival, t) / asaltosDesdeCero(l, t);
       if (ritmo > mejorRitmo) {
         mejorRitmo = ritmo;
         objetivo = t;
