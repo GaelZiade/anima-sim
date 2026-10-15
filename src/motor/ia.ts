@@ -8,7 +8,7 @@ import {
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
-import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
+import { absorcion, negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
@@ -757,7 +757,17 @@ function mejorManiobra(
     if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amen;
     // Ataque indirecto (Ki) o desde lejos: no se le puede contraatacar (Dominus p.52).
     if (def.ataquesRestantes > 0 && puedeActuar(def) && !ki?.indirecto && !(aDistancia && lejos)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
-    if (ki && ki !== SIN_KI) v += valorEfectosKi(atk, def, ki, p, m, golpesSiguientes);
+    if (ki && ki !== SIN_KI && !esManiobraDeControl(m) && (ki.estados.length || ki.impacto || ki.marca || ki.interrumpe)) {
+      // Como el motor: Marca, Interrupción y los Estados de ataque piden que el golpe dañe (contra la
+      // armadura real, con el daño sin reducir); los de contacto, alcanzar el 10% contra TA 0.
+      const prep = prepDe(m, tipo, undefined);
+      const s = hab - habDef;
+      const pDana = prep.nulo ? 0 : prep.t.pPorcentajeAlMenos(s, prep.absDano, 10);
+      const pContacto = prep.t.pPorcentajeAlMenos(s, absorcion(0), 10);
+      const pleno = reducido !== undefined ? pronosticoDesde(prep, def, s, criticoAuto) : p;
+      const danoPleno = pleno.pImpacto > 0 ? pleno.dano / pleno.pImpacto : 0;
+      v += valorEfectosKi(atk, def, ki, p, golpesSiguientes, pDana, pContacto, danoPleno);
+    }
 
     // Crítico: un punto vulnerable critica con 1/10 de los PV (Core p.97) y pega donde apuntó;
     // cualquier otro golpe, con la mitad de los PV y en un lugar al azar.
@@ -1223,31 +1233,35 @@ function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golp
  * con Contacto físico), Impacto si supera la defensa, Marca para los golpes que sigan, Interrupción
  * del Ki que tenga concentrado.
  */
-function valorEfectosKi(atk: Luchador, def: Luchador, ki: ModKi, p: Pronostico, m: Maniobra, golpes: number): number {
-  if (!ki.estados.length && !ki.impacto && !ki.marca && !ki.interrumpe) return 0;
+function valorEfectosKi(
+  atk: Luchador, def: Luchador, ki: ModKi, p: Pronostico, golpes: number, pDana: number, pContacto: number, danoPleno: number,
+): number {
   let v = 0;
   for (const est of ki.estados) {
     if (est.condicion === 'automatico') continue;
-    v += (est.condicion === 'contacto' ? p.pManiobra : p.pImpacto) * valorEstado(atk, def, est, golpes);
+    v += (est.condicion === 'contacto' ? pContacto : pDana) * valorEstado(atk, def, est, golpes);
   }
   if (ki.impacto) {
     // Lanzado lejos pierde lo que le queda del asalto; atraído, queda a su alcance.
     const pGana = pGanaControl(ki.impacto, atributo(def, 'FUE') + modControl(def));
     v += p.pImpacto * pGana * (ki.atraer ? 0.2 * amenaza(def, atk) : amenaza(def, atk));
   }
-  if (ki.marca && !def.marcas.has(atk)) {
+  // Una marca mayor reemplaza a la que tenía (Dominus p.70).
+  const marcaPrevia = def.marcas.get(atk) ?? 0;
+  if (ki.marca > marcaPrevia) {
     const b = base(atk, def);
-    v += p.pImpacto * Math.max(1, golpes) * (danoEsperado(atk, def, b.hab + ki.marca, b.def) - b.golpe);
+    v += pDana * Math.max(1, golpes) * (danoEsperado(atk, def, b.hab + ki.marca, b.def) - danoEsperado(atk, def, b.hab + marcaPrevia, b.def));
   }
   if (ki.interrumpe && def.ki) {
     let concentrado = 0;
     for (const c of CARACTERISTICAS_KI) concentrado += def.ki.acumulado[c] ?? 0;
     for (const t of def.ki.enEspera.keys()) concentrado += costeKi(t);
     for (const t of def.ki.mantenidas.keys()) concentrado += costeKi(t);
-    const danoMedio = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
-    v += p.pImpacto * fallaResistencia(rfDe(def), danoMedio + ki.interrupcion).p * concentrado * precioKi(def);
+    // Contra la acumulación, la dificultad entre 5 (Dominus p.69).
+    const dif = danoPleno + ki.interrupcion;
+    v += pDana * fallaResistencia(rfDe(def), def.ficha.acumulacion ? Math.floor(dif / 5) : dif).p * concentrado * precioKi(def);
   }
-  return m === 'desarmar' ? 0 : v;
+  return v;
 }
 
 /**
