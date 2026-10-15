@@ -9,7 +9,7 @@ import {
   umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia, type TipoAtaque,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
+  absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
   defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
 } from './calculos';
@@ -809,7 +809,7 @@ function accionADistancia(ctx: Contexto, l: Luchador, d: ia.AccionDistancia) {
     if (d.disparos > 1) log(ctx, () => `${l.ficha.nombre} ${arma.clase === 'disparo' ? 'dispara' : 'lanza'} ${d.disparos} veces con ${arma.nombre} (−${d.pen} a cada uno).`);
     let blanco: Luchador | null = d.objetivo;
     for (let k = 0; k < d.disparos && blanco; k++) {
-      if (!ia.armaListaParaDisparar(l, d.arma)) break;
+      if (!ia.armaUsable(l, d.arma)) break;
       atacar(ctx, l, blanco, { esContra: false, bono: 0, proyectil: { arma: d.arma, pen: d.pen } });
       if (!puedeActuar(l) || terminado(ctx)) break;
       if (!activo(blanco)) blanco = ia.siguienteBlanco(ctx, l, d.arma, d.pen);
@@ -1504,14 +1504,9 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const { bonoKi = 0, nivelFijo } = o;
   atk.stats.criticosCausados++;
   if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
-  const e = atk.cap.est;
   const apuntado = localizacionApuntada(m);
-  const vital = m === 'cabeza' || m === 'corazon';
-  // Enuth: +20 al crítico para dejar inconsciente; arcano +50 (Dominus p.43).
-  const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-  // Potenciar Crítico (Ki) suma a la tirada del crítico (Dominus p.70).
   // Un crítico que no viene del arma del atacante (el choque de un Impacto) no suma sus bonos (Dominus p.12).
-  let bono = o.sinBonos ? 0 : atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
+  let bono = o.sinBonos ? 0 : bonoCriticoDe(atk, m, bonoKi);
   // Aumentar el Crítico: conjuro pasivo que se declara antes de tirar (Core p.157).
   const aumento = nivelFijo === undefined && !o.sinBonos && atk.magia ? iaMagia.aumentarCritico(ctx, atk, def, dano + bono) : null;
   if (aumento) {

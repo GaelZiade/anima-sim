@@ -4,7 +4,7 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
-  absorcionContra, activo, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  absorcionContra, activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
@@ -182,15 +182,12 @@ export function valorNegativo(atk: Luchador, def: Luchador, pen: number, golpes:
  * Valor esperado del crítico de un golpe, en PV: P(critica) × [P(fuera de combate) × (PV que le
  * quedarían + su amenaza de dos asaltos) + P(sólo negativos) × valor de esos negativos].
  */
-export function valorCritico(
+function valorCritico(
   atk: Luchador, def: Luchador, pCritica: number, danoPleno: number, loc: Localizacion | null, m: Maniobra,
   golpes: number, danoPrevio: number, bonoKi = 0,
 ): number {
   if (pCritica <= 0) return 0;
-  const e = atk.cap.est;
-  const vital = m === 'cabeza' || m === 'corazon';
-  const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
-  const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
+  const base = danoPleno + bonoCriticoDe(atk, m, bonoKi);
   const ef = efectoCritico(base, rfCritico(def), loc, {
     inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
   });
@@ -419,18 +416,20 @@ function elegirModos(
 ): Omit<Declaracion, 'defensaTotal' | 'ataques' | 'acumularKi'> {
   const e = l.cap.est;
   const original = { modo: l.modo, bonoVariableEn: l.bonoVariableEn };
-  const probar = (modo: Luchador['modo'], bonoVariableEn: Luchador['bonoVariableEn']) => {
+  const probar = (modo: Luchador['modo'], bonoVariableEn: Luchador['bonoVariableEn']) => conCambio(() => {
     l.modo = modo;
     l.bonoVariableEn = bonoVariableEn;
     nuevaDecision();
-    let v = valorDelAsalto(l, n, objetivos, entrantes);
+    return () => {
+      l.modo = original.modo;
+      l.bonoVariableEn = original.bonoVariableEn;
+      nuevaDecision();
+    };
+  }, () => {
+    const v = valorDelAsalto(l, n, objetivos, entrantes);
     // Seraphite arcano sigue actuando aunque lo pongan a la defensiva: vale su ofensiva perdida.
-    if (modo.seraphite === 3) v += 0.3 * Math.max(0, valorDelAsalto(l, n, objetivos, []));
-    l.modo = original.modo;
-    l.bonoVariableEn = original.bonoVariableEn;
-    nuevaDecision();
-    return v;
-  };
+    return modo.seraphite === 3 ? v + 0.3 * Math.max(0, valorDelAsalto(l, n, objetivos, [])) : v;
+  });
   // Ataque Final: una vez, por debajo de la mitad de los PV (Dominus p.86). Se usa en cuanto se puede.
   const activarAtaqueFinal = e.ataqueFinal && !l.ataqueFinalUsado && l.pv < l.ficha.pv / 2;
   const base = { seraphite: 0 as 0 | 1 | 3, berserker: false, ataqueFinal: l.modo.ataqueFinal || activarAtaqueFinal };
@@ -572,6 +571,12 @@ function convieneResistir(ctx: Contexto, l: Luchador, atk: Luchador): boolean {
   return costo < (1 - pSinImpacto) * pSigueEnPie * miAsalto;
 }
 
+/** `f` recordada por nivel de cansancio: se pide varias veces el mismo k en una decisión. */
+function porNivel<T>(f: (k: number) => T): (k: number) => T {
+  const vistos: T[] = [];
+  return (k) => (k in vistos ? vistos[k] : (vistos[k] = f(k)));
+}
+
 /** ¿Gastar `k` puntos lo deja agotado (Tabla 27)? */
 function agota(l: Luchador, k: number): boolean {
   return negativoCansancio(l.cansancio - k, l.ficha.cansancio ?? l.ficha.constitucion) > 0;
@@ -595,11 +600,11 @@ function decidirCansancio(l: Luchador, ganancia: (k: number) => number, referenc
 export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bono: number, plan: PlanAtaque = NORMAL): number {
   nuevaDecision(ctx);
   const defensa = defensaFinal(def, atk);
-  const valor = (k: number) => {
+  const valor = porNivel((k) => {
     const o = { bono, cansancio: k, maniobra: plan.maniobra, tipo: plan.tipo, especial: plan.especial };
     const p = pronostico(atk, def, ataqueFinal(atk, def, o), defensa, { maniobra: plan.maniobra, tipo: plan.tipo });
     return p.dano + p.pBaja * def.pv;
-  };
+  });
   // La referencia es su propia vida: lo que vale el cansancio depende de él, no del blanco.
   return decidirCansancio(atk, valor, Math.max(1, atk.pv));
 }
@@ -607,8 +612,8 @@ export function cansancioAtaque(ctx: Contexto, atk: Luchador, def: Luchador, bon
 export function cansancioDefensa(ctx: Contexto, def: Luchador, atk: Luchador, habAtaque: number, resistiendo: boolean): number {
   nuevaDecision(ctx);
   if (def.ficha.acumulacion) return 0;
-  const pron = (k: number) =>
-    pronostico(atk, def, habAtaque, defensaFinal(def, atk, { cansancio: k, resistir: resistiendo }));
+  const pron = porNivel((k) =>
+    pronostico(atk, def, habAtaque, defensaFinal(def, atk, { cansancio: k, resistir: resistiendo })));
   const gastar = decidirCansancio(def, (k) => -(pron(k).dano + pron(k).pBaja * def.pv), Math.max(1, def.pv));
   if (gastar > 0) return gastar;
   // Desesperado: agotarse sólo si baja mucho la chance de quedar fuera de combate ahora, y con lo
@@ -651,7 +656,6 @@ function valorEstadoMushin(estado: EstadoMushin, def: Luchador, amen: number): n
 
 /** Enemigos al alcance que un ataque en área alcanzaría, empezando por el elegido. */
 export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchador[] {
-  nuevaDecision(ctx);
   const otros = enemigos(ctx, atk).filter((e) => e !== def && enAlcance(atk, e));
   return [def, ...otros].slice(0, atk.cap.est.blancosArea);
 }
@@ -1069,11 +1073,14 @@ function elegirAumento(ctx: Contexto, l: Luchador): DecisionKi['aumentar'] {
     const hasta = desde + h.aumento;
     const mantener = Math.ceil(ASALTOS_PREVISTOS / h.asaltosPorPagoAumento);
     if (l.ki!.reserva < hasta + mantener) continue;
-    l.ficha = fichaConAumento(original.ficha, a, desde, hasta);
-    l.cap = capacidades(l.ficha);
-    const ganancia = medir() - antes;
-    l.ficha = original.ficha;
-    l.cap = original.cap;
+    const ganancia = conCambio(() => {
+      l.ficha = fichaConAumento(original.ficha, a, desde, hasta);
+      l.cap = capacidades(l.ficha);
+      return () => {
+        l.ficha = original.ficha;
+        l.cap = original.cap;
+      };
+    }, medir) - antes;
     const neto = ganancia * ASALTOS_PREVISTOS - precioKi(l) * (hasta + mantener);
     if (neto > mejorNeto) {
       mejorNeto = neto;
@@ -1180,20 +1187,12 @@ function valorAreaKi(
   return v;
 }
 
-/**
- * RF contra una dificultad: P(fallarla) y el fracaso medio si la falla. El d100 no es abierto y el
- * 100 natural siempre resiste.
- */
-function fracasoRf(def: Luchador, dificultad: number, extra = 0): { p: number; medio: number } {
-  const f = fallaResistencia(rfDe(def) + extra, dificultad);
-  return { p: f.p, medio: f.fracaso };
-}
 
 /** Lo que vale para `atk`, en PV, que `def` sufra este Estado sobrenatural (Dominus p.67) si falla la RF. */
 function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golpes: number): number {
   // Miedo, Terror y Fascinación afectan el ánimo: suma la Frialdad (Core p.54), como en el motor.
   const animo = ESTADOS_DE_ANIMO.has(est.estado);
-  const { p, medio } = fracasoRf(def, est.rf, animo ? frialdadDe(def) : 0);
+  const { p, fracaso: medio } = fallaResistencia(rfDe(def) + (animo ? frialdadDe(def) : 0), est.rf);
   if (!p) return 0;
   const pv = Math.max(0, def.pv);
   const fuera = pv + 2 * amenaza(def, atk);
@@ -1246,7 +1245,7 @@ function valorEfectosKi(atk: Luchador, def: Luchador, ki: ModKi, p: Pronostico, 
     for (const t of def.ki.enEspera.keys()) concentrado += costeKi(t);
     for (const t of def.ki.mantenidas.keys()) concentrado += costeKi(t);
     const danoMedio = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
-    v += p.pImpacto * fracasoRf(def, danoMedio + ki.interrupcion).p * concentrado * precioKi(def);
+    v += p.pImpacto * fallaResistencia(rfDe(def), danoMedio + ki.interrupcion).p * concentrado * precioKi(def);
   }
   return m === 'desarmar' ? 0 : v;
 }
@@ -1272,7 +1271,7 @@ export type AccionDistancia =
   | { tipo: 'apuntar'; arma: number; objetivo: Luchador };
 
 /** Un arma a distancia que todavía puede usar: ni encasquillada ni rota, y con proyectiles. */
-function armaUsable(l: Luchador, i: number): boolean {
+export function armaUsable(l: Luchador, i: number): boolean {
   const a = l.ficha.armasDistancia![i];
   const st = l.proyectiles[i];
   return !st.inutil && (a.leo ? l.balas > 0 : st.municion > 0);
@@ -1398,11 +1397,6 @@ export function accionADistancia(ctx: Contexto, l: Luchador): AccionDistancia | 
     if (blanco) return { tipo: 'apuntar', arma: cargada, objetivo: blanco };
   }
   return null;
-}
-
-/** Puede disparar ya con esa arma: usable y sin recarga pendiente. */
-export function armaListaParaDisparar(l: Luchador, i: number): boolean {
-  return armaUsable(l, i);
 }
 
 /** Si cae el blanco a mitad de los disparos: el enemigo al que más rinde seguir disparando. */

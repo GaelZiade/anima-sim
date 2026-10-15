@@ -909,3 +909,16 @@ export function areaDoblaDano(atk: Luchador, def: Luchador, maniobra: Maniobra, 
 
 /** Índice de un luchador, para el registro. */
 export const nro = (ctx: { luchadores: Luchador[] }, l: Luchador) => ctx.luchadores.indexOf(l);
+
+/**
+ * Lo que el atacante le suma al crítico: Crítico incrementado, estilos (Moai Thai, Hakyoukuken), el bono
+ * a los puntos vitales, Enuth para dejar inconsciente (+20, arcano +50, Dominus p.43) y Potenciar
+ * Crítico del Ki (Dominus p.70). Lo usan el motor y la IA.
+ */
+export function bonoCriticoDe(atk: Luchador, m: Maniobra, bonoKi = 0): number {
+  const e = atk.cap.est;
+  const vital = m === 'cabeza' || m === 'corazon';
+  const enuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
+  return atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + enuth + bonoKi;
+}
+
