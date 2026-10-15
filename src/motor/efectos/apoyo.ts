@@ -5,7 +5,7 @@
 import { activo, distancia } from '../calculos';
 import { DADO_FIJO } from '../dados';
 import type { Golpe } from '../golpe';
-import { golpeDeConjuro, RANURA_MAGIA, zeonLibre } from '../magia';
+import { actDe, golpeDeConjuro, RANURA_MAGIA, zeonLibre } from '../magia';
 import { atributo, pGanaControl } from '../maniobras';
 import { celdaLibreCerca, indice } from '../mapa';
 import type { Contexto, Luchador } from '../modelo';
@@ -168,7 +168,7 @@ export const sacrificioPoder: ManejadorEfecto = {
     const objetivo = meta();
     if (!objetivo) return;
     const act = (g.maximo ?? 0) / 2;
-    probar({ conjuro: c, grado: i, objetivo: null }, ASALTOS_EFECTO * ((act / l.ficha.magia!.act) * objetivo.porAsalto - precioZeon(l) * act));
+    probar({ conjuro: c, grado: i, objetivo: null }, ASALTOS_EFECTO * ((act / Math.max(1, actDe(l))) * objetivo.porAsalto - precioZeon(l) * act));
   },
 };
 
@@ -179,7 +179,7 @@ export const consumirVida: ManejadorEfecto = {
   valorar({ l, e, c, i, g, probar }) {
     // Lo vale cuando la reserva no alcanza para el resto del combate: el zeon que daría en dos
     // asaltos, a su precio, menos los PV (por λ).
-    if (zeonLibre(e) >= 3 * l.ficha.magia!.act || l.pv <= l.ficha.pv * 0.6) return;
+    if (zeonLibre(e) >= 3 * actDe(l) || l.pv <= l.ficha.pv * 0.6) return;
     const pv = Math.min(g.maximo ?? 0, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
     probar({ conjuro: c, grado: i, objetivo: null }, 2 * (precioZeon(l) * 20 * pv - lambda(l) * pv));
   },

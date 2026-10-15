@@ -8,7 +8,7 @@ import {
 } from './efectos/valorar';
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
 import {
-  actPara, actPorCansancio, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
+  actDe, actPara, actPorCansancio, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
   preparadoListo, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
 } from './magia';
 import { rfCritico,
@@ -168,7 +168,7 @@ export function interceptarCon(ctx: Contexto, l: Luchador, atk: Luchador, result
     for (const i of gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia)) {
       const g = c.grados[i];
       // Usando la magia innata, intercepta con un innato; si no, con lo acumulado.
-      const alcanza = e.innato ? g.zeon <= maximoInnato(l.ficha.magia!.act) && !e.mantenidos.some((x) => x.innato) : g.zeon <= e.acumulado;
+      const alcanza = e.innato ? g.zeon <= maximoInnato(actDe(l)) && !e.mantenidos.some((x) => x.innato) : g.zeon <= e.acumulado;
       if (!alcanza || (g.dano ?? 0) <= mejorDano) continue;
       mejor = { conjuro: c, grado: i, objetivo: atk, ...(e.innato ? { innato: true } : {}) };
       mejorDano = g.dano ?? 0;
@@ -188,7 +188,7 @@ export function interceptarCon(ctx: Contexto, l: Luchador, atk: Luchador, result
 function mejorInnato(ctx: Contexto, l: Luchador, alcance: number): { l: Lanzamiento; valor: number } | null {
   const e = l.magia!;
   if (e.mantenidos.some((x) => x.innato)) return null;
-  const maximo = maximoInnato(l.ficha.magia!.act);
+  const maximo = maximoInnato(actDe(l));
   let mejor: { l: Lanzamiento; valor: number } | null = null;
   for (const c of e.conjuros) {
     if (!lanzable(e, c, [])) continue;
@@ -248,20 +248,20 @@ export function planMagia(ctx: Contexto, l: Luchador): PlanMagia {
   const plan: PlanMagia = { acumula: zeonLibre(e) > 0 };
   // Consumir Vida por Magia: cuando le queda menos de dos asaltos de ACT libres y conserva la mitad de sus PV.
   const vida = mantenidoDe(l, 'consumirVida');
-  if (vida && zeonLibre(e) < 2 * l.ficha.magia!.act && l.pv > l.ficha.pv / 2) {
+  if (vida && zeonLibre(e) < 2 * actDe(l) && l.pv > l.ficha.pv / 2) {
     const max = vida.conjuro.grados[vida.grado].maximo ?? 0;
     plan.consumirVida = Math.min(max, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
   }
   // Pasarle su ACT de zeon a un mago aliado que se está quedando sin, si a él le sobra (Core p.117).
   const alcanceZeon = l.ficha.magia!.transmision ? presenciaDe(l) : ALCANCE;
   const necesitado = ctx.luchadores.find((x) => x !== l && x.equipo === l.equipo && activo(x) && x.magia &&
-    zeonLibre(x.magia) < 2 * (x.ficha.magia?.act ?? 0) && distancia(l, x) <= alcanceZeon);
-  if (necesitado && zeonLibre(e) > 600) return { acumula: false, transferir: { a: necesitado, zeon: l.ficha.magia!.act } };
+    zeonLibre(x.magia) < 2 * actDe(x) && distancia(l, x) <= alcanceZeon);
+  if (necesitado && zeonLibre(e) > 600) return { acumula: false, transferir: { a: necesitado, zeon: actDe(l) } };
   const meta = metaMagica(ctx, l, alcance);
   const inn = mejorInnato(ctx, l, alcance);
   if (inn && inn.valor > (meta?.porAsalto ?? 0)) return { ...plan, acumula: false, innato: true };
   if (!meta || !plan.acumula) return plan;
-  const especialista = actPara(l, meta.conjuro) > l.ficha.magia!.act;
+  const especialista = actPara(l, meta.conjuro) > actDe(l);
   if (especialista) plan.preparar = { conjuro: meta.conjuro, grado: meta.grado };
   // Lo que le falta después de este asalto de ACT: con cansancio o Sacrificio de Poder, ¿llega ya?
   let falta = meta.falta - actPara(l, especialista ? meta.conjuro : null);

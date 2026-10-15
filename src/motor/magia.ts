@@ -6,6 +6,7 @@ import { conjurosDe, esEspecialista, gradosPosibles, type EfectoConjuro, type Bo
 import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
+import { penAccion } from './calculos';
 import { umbralPifia, type TipoAtaque } from './reglas';
 import { SIN_KI, type ModKi } from './ki';
 import type { Ranura } from './rasgos';
@@ -142,10 +143,18 @@ export function maximoInnato(act: number): number {
   return 90;
 }
 
+/**
+ * Su ACT con los negativos: la mitad del negativo a toda acción, redondeada hacia arriba en grupos de 5;
+ * los bonos a toda acción no lo suben (Core p.232).
+ */
+export function actDe(l: Luchador): number {
+  const pen = Math.ceil(Math.max(0, penAccion(l)) / 10) * 5;
+  return Math.max(0, l.ficha.magia!.act - pen);
+}
+
 /** Su ACT este asalto preparando ese conjuro: +10 si es su Conjuro Especialista (Arcana p.30). */
 export function actPara(l: Luchador, c?: Conjuro | null): number {
-  const m = l.ficha.magia!;
-  return m.act + (c && esEspecialista(c, m) ? 10 : 0);
+  return actDe(l) + (c && esEspecialista(c, l.ficha.magia) ? 10 : 0);
 }
 
 /** Zeon libre de la reserva: lo que no está acumulado ni en un conjuro preparado. */
@@ -438,12 +447,6 @@ export function escudoDetiene(l: Luchador, tipo?: TipoAtaque): boolean {
 /** Ese conjuro, si lo mantiene. */
 export function mantenidoCon(l: Luchador, c: Conjuro): Mantenido | undefined {
   return l.magia?.mantenidos.find((x) => x.conjuro === c);
-}
-
-/** TA de la armadura mágica contra ese tipo de ataque (0 sin armadura). */
-export function taMagica(l: Luchador, tipo: string): number {
-  const a = l.magia?.armadura;
-  return a ? (tipo === 'ENE' ? a.energia : a.resto) : 0;
 }
 
 /**

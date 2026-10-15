@@ -3,11 +3,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, ataqueFinal, ataqueMagico, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
-import { bonoFrialdad } from '../src/motor/reglas';
+import { bonoFrialdad, type TipoAtaque } from '../src/motor/reglas';
 import { SIN_KI } from '../src/motor/ki';
+import { actDe } from '../src/motor/magia';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -161,7 +162,7 @@ describe('16. Frialdad (Core p.54, Tabla 13)', () => {
 });
 
 describe('segunda auditoría: ataques sobrenaturales (Core p.99-101)', () => {
-  const conjuro = (elemento: string) => ({ ...SIN_KI, sobrenatural: true, danaEnergia: true, conjuro: true, elemento });
+  const conjuro = (elemento: TipoAtaque) => ({ ...SIN_KI, sobrenatural: true, danaEnergia: true, conjuro: true, elemento });
 
   it('un conjuro de energía no se para; uno de fuego se para con −120 (Core p.100)', () => {
     const atk = crearLuchador(ficha('Mago'), 'A', 0, 0);
@@ -186,5 +187,24 @@ describe('segunda auditoría: ataques sobrenaturales (Core p.99-101)', () => {
     const def = crearLuchador(ficha('Golem', {}, { acumulacion: true }), 'B', 10, 0);
     const sin = danoEsperado(atk, def, 200, 0);
     expect(danoEsperado(atk, def, 200, 0, { area: 5 })).toBeCloseTo(2 * sin);
+  });
+});
+
+describe('segunda auditoría: magia y negativos (Core p.232)', () => {
+  const mago = () => ficha('Mago', {}, { magia: { zeon: 500, act: 60, proyeccion: 150, vias: {} } });
+
+  it('el ACT sufre la mitad del negativo, redondeada hacia arriba de a 5; un bono no lo sube', () => {
+    const l = crearLuchador(mago(), 'A', 0, 0);
+    expect(actDe(l)).toBe(60);
+    l.penDolor = 45; // mitad 22,5 → 25
+    expect(actDe(l)).toBe(35);
+  });
+
+  it('un bono a toda acción (Campeón) no sube la Proyección Mágica', () => {
+    const l = crearLuchador(mago(), 'A', 0, 0);
+    const def = crearLuchador(ficha('Blanco'), 'B', 10, 0);
+    const antes = ataqueMagico(l, def);
+    l.bono = { toda: 20 } as typeof l.bono;
+    expect(ataqueMagico(l, def)).toBe(antes);
   });
 });

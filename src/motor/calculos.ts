@@ -15,7 +15,6 @@ import { localizacionArmadura, type Ranura } from './rasgos';
 import { ajusteTaEnergia, type ModKi } from './ki';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
-import { taMagica } from './magia';
 
 export const ALCANCE = 2;
 /** Atacar con el crítico secundario del arma (Core p.92). */
@@ -785,11 +784,12 @@ export function alcanceMaximo(arma: ArmaDistancia): number {
 /**
  * Proyección Mágica para lanzar un conjuro de ataque o anímico contra `def`: no sufre ninguno de los
  * penalizadores del combate (ataques adicionales, proyectiles, posición) salvo los negativos a toda
- * acción y la ceguera; +40 si lo toca (Core p.118, p.100).
+ * acción y la ceguera; +40 si lo toca (Core p.118, p.100). Un bono a toda acción (Campeón, la Luna) no
+ * la sube (Core p.232).
  */
 export function ataqueMagico(atk: Luchador, def: Luchador): number {
   const m = atk.ficha.magia!;
-  return m.proyeccion - penAccion(atk) + (atk.bono?.toda ?? 0) + conCeguera('frente', 0, cegueraContra(atk, def), 'ataque') +
+  return m.proyeccion - Math.max(0, penAccion(atk)) + conCeguera('frente', 0, cegueraContra(atk, def), 'ataque') +
     (enAlcance(atk, def) ? 40 : 0);
 }
 
@@ -800,7 +800,7 @@ export function ataqueMagico(atk: Luchador, def: Luchador): number {
  */
 export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi): number {
   const m = def.ficha.magia!;
-  return (m.proyeccionDefensa ?? m.proyeccion) - penAccion(def) + (def.bono?.toda ?? 0) +
+  return (m.proyeccionDefensa ?? m.proyeccion) - Math.max(0, penAccion(def)) +
     conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
     (def.amenazadoPor === atk ? AMENAZADO.parada : 0);
@@ -839,3 +839,8 @@ export function resistenciaCalor(l: Luchador): number {
   return (l.bono?.resCalor ?? 0) + 5 * (l.bono?.inmuneFuego ?? 0);
 }
 
+/** TA de la armadura mágica contra ese tipo de ataque (0 sin armadura). */
+export function taMagica(l: Luchador, tipo: string): number {
+  const a = l.magia?.armadura;
+  return a ? (tipo === 'ENE' ? a.energia : a.resto) : 0;
+}
