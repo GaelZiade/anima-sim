@@ -471,6 +471,8 @@ export interface Evento {
   camino?: { quien: number; celdas: Punto[] };
   /** PV que perdió alguien. */
   dano?: { quien: number; cantidad: number };
+  /** De quién habla la línea: quien ataca, o si no el primero que nombra (`sujetoDe` en combate.ts). */
+  sujeto?: number;
 }
 
 export interface FotoLuchador {

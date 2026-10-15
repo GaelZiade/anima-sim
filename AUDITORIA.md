@@ -246,6 +246,12 @@ la foto de cada línea lleva los estados (`estadoVisible`), Ki y zeon.
 63 ± 2).
 
 **Queda como está, a propósito:** `conCambio` no vacía la memoria de la decisión (las hipótesis de
-hoy no la leen; si una nueva la leyera, tiene que llamar a `nuevaDecision`, como `elegirAumento`). De
-quién habla cada línea en la página se busca por nombre en el texto, no con un dato del evento.
+hoy no la leen; si una nueva la leyera, tiene que llamar a `nuevaDecision`, como `elegirAumento`).
+
+**Cerrado después:** de quién habla cada línea es un dato del evento (`Evento.sujeto`: quien ataca,
+quien recibe el daño o, si no, el primer nombre de la línea, calculado en el motor sólo con el
+registro prendido); el compendio muestra Ki y magia y ya no relee la planilla en cada redibujo; el
+progreso de "Simular muchos" avanza dentro de cada tanda; `aliadosSobre` se recuerda por decisión.
+En el escenario más lento no hay un cuello de botella: el perfil se reparte (Dijkstra 5%,
+`preparar` 5%, el resto menos), y leer planillas pasa una sola vez.
 

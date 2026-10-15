@@ -113,7 +113,35 @@ function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<E
     return f;
   });
   const turno = ctx.turnoDe ? ctx.luchadores.indexOf(ctx.turnoDe) : undefined;
-  ctx.registro.push({ asalto: ctx.asalto, texto: typeof texto === 'string' ? texto : texto(), foto, turno, ...extra?.() });
+  const linea = typeof texto === 'string' ? texto : texto();
+  const ev: Evento = { asalto: ctx.asalto, texto: linea, foto, turno, ...extra?.() };
+  ev.sujeto ??= ev.ataque?.de ?? ev.dano?.quien ?? sujetoDe(ctx, linea);
+  ctx.registro.push(ev);
+}
+
+/** Nombres de los luchadores, los más largos primero ("Soldado (2)" antes que "Soldado"), por combate. */
+const nombresPorCombate = new WeakMap<Contexto, { nombre: string; i: number }[]>();
+
+/**
+ * De quién habla una línea que no dice explícitamente su sujeto: el primer nombre que aparece en el
+ * texto (un nombre que es parte de otro más largo no cuenta). Sólo corre con el registro prendido.
+ */
+function sujetoDe(ctx: Contexto, texto: string): number | undefined {
+  let nombres = nombresPorCombate.get(ctx);
+  if (!nombres) {
+    nombres = ctx.luchadores.map((l, i) => ({ nombre: l.ficha.nombre, i })).sort((a, b) => b.nombre.length - a.nombre.length);
+    nombresPorCombate.set(ctx, nombres);
+  }
+  const tapado = new Uint8Array(texto.length);
+  let mejor: { i: number; pos: number } | undefined;
+  for (const n of nombres) {
+    for (let pos = texto.indexOf(n.nombre); pos >= 0; pos = texto.indexOf(n.nombre, pos + 1)) {
+      if (tapado[pos] || tapado[pos + n.nombre.length - 1]) continue;
+      tapado.fill(1, pos, pos + n.nombre.length);
+      if (!mejor || pos < mejor.pos) mejor = { i: n.i, pos };
+    }
+  }
+  return mejor?.i;
 }
 
 /** Lo que el motor le presta a los efectos de conjuro (efectos/). */

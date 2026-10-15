@@ -4,7 +4,7 @@
 
 import { combinar, type ResultadoMonteCarlo } from '../src/motor/montecarlo';
 import { tandas as cortar } from '../src/motor/tandas';
-import type { Preparar, Tanda, TandaHecha, Fallo } from './simulacion.worker';
+import type { Avance, Preparar, Tanda, TandaHecha, Fallo } from './simulacion.worker';
 
 export interface Corrida {
   /** Resultado final, con el tiempo real (no la suma de los workers). */
@@ -15,7 +15,7 @@ export interface Corrida {
 export function correrEnParalelo(
   escenario: Omit<Preparar, 'tipo'>,
   combates: number,
-  o: { hilos: number; semilla: number; alAvanzar?: (hechos: number, parcial: ResultadoMonteCarlo) => void },
+  o: { hilos: number; semilla: number; alAvanzar?: (hechos: number, parcial: ResultadoMonteCarlo | null) => void },
 ): Corrida {
   const inicio = performance.now();
   const lista = cortar(combates, o.semilla);
@@ -27,6 +27,9 @@ export function correrEnParalelo(
   let siguiente = 0;
   let hechos = 0;
   let ultimoAviso = 0;
+  // Combates hechos de las tandas que todavía corren, y lo combinado de las ya terminadas.
+  const enCurso = new Map<number, number>();
+  let parcial: ResultadoMonteCarlo | null = null;
   let cancelar = () => {};
 
   const resultado = new Promise<ResultadoMonteCarlo>((resolver, rechazar) => {
@@ -42,25 +45,36 @@ export function correrEnParalelo(
       w.postMessage(tanda);
     };
     for (const w of workers) {
-      w.onmessage = (e: MessageEvent<TandaHecha | Fallo>) => {
+      w.onmessage = (e: MessageEvent<TandaHecha | Avance | Fallo>) => {
         if (e.data.tipo === 'error') {
           terminar();
           rechazar(new Error(e.data.mensaje));
           return;
         }
-        partes[e.data.indice] = e.data.resultado;
-        hechos += e.data.resultado.combates;
-        if (hechos >= combates) {
-          terminar();
-          resolver({ ...combinar(partes), milisegundos: performance.now() - inicio });
-          return;
+        if (e.data.tipo === 'avance') {
+          enCurso.set(e.data.indice, e.data.hechos);
+        } else {
+          enCurso.delete(e.data.indice);
+          partes[e.data.indice] = e.data.resultado;
+          hechos += e.data.resultado.combates;
+          parcial = null;
+          if (hechos >= combates) {
+            terminar();
+            resolver({ ...combinar(partes), milisegundos: performance.now() - inicio });
+            return;
+          }
+          pedir(w);
         }
-        pedir(w);
-        // Avisar a lo sumo 5 veces por segundo: combinar recorre todas las tandas.
+        // Avisar a lo sumo 5 veces por segundo: combinar recorre todas las tandas (y sólo cuando hay
+        // alguna nueva terminada).
         const ahora = performance.now();
         if (o.alAvanzar && ahora - ultimoAviso > 200) {
           ultimoAviso = ahora;
-          o.alAvanzar(hechos, combinar(partes.filter(Boolean)));
+          let corriendo = 0;
+          for (const n of enCurso.values()) corriendo += n;
+          const listas = partes.filter(Boolean);
+          if (listas.length) o.alAvanzar(hechos + corriendo, (parcial ??= combinar(listas)));
+          else o.alAvanzar(hechos + corriendo, null);
         }
       };
       w.onerror = (e) => {

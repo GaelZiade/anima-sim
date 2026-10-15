@@ -25,6 +25,13 @@ export interface TandaHecha {
   resultado: ResultadoMonteCarlo;
 }
 
+/** Combates hechos de una tanda que todavía corre (para que el progreso no espere a que termine). */
+export interface Avance {
+  tipo: 'avance';
+  indice: number;
+  hechos: number;
+}
+
 export interface Fallo {
   tipo: 'error';
   mensaje: string;
@@ -32,7 +39,7 @@ export interface Fallo {
 
 const ambito = self as unknown as {
   onmessage: (e: MessageEvent<Preparar | Tanda>) => void;
-  postMessage: (m: TandaHecha | Fallo) => void;
+  postMessage: (m: TandaHecha | Avance | Fallo) => void;
 };
 
 let escenario: Preparar | null = null;
@@ -45,7 +52,14 @@ ambito.onmessage = (e) => {
   }
   try {
     const { equipoA, equipoB, distanciaInicial, escenario: opciones } = escenario!;
-    const resultado = monteCarlo(equipoA, equipoB, m.combates, { semilla: m.semilla, distanciaInicial, escenario: opciones });
+    let ultimo = performance.now();
+    const alAvanzar = (hechos: number) => {
+      const ahora = performance.now();
+      if (ahora - ultimo < 150) return;
+      ultimo = ahora;
+      ambito.postMessage({ tipo: 'avance', indice: m.indice, hechos });
+    };
+    const resultado = monteCarlo(equipoA, equipoB, m.combates, { semilla: m.semilla, distanciaInicial, escenario: opciones, alAvanzar });
     ambito.postMessage({ tipo: 'tanda', indice: m.indice, resultado });
   } catch (error) {
     ambito.postMessage({ tipo: 'error', mensaje: error instanceof Error ? error.message : String(error) });

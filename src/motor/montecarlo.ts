@@ -37,7 +37,11 @@ export interface ResultadoMonteCarlo {
 
 export function monteCarlo(
   equipoA: Ficha[], equipoB: Ficha[], combates: number,
-  o: { semilla?: number; distanciaInicial?: number; escenario?: OpcionesEscenario } = {},
+  o: {
+    semilla?: number; distanciaInicial?: number; escenario?: OpcionesEscenario;
+    /** Se llama con los combates hechos (para mostrar avance); no cambia el resultado. */
+    alAvanzar?: (hechos: number) => void;
+  } = {},
 ): ResultadoMonteCarlo {
   const inicio = performance.now();
   const rng = crearRng(o.semilla ?? 1);
@@ -54,6 +58,7 @@ export function monteCarlo(
     else if (r.ganador === 'B') victoriasB++;
     else empates++;
     asaltos += r.asaltos;
+    o.alAvanzar?.(i + 1);
     r.luchadores.forEach((l, j) => {
       const a = acum[j];
       if (l.estado === 'activo') a.vivo++;

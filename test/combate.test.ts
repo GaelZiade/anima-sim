@@ -20,6 +20,17 @@ describe('combate', () => {
     expect(a.luchadores.map((l) => l.pv)).toEqual(b.luchadores.map((l) => l.pv));
   });
 
+  it('el registro dice de quién habla cada línea, y una copia no se confunde con el original', () => {
+    const r = simularCombate([ficha('Soldado')], [ficha('Soldado (2)')], { semilla: 5, registrar: true });
+    for (const e of r.registro!) {
+      if (e.ataque) expect(e.sujeto).toBe(e.ataque.de);
+      const primero = e.texto.trim();
+      if (primero.startsWith('Soldado (2) ')) expect(e.sujeto).toBe(1);
+      else if (primero.startsWith('Soldado ')) expect(e.sujeto).toBe(0);
+    }
+    expect(r.registro!.some((e) => e.sujeto === 1)).toBe(true);
+  });
+
   it('espejo: cerca de 50%', () => {
     const r = monteCarlo([ficha('A')], [ficha('B')], 6000, { semilla: 3 });
     expect(r.victoriasA / r.combates).toBeGreaterThan(0.44);

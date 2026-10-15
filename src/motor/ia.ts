@@ -292,11 +292,19 @@ export function ventajaEquipos(ctx: Contexto): Record<'A' | 'B', number> {
   return { A: a, B: a === 0 ? Infinity : 1 / a };
 }
 
-/** Aliados (sin contarlo a él) que pueden atacar a `e` este asalto. */
+/** Aliados de `l` (sin contarlo a él) que pueden atacar a `e` este asalto; por par, no cambia en una decisión. */
+const aliadosSobreMemo = cacheDeDecision<Luchador, Map<Luchador, number>>();
+
 function aliadosSobre(ctx: Contexto, l: Luchador, e: Luchador): number {
-  let n = 0;
-  for (const x of ctx.luchadores)
-    if (x !== l && x.equipo === l.equipo && activo(x) && faltaParaLlegar(x, e) <= metrosTotales(x)) n++;
+  let m = aliadosSobreMemo.get(l);
+  if (!m) aliadosSobreMemo.set(l, (m = new Map()));
+  let n = m.get(e);
+  if (n === undefined) {
+    n = 0;
+    for (const x of ctx.luchadores)
+      if (x !== l && x.equipo === l.equipo && activo(x) && faltaParaLlegar(x, e) <= metrosTotales(x)) n++;
+    m.set(e, n);
+  }
   return n;
 }
 

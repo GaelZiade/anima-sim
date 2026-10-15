@@ -10,8 +10,10 @@ retomar el trabajo, empezar por README.md.
   arcano, Destrucción por Ki, la contra (con su bono; Selene arcano), atrapar proyectiles, Ki por
   juntar, neto de las técnicas, área de Ki y Reflectar: todo valorado como lo aplica el motor, con
   funciones compartidas en vez de cuentas repetidas.
-- **Página:** estados, Ki y zeon de cada luchador en cada línea; quien huye deja el tablero; selector
-  de maniobras; canvas y guardado sin trabas; `main.ts` en módulos.
+- **Página:** estados, Ki y zeon de cada luchador en cada línea; de quién habla cada línea viene del
+  motor (`Evento.sujeto`); quien huye deja el tablero; selector de maniobras; el compendio muestra Ki
+  y magia sin releer planillas; progreso dentro de cada tanda; canvas y guardado sin trabas;
+  `main.ts` en módulos.
 - **Medición** (500): sin cambios fuera del ruido.
 
 ## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)

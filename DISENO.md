@@ -269,20 +269,23 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   color (`Evento.ataque`); el daño aparece flotando sobre quien lo recibe (`Evento.dano`). Barras
   de PV, borde punteado a la defensiva, cruz si cayó (quien huyó deja de verse), un punto violeta si
   tiene algún estado encima. Cada línea guarda la foto de todos (`Evento.foto`: lugar, PV, estados
-  visibles, Ki y zeon); la barra de iniciativa los muestra al pasar el mouse.
+  visibles, Ki y zeon) y de quién habla (`Evento.sujeto`), que se marca suave en el tablero; la barra
+  de iniciativa muestra los estados al pasar el mouse.
   Controles: reproducir/pausa (espacio), línea anterior o siguiente (flechas), desde el principio y
   velocidad; clic en una línea de la narración salta ahí.
 - **Publicación:** `.github/workflows/pages.yml` la construye y la publica en GitHub Pages en cada
   push a `main`.
 - **Monte Carlo en paralelo** (`paralelo.ts`): un worker por núcleo. Los combates se cortan en
   tandas de 250, cada una con su semilla; cada worker pide la siguiente al terminar, y
-  `combinar` (`src/motor/montecarlo.ts`) junta los resultados. Resultados parciales en vivo.
+  `combinar` (`src/motor/montecarlo.ts`) junta los resultados. Resultados parciales en vivo; la
+  barra avanza también dentro de cada tanda (el worker avisa cada 150 ms).
 - **Narrar un combate:** corre uno con registro, con la semilla elegida. Cada tirada muestra sus
   dados: abiertas con cada d100 (`170+159 (abierta: 93+66)`), pifias con el natural y el nivel,
   y críticos con daño + d100 contra RF + d100. Abiertas y pifias se resaltan en color. Los dados
   de una abierta sólo se guardan cuando abre (`TiradaD100.dados`), para no costar en Monte Carlo.
 
-- **Archivos:** `main.ts` (estado, eventos, en vivo), `dom.ts`, `opciones.ts` (las casillas de reglas
+- **Archivos:** `main.ts` (estado, eventos, en vivo), `dom.ts`, `compendio.ts` (resumen de cada personaje: combate, Ki,
+  magia; se calcula una vez por entrada), `opciones.ts` (las casillas de reglas
   salen de una tabla: agregar una regla opcional es una fila), `narracion.ts` (funciones puras del
   registro), `tablero.ts` (canvas: el fondo va en una capa aparte, los colores se leen una vez y el
   tamaño sólo se toca si cambia), `paralelo.ts` y el worker. Lo guardado espera 400 ms al último

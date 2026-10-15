@@ -19,6 +19,7 @@ import { Tablero, type FichaTablero, type Pincel } from './tablero';
 import { $, crear, numeroDe } from './dom';
 import { armarCasillas, CASILLAS, casillasMarcadas, leerOpciones, mostrarOpciones, type OpcionesGuardadas } from './opciones';
 import { celdasDe, duracionDe, resaltarTiradas, textoEstado } from './narracion';
+import { resumenFicha, type Resumen } from './compendio';
 import { conEstado, ESTADOS_INICIALES, fichaDesdeHoja, numerarCopias, type EscenarioJson } from '../src/escenario';
 
 type Entrada =
@@ -376,13 +377,20 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
 
 // ---------- Compendio y equipos ----------
 
-function datosDe(e: Entrada): string {
-  try {
-    const f = fichaBase(e);
-    return `PV ${f.pv} · Turno ${f.turno} · HA ${f.ataque} · HD ${f.defensa} · Daño ${f.danoBase}`;
-  } catch (error) {
-    return `No se pudo leer: ${error instanceof Error ? error.message : error}`;
+/** Resumen de cada entrada: leer una planilla es caro y el compendio se redibuja seguido. */
+const resumenes = new WeakMap<Entrada, Resumen>();
+
+function datosDe(e: Entrada): Resumen {
+  let r = resumenes.get(e);
+  if (!r) {
+    try {
+      r = resumenFicha(fichaBase(e));
+    } catch (error) {
+      r = { lineas: [`No se pudo leer: ${error instanceof Error ? error.message : error}`], detalle: '' };
+    }
+    resumenes.set(e, r);
   }
+  return r;
 }
 
 function sumar(e: Entrada, equipo: 'equipoA' | 'equipoB') {
@@ -418,7 +426,7 @@ function dibujarCompendio() {
     };
     return crear('li', {},
       crear('span', { className: 'nombre', title: e.clave }, e.nombre),
-      crear('span', { className: 'datos' }, datosDe(e)),
+      ...datosDe(e).lineas.map((linea) => crear('span', { className: 'datos', title: datosDe(e).detalle }, linea)),
       crear('div', { className: 'botones' },
         crear('button', { type: 'button', className: 'chico a', onclick: () => sumar(e, 'equipoA') }, '+ A'),
         crear('button', { type: 'button', className: 'chico b', onclick: () => sumar(e, 'equipoB') }, '+ B'),
@@ -558,12 +566,14 @@ async function simular() {
   botonCancelar.hidden = false;
   progreso.hidden = false;
   barra.style.width = '0';
+  let mostrado: ResultadoMonteCarlo | null = null;
   corrida = correrEnParalelo(esc, combates, {
     hilos: Math.max(1, Math.round(numeroDe('hilos'))),
     semilla: Math.max(1, Math.round(numeroDe('semilla'))),
     alAvanzar: (hechos, parcial) => {
       barra.style.width = `${(100 * hechos) / combates}%`;
-      mostrarResultado(parcial, false);
+      // La tabla sólo cambia cuando termina una tanda; el resto de los avisos mueven la barra.
+      if (parcial && parcial !== mostrado) mostrarResultado((mostrado = parcial), false);
     },
   });
   try {
@@ -589,8 +599,6 @@ function duracion(e: Evento): number {
 interface Funcion {
   r: ResultadoCombate;
   semilla: number;
-  /** Nombre e id de ficha del tablero de cada luchador, más largos primero (para buscarlos en el texto). */
-  nombres: { nombre: string; id: string }[];
   /** Id de ficha del tablero de cada luchador, en el orden de `r.luchadores`. */
   ids: string[];
   lineas: HTMLElement[];
@@ -608,7 +616,6 @@ function verEnVivo() {
   const r = simularCombate(esc.equipoA, esc.equipoB, { semilla, registrar: true, escenario: esc.escenario });
   pararFuncion();
   const ids = r.luchadores.map((_, k) => (k < esc.equipoA.length ? `A${k}` : `B${k - esc.equipoA.length}`));
-  const nombres = r.luchadores.map((l, k) => ({ nombre: l.ficha.nombre, id: ids[k] })).sort((a, b) => b.nombre.length - a.nombre.length);
 
   // El registro completo, con un encabezado por asalto; cada línea lleva a ese momento.
   const nodos: HTMLElement[] = [];
@@ -627,7 +634,7 @@ function verEnVivo() {
   nodos.push(crear('h3', {}, `${ganador} en ${r.asaltos} asaltos (semilla ${semilla})`));
   $('registro').replaceChildren(...nodos);
 
-  funcion = { r, semilla, nombres, ids, lineas, indice: -1, reproduciendo: false, temporizador: 0 };
+  funcion = { r, semilla, ids, lineas, indice: -1, reproduciendo: false, temporizador: 0 };
   tablero.modo = 'ver';
   tablero.mapa = { ancho: r.mapa.ancho, alto: r.mapa.alto, ...celdasDe(r) };
   $('editor').hidden = true;
@@ -667,19 +674,7 @@ function irA(k: number) {
     }
     : null;
   tablero.dano = e.dano ? { id: f.ids[e.dano.quien], cantidad: e.dano.cantidad } : null;
-  // De quién habla una línea que no es un ataque: el primer nombre que aparece (los más largos
-  // primero: "Soldado (2)" tapa al "Soldado" que lleva adentro).
-  const texto = e.texto.trim();
-  const tapado = new Array<boolean>(texto.length).fill(false);
-  let primero: { id: string; pos: number } | null = null;
-  for (const n of f.nombres) {
-    for (let pos = texto.indexOf(n.nombre); pos >= 0; pos = texto.indexOf(n.nombre, pos + 1)) {
-      if (tapado[pos] || tapado[pos + n.nombre.length - 1]) continue;
-      tapado.fill(true, pos, pos + n.nombre.length);
-      if (!primero || pos < primero.pos) primero = { id: n.id, pos };
-    }
-  }
-  tablero.sujeto = primero?.id ?? null;
+  tablero.sujeto = e.sujeto !== undefined ? f.ids[e.sujeto] : null;
 
   // Estelas: los recorridos del asalto hasta esta línea; el de esta línea se dibuja mientras avanza.
   let inicioAsalto = k;
@@ -719,7 +714,7 @@ function irA(k: number) {
     crear('span', { className: 'cartel-turno' },
       crear('strong', {}, e.asalto === 0 ? 'Inicio' : `Asalto ${e.asalto}`),
       ...(quien ? [' · Turno de ', crear('span', { className: `marca ${quien.equipo.toLowerCase()}` }), ` ${quien.ficha.nombre}`] : [])),
-    crear('span', { className: 'cartel-linea' }, ...resaltarTiradas(texto)));
+    crear('span', { className: 'cartel-linea' }, ...resaltarTiradas(e.texto.trim())));
   $('posicion').textContent = `${k + 1} / ${registro.length}`;
 }
 
