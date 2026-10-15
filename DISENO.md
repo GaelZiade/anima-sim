@@ -360,12 +360,25 @@ uno se cataloga y se resuelve caso por caso (`Conjuro.efecto`).
 ### Datos
 
 `Ficha.magia` (hoja Místicos): zeon, ACT, Proyección Mágica para atacar y defender (ya con el
-desequilibrio ofensivo), nivel en cada vía y conjuros libres. Sólo si tiene vías o libres. También
-se leen la RM y Resistir el dolor. El catálogo (`motor/conjuros.ts`) tiene los números de cada grado
-(zeon, Inteligencia requerida, daño, área, resistencia, TA, mantenimiento), nunca el texto del
-manual; conoce los de sus vías hasta su nivel, los de la sub-vía elegida para cada vía y los libres
-que eligió. También se leen las sub-vías y la metamagia que usa el motor (Control del Espacio, Romper
-Resistencias, Conjuro Especialista).
+desequilibrio ofensivo), nivel en cada vía, sub-vías, metamagia y los conjuros elegidos por nombre
+(libres y seleccionados). Sólo si tiene vías o libres. También se leen la RM y Resistir el dolor.
+
+**Grimorio** (`motor/grimorio.ts`, generado con `npm run grimorio` desde la hoja "Tablas Magia" de la
+planilla): los 640 conjuros de todas las vías, sub-vías y libre acceso, con vía, nivel, tipo, acción,
+diario y, por grado, zeon, Inteligencia, mantenimiento y lo que se lee sin ambigüedad del efecto (daño,
+radio, RM, RF, RP, resistencia, crítico, PV, TA). Sólo nombres y números, nunca el texto.
+`conocidos(magia)` da los que conoce un personaje (sus vías hasta su nivel, la sub-vía elegida hasta el
+nivel de su vía, y los elegidos por nombre); `sinSimular(magia)`, los que el simulador todavía no usa.
+
+**Catálogo** (`motor/conjuros.ts`, `COMPORTAMIENTO`): lo que hace en combate cada conjuro simulado,
+caso por caso, sobre los números del grimorio; agrega lo que el grimorio no lee (bonos, habilidad de
+un ataque automático) y corrige donde manda el manual. Catalogar un conjuro nuevo es escribir su
+comportamiento y, si hace falta, la mecánica en el motor.
+
+**Validación**: `npm run validar-grimorio -- ../anima-manuales` compara zeon e Inteligencia del grimorio
+con los manuales (encuentra 580 de 640; las diferencias son en su mayoría errores de la copia en md).
+Entre los simulados, las únicas son tres Inteligencias de grado avanzado que el catálogo ya corrige
+(Cuerpo a Fuego 13, Incinerar 14, Consumir Esencia 12). Al catalogar uno nuevo, revisar su línea.
 
 ### Reglas (`motor/magia.ts`)
 

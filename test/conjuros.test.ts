@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, cegueraContra, defensaFinal, inmuneAlGolpe, turnoFinal } from '../src/motor/calculos';
-import { CATALOGO, conjurosDe, gradosPosibles } from '../src/motor/conjuros';
+import { CATALOGO, conjurosDe, conocidos, gradosPosibles, sinSimular } from '../src/motor/conjuros';
+import { GRIMORIO } from '../src/motor/grimorio';
 import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
 import { blancosConjuro, golpeDeConjuro } from '../src/motor/ia';
 
@@ -18,6 +19,31 @@ const mago = (magia: Partial<NonNullable<Ficha['magia']>>, extra: Partial<Ficha>
   ta: {}, rf: 40, constitucion: 6, tipoMovimiento: 6, inteligencia: 11, resistirDolor: 60, rm: 80,
   magia: { zeon: 3000, act: 150, proyeccion: 150, vias: {}, ...magia },
   ...extra,
+});
+
+describe('el grimorio (generado de la planilla)', () => {
+  it('todas las vías, sub-vías y libre acceso, con zeon e Inteligencia en los cuatro grados', () => {
+    expect(GRIMORIO.length).toBeGreaterThan(600);
+    for (const v of ['luz', 'oscuridad', 'fuego', 'agua', 'aire', 'tierra', 'creacion', 'destruccion', 'esencia', 'ilusion', 'nigromancia', 'guerra', 'libre acceso'])
+      expect(GRIMORIO.some((e) => e.via === v)).toBe(true);
+    for (const e of GRIMORIO) expect(e.grados.every((g) => g.zeon > 0 && g.int > 0)).toBe(true);
+  });
+
+  it('el catálogo toma sus números del grimorio y corrige donde manda el manual', () => {
+    const bola = conjuro('Bola de Fuego');
+    expect(bola.grados.map((g) => [g.zeon, g.int, g.dano, g.area])).toEqual([[50, 6, 50, 5], [100, 9, 100, 25], [160, 12, 140, 80], [250, 15, 160, 150]]);
+    expect(conjuro('Incinerar').grados[2].int).toBe(14);
+    expect(conjuro('Incinerar').grados[0].mantenimiento).toBeUndefined();
+  });
+
+  it('Stéphan conoce todo su grimorio; el simulador usa los de combate', () => {
+    const m = { zeon: 1, act: 1, proyeccion: 1, vias: { Fuego: 80, Luz: 40 }, subvias: { Fuego: 'Guerra', Luz: 'Conocimiento' }, libres: ['Curar heridas', 'Invisibilidad'] };
+    const sabe = conocidos(m).map((e) => e.nombre);
+    expect(sabe).toEqual(expect.arrayContaining(['Bola de fuego', 'Tormenta de fuego', 'Campeón', 'Saber debilidad', 'Descarga de luz', 'Curar heridas', 'Invisibilidad']));
+    expect(sabe).not.toContain('Maestro de la guerra');
+    expect(sinSimular(m).map((e) => e.nombre)).toEqual(expect.arrayContaining(['Invisibilidad', 'Barrera de fuego', 'Saber debilidad']));
+    expect(conjurosDe(m).length + sinSimular(m).length).toBe(sabe.length);
+  });
 });
 
 describe('qué conjuros conoce', () => {

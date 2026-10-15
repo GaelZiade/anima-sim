@@ -1,9 +1,12 @@
-// Catálogo de conjuros que el simulador sabe usar en combate (Core cap. 11 y Libros de magia). Sólo
-// los números de cada grado y una descripción corta propia: el texto está en el manual.
+// Catálogo de conjuros que el simulador sabe usar en combate (Core cap. 11 y Libros de magia). Los
+// números de cada grado salen del grimorio (grimorio.ts, generado desde la planilla); acá va, caso por
+// caso, lo que hace cada uno en combate (COMPORTAMIENTO) y lo que el grimorio no trae o el manual
+// corrige. Nunca el texto del manual.
 
 import type { MagiaFicha } from './modelo';
 import type { TipoAtaque } from './reglas';
 import { normalizarRasgo } from './rasgos';
+import { GRIMORIO } from './grimorio';
 
 export type TipoConjuro = 'ataque' | 'defensa' | 'efecto' | 'animico' | 'automatico' | 'deteccion';
 
@@ -72,12 +75,24 @@ export interface Grado {
   bono?: BonoMagico;
 }
 
+/** Un conjuro del grimorio: sus números por grado, tal como los trae la planilla. */
+export interface EntradaGrimorio {
+  nombre: string;
+  /** Vía o sub-vía sin acentos ("fuego", "guerra"), o "libre acceso". */
+  via: string;
+  nivel: number;
+  /** Mantenimiento diario en vez de por asalto. */
+  diario: boolean;
+  tipos: string[];
+  accion: 'activa' | 'pasiva';
+  /** Zeon, Inteligencia, mantenimiento y lo que se pudo leer del efecto (daño, radio, RM, RF, RP…). */
+  grados: readonly Readonly<Record<string, number>>[];
+}
+
 export interface Conjuro {
   nombre: string;
-  /** Vía (sin acentos), o "libre" para los de libre acceso. */
+  /** Vía o sub-vía (sin acentos), o "libre acceso". */
   via: string;
-  /** Sub-vía (Arcana p.32): se conoce si es la elegida para esa vía y la vía llega a su nivel. */
-  subvia?: string;
   nivel: number;
   /** Activo (en su turno) o pasivo (cuando haga falta, como un escudo, Core p.117). */
   accion: 'activa' | 'pasiva';
@@ -96,211 +111,132 @@ export interface Conjuro {
   fuente: string;
 }
 
-/** Conjuros de combate por vía (Core p.126-159). */
-export const CATALOGO: readonly Conjuro[] = [
+/**
+ * Lo que hace cada conjuro en combate. `centro` dice dónde va el radio que trae el grimorio: alrededor
+ * del lanzador (`radio`) o del objetivo (`area`). `grados` y `todos` agregan lo que el grimorio no lee
+ * o corrigen donde manda el manual.
+ */
+interface Comportamiento extends Omit<Conjuro, 'grados' | 'via' | 'nivel' | 'tipos' | 'accion'> {
+  tipos?: TipoConjuro[];
+  accion?: 'activa' | 'pasiva';
+  centro?: 'lanzador' | 'objetivo';
+  todos?: Partial<Grado>;
+  grados?: readonly Partial<Grado>[];
+}
+
+const COMPORTAMIENTO: readonly Comportamiento[] = [
+  // Luz (Core p.126-127)
+  { nombre: 'Flash Cegador', tipos: ['automatico'], efecto: 'flash', centro: 'lanzador', fuente: 'Core p.126' },
+  { nombre: 'Escudo de Luz', escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126' },
+  { nombre: 'Armadura de Luz', fuente: 'Core p.127' },
+  { nombre: 'Descarga de Luz', ta: 'ENE', fuente: 'Core p.127' },
+  // Fuego (Core p.157-159)
+  { nombre: 'Bola de Fuego', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157' },
+  { nombre: 'Descarga de Calor', ta: 'CAL', fuente: 'Core p.157' },
   {
-    nombre: 'Flash Cegador', via: 'luz', nivel: 8, accion: 'activa', tipos: ['automatico'], efecto: 'flash', fuente: 'Core p.126',
+    nombre: 'Arma Ígnea', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.157',
+    grados: [10, 20, 30, 40].map((n) => ({ bono: { tipoArma: 'CAL', danoArma: n } })),
+  },
+  { nombre: 'Aumentar el Crítico', efecto: 'aumentarCritico', fuente: 'Core p.157' },
+  { nombre: 'Secar', tipos: ['efecto', 'animico'], efecto: 'secar', centro: 'objetivo', fuente: 'Core p.158' },
+  {
+    // El grimorio dice Int. 12 en avanzado; el manual, 13.
+    nombre: 'Cuerpo a Fuego', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.158',
     grados: [
-      { zeon: 50, int: 6, radio: 10, rf: 140 },
-      { zeon: 100, int: 9, radio: 25, rf: 140 },
-      { zeon: 150, int: 11, radio: 50, rf: 140 },
-      { zeon: 200, int: 14, radio: 100, rf: 160 },
+      { bono: { cuerpoFuego: true } },
+      { bono: { cuerpoFuego: true, resCalor: 30 } },
+      { bono: { cuerpoFuego: true, resCalor: 30 }, int: 13 },
+      { bono: { cuerpoFuego: true, resCalor: 30 } },
     ],
   },
   {
-    nombre: 'Escudo de Luz', via: 'luz', nivel: 10, accion: 'pasiva', tipos: ['defensa'],
-    escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126',
-    // El mantenimiento está cortado en la copia del manual: el del grimorio de la planilla (5 / 15 /
-    // 20 / 25), igual al del Escudo de Oscuridad.
-    grados: [
-      { zeon: 50, int: 6, resistencia: 300, mantenimiento: 5 },
-      { zeon: 120, int: 8, resistencia: 1000, mantenimiento: 15 },
-      { zeon: 180, int: 10, resistencia: 1800, mantenimiento: 20 },
-      { zeon: 250, int: 14, resistencia: 3000, mantenimiento: 25 },
-    ],
+    // Su mantenimiento no dice qué mantiene: no se mantiene (interpretación confirmada). Int. 14 en
+    // avanzado según el manual (el grimorio dice 12).
+    nombre: 'Incinerar', efecto: 'incinerar', centro: 'lanzador', fuente: 'Core p.158',
+    grados: [{ llamas: 100, mantenimiento: undefined }, { llamas: 120, mantenimiento: undefined }, { llamas: 140, int: 14, mantenimiento: undefined }, { llamas: 160, mantenimiento: undefined }],
   },
   {
-    nombre: 'Armadura de Luz', via: 'luz', nivel: 16, accion: 'activa', tipos: ['efecto'], fuente: 'Core p.127',
-    grados: [
-      { zeon: 60, int: 6, taEnergia: 2, taResto: 1, mantenimiento: 5 },
-      { zeon: 90, int: 9, taEnergia: 5, taResto: 2, mantenimiento: 10 },
-      { zeon: 120, int: 12, taEnergia: 8, taResto: 4, mantenimiento: 15 },
-      { zeon: 150, int: 15, taEnergia: 12, taResto: 6, mantenimiento: 20 },
-    ],
+    // Int. 12 en avanzado según el manual (el grimorio dice 14).
+    nombre: 'Consumir Esencia', efecto: 'consumirEsencia', centro: 'lanzador', fuente: 'Core p.158',
+    grados: [{}, {}, { int: 12 }, {}],
+  },
+  { nombre: 'Crítico Directo', efecto: 'criticoDirecto', fuente: 'Core p.159' },
+  {
+    nombre: 'Tormenta de Fuego', efecto: 'tormenta', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.159',
+    todos: { dano: 100 }, grados: [180, 240, 280, 320].map((habilidad) => ({ habilidad })),
+  },
+  // Sub-vía de Guerra (Arcana p.34-35)
+  { nombre: 'Ira Ancestral', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', todos: { bono: { ataque: 10, ira: true } }, fuente: 'Arcana p.35' },
+  {
+    nombre: 'Velocidad en la Batalla', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Arcana p.35',
+    grados: [10, 10, 20, 20].map((turno) => ({ bono: { turno } })),
   },
   {
-    nombre: 'Descarga de Luz', via: 'luz', nivel: 22, accion: 'activa', tipos: ['ataque'], ta: 'ENE', fuente: 'Core p.127',
-    grados: [
-      { zeon: 50, int: 6, dano: 60 },
-      { zeon: 90, int: 9, dano: 90 },
-      { zeon: 120, int: 12, dano: 120 },
-      { zeon: 150, int: 15, dano: 150 },
-    ],
+    nombre: 'Destrucción Desencadenada', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Arcana p.35',
+    grados: [20, 20, 30, 40].map((dano) => ({ bono: { dano } })),
   },
   {
-    nombre: 'Bola de Fuego', via: 'fuego', nivel: 16, accion: 'activa', tipos: ['ataque'], ta: 'CAL', fuente: 'Core p.157',
-    grados: [
-      { zeon: 50, int: 6, dano: 50, area: 5 },
-      { zeon: 100, int: 9, dano: 100, area: 25 },
-      { zeon: 160, int: 12, dano: 140, area: 80 },
-      { zeon: 250, int: 15, dano: 160, area: 150 },
-    ],
+    nombre: 'Protección Final', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Arcana p.35',
+    grados: [[10, 1], [10, 2], [20, 2], [30, 3]].map(([resistencias, ta]) => ({ bono: { resistencias, ta } })),
   },
   {
-    nombre: 'Descarga de Calor', via: 'fuego', nivel: 30, accion: 'activa', tipos: ['ataque'], ta: 'CAL', fuente: 'Core p.157',
-    grados: [
-      { zeon: 60, int: 6, dano: 50 },
-      { zeon: 90, int: 9, dano: 70 },
-      { zeon: 120, int: 12, dano: 90 },
-      { zeon: 150, int: 15, dano: 110 },
-    ],
+    nombre: 'Campeón', efecto: 'bendicion', blanco: 'aliado', fuente: 'Arcana p.35',
+    grados: [[10, 10, 10, 2], [10, 20, 20, 3], [20, 20, 20, 4], [30, 30, 30, 5]].map(([toda, dano, turno, ta]) => ({ bono: { toda, dano, turno, ta } })),
   },
-  {
-    // El nombre está cortado en la copia del manual: el del grimorio de la planilla.
-    nombre: 'Arma Ígnea', via: 'fuego', nivel: 26, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.157',
-    grados: [
-      { zeon: 50, int: 6, mantenimiento: 5, bono: { tipoArma: 'CAL', danoArma: 10 } },
-      { zeon: 80, int: 9, mantenimiento: 10, bono: { tipoArma: 'CAL', danoArma: 20 } },
-      { zeon: 100, int: 11, mantenimiento: 10, bono: { tipoArma: 'CAL', danoArma: 30 } },
-      { zeon: 120, int: 14, mantenimiento: 15, bono: { tipoArma: 'CAL', danoArma: 40 } },
-    ],
-  },
-  {
-    nombre: 'Aumentar el Crítico', via: 'fuego', nivel: 42, accion: 'pasiva', tipos: ['efecto'], efecto: 'aumentarCritico', fuente: 'Core p.157',
-    grados: [
-      { zeon: 60, int: 6, critico: 20 },
-      { zeon: 90, int: 9, critico: 40 },
-      { zeon: 120, int: 12, critico: 60 },
-      { zeon: 150, int: 15, critico: 80 },
-    ],
-  },
-  {
-    nombre: 'Secar', via: 'fuego', nivel: 46, accion: 'activa', tipos: ['efecto', 'animico'], efecto: 'secar', fuente: 'Core p.158',
-    grados: [
-      { zeon: 80, int: 8, area: 5, rm: 100, rf: 100 },
-      { zeon: 120, int: 10, area: 15, rm: 120, rf: 120 },
-      { zeon: 180, int: 12, area: 25, rm: 140, rf: 140 },
-      { zeon: 240, int: 14, area: 35, rm: 160, rf: 160 },
-    ],
-  },
-  {
-    // El nombre está cortado en la copia del manual: el del grimorio de la planilla.
-    nombre: 'Cuerpo a Fuego', via: 'fuego', nivel: 52, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.158',
-    grados: [
-      { zeon: 100, int: 8, mantenimiento: 10, bono: { cuerpoFuego: true } },
-      { zeon: 120, int: 11, mantenimiento: 15, bono: { cuerpoFuego: true, resCalor: 30 } },
-      { zeon: 140, int: 13, mantenimiento: 15, bono: { cuerpoFuego: true, resCalor: 30 } },
-      { zeon: 160, int: 16, mantenimiento: 20, bono: { cuerpoFuego: true, resCalor: 30 } },
-    ],
-  },
-  {
-    nombre: 'Incinerar', via: 'fuego', nivel: 60, accion: 'activa', tipos: ['automatico'], efecto: 'incinerar', fuente: 'Core p.158',
-    grados: [
-      { zeon: 100, int: 10, rm: 140, llamas: 100, radio: 50 },
-      { zeon: 150, int: 12, rm: 160, llamas: 120, radio: 100 },
-      { zeon: 200, int: 14, rm: 180, llamas: 140, radio: 150 },
-      { zeon: 260, int: 16, rm: 200, llamas: 160, radio: 200 },
-    ],
-  },
-  {
-    nombre: 'Consumir Esencia', via: 'fuego', nivel: 62, accion: 'activa', tipos: ['animico'], efecto: 'consumirEsencia', fuente: 'Core p.158',
-    grados: [
-      { zeon: 120, int: 6, radio: 10, rm: 120 },
-      { zeon: 180, int: 9, radio: 25, rm: 160 },
-      { zeon: 240, int: 12, radio: 50, rm: 200 },
-      { zeon: 300, int: 15, radio: 150, rm: 220 },
-    ],
-  },
-  {
-    nombre: 'Crítico Directo', via: 'fuego', nivel: 70, accion: 'activa', tipos: ['animico'], efecto: 'criticoDirecto', fuente: 'Core p.159',
-    grados: [
-      { zeon: 100, int: 9, critico: 120, rm: 140 },
-      { zeon: 140, int: 11, critico: 140, rm: 160 },
-      { zeon: 200, int: 13, critico: 180, rm: 180 },
-      { zeon: 280, int: 16, critico: 220, rm: 200 },
-    ],
-  },
-  {
-    nombre: 'Tormenta de Fuego', via: 'fuego', nivel: 76, accion: 'activa', tipos: ['automatico'], efecto: 'tormenta', ta: 'CAL', fuente: 'Core p.159',
-    grados: [
-      { zeon: 150, int: 8, area: 25, habilidad: 180, dano: 100, mantenimiento: 15 },
-      { zeon: 200, int: 10, area: 150, habilidad: 240, dano: 100, mantenimiento: 20 },
-      { zeon: 240, int: 12, area: 200, habilidad: 280, dano: 100, mantenimiento: 25 },
-      { zeon: 280, int: 15, area: 250, habilidad: 320, dano: 100, mantenimiento: 30 },
-    ],
-  },
-  // Sub-vía de Guerra (Arcana p.34-35): se vincula a Fuego, no a Luz.
-  {
-    nombre: 'Ira Ancestral', via: 'fuego', subvia: 'guerra', nivel: 14, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliados', fuente: 'Arcana p.35',
-    grados: [
-      { zeon: 40, int: 6, radio: 10, mantenimiento: 5, bono: { ataque: 10, ira: true } },
-      { zeon: 70, int: 9, radio: 50, mantenimiento: 10, bono: { ataque: 10, ira: true } },
-      { zeon: 100, int: 12, radio: 250, mantenimiento: 10, bono: { ataque: 10, ira: true } },
-      { zeon: 130, int: 15, radio: 500, mantenimiento: 15, bono: { ataque: 10, ira: true } },
-    ],
-  },
-  {
-    nombre: 'Velocidad en la Batalla', via: 'fuego', subvia: 'guerra', nivel: 24, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliados', fuente: 'Arcana p.35',
-    grados: [
-      { zeon: 50, int: 6, radio: 10, mantenimiento: 5, bono: { turno: 10 } },
-      { zeon: 90, int: 9, radio: 50, mantenimiento: 10, bono: { turno: 10 } },
-      { zeon: 120, int: 12, radio: 250, mantenimiento: 15, bono: { turno: 20 } },
-      { zeon: 150, int: 15, radio: 500, mantenimiento: 15, bono: { turno: 20 } },
-    ],
-  },
-  {
-    nombre: 'Destrucción Desencadenada', via: 'fuego', subvia: 'guerra', nivel: 34, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliados', fuente: 'Arcana p.35',
-    // El mantenimiento falta en la copia del manual: el del grimorio de la planilla.
-    grados: [
-      { zeon: 80, int: 7, radio: 10, mantenimiento: 5, bono: { dano: 20 } },
-      { zeon: 120, int: 9, radio: 50, mantenimiento: 15, bono: { dano: 20 } },
-      { zeon: 160, int: 12, radio: 250, mantenimiento: 20, bono: { dano: 30 } },
-      { zeon: 200, int: 15, radio: 500, mantenimiento: 20, bono: { dano: 40 } },
-    ],
-  },
-  {
-    nombre: 'Protección Final', via: 'fuego', subvia: 'guerra', nivel: 44, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliados', fuente: 'Arcana p.35',
-    grados: [
-      { zeon: 80, int: 7, radio: 10, mantenimiento: 5, bono: { resistencias: 10, ta: 1 } },
-      { zeon: 120, int: 9, radio: 50, mantenimiento: 15, bono: { resistencias: 10, ta: 2 } },
-      { zeon: 160, int: 12, radio: 250, mantenimiento: 20, bono: { resistencias: 20, ta: 2 } },
-      { zeon: 200, int: 15, radio: 500, mantenimiento: 20, bono: { resistencias: 30, ta: 3 } },
-    ],
-  },
-  {
-    nombre: 'Campeón', via: 'fuego', subvia: 'guerra', nivel: 64, accion: 'activa', tipos: ['efecto'], efecto: 'bendicion', blanco: 'aliado', fuente: 'Arcana p.35',
-    grados: [
-      { zeon: 140, int: 10, mantenimiento: 15, bono: { toda: 10, dano: 10, turno: 10, ta: 2 } },
-      { zeon: 180, int: 12, mantenimiento: 15, bono: { toda: 10, dano: 20, turno: 20, ta: 3 } },
-      { zeon: 240, int: 14, mantenimiento: 20, bono: { toda: 20, dano: 20, turno: 20, ta: 4 } },
-      { zeon: 350, int: 16, mantenimiento: 30, bono: { toda: 30, dano: 30, turno: 30, ta: 5 } },
-    ],
-  },
-  // Libre acceso (Core p.187).
-  {
-    nombre: 'Curar Heridas', via: 'libre', nivel: 50, accion: 'activa', tipos: ['efecto'], efecto: 'curar', blanco: 'aliado', fuente: 'Core p.187',
-    grados: [
-      { zeon: 100, int: 8, curar: 40 },
-      { zeon: 140, int: 10, curar: 80 },
-      { zeon: 180, int: 13, curar: 160 },
-      { zeon: 220, int: 16, curar: 320 },
-    ],
-  },
+  // Libre acceso (Core p.187)
+  { nombre: 'Curar Heridas', efecto: 'curar', blanco: 'aliado', fuente: 'Core p.187' },
 ];
 
+const clave = (nombre: string) => normalizarRasgo(nombre);
+const porNombre = new Map(GRIMORIO.map((e) => [clave(e.nombre), e]));
+
+/** El grado de un conjuro: los números del grimorio, en los campos que usa el motor, más su comportamiento. */
+function gradoDe(e: Readonly<Record<string, number>>, b: Comportamiento, i: number): Grado {
+  const g: Grado = { zeon: e.zeon, int: e.int };
+  if (e.mantenimiento) g.mantenimiento = e.mantenimiento;
+  for (const k of ['dano', 'resistencia', 'taEnergia', 'taResto', 'rm', 'rf', 'critico'] as const) if (e[k] !== undefined) g[k] = e[k];
+  if (e.pv !== undefined) g.curar = e.pv;
+  if (e.radio !== undefined && b.centro) g[b.centro === 'lanzador' ? 'radio' : 'area'] = e.radio;
+  Object.assign(g, b.todos, b.grados?.[i]);
+  for (const k of Object.keys(g) as (keyof Grado)[]) if (g[k] === undefined) delete g[k];
+  return g;
+}
+
+/** Los conjuros que el simulador sabe usar en combate, con los números del grimorio. */
+export const CATALOGO: readonly Conjuro[] = COMPORTAMIENTO.map((b) => {
+  const e = porNombre.get(clave(b.nombre));
+  if (!e) throw new Error(`${b.nombre} no está en el grimorio`);
+  const { centro: _c, todos: _t, grados: _g, ...resto } = b;
+  return {
+    ...resto, via: e.via, nivel: e.nivel, accion: b.accion ?? e.accion, tipos: b.tipos ?? (e.tipos as TipoConjuro[]),
+    grados: e.grados.map((x, i) => gradoDe(x, b, i)) as unknown as Conjuro['grados'],
+  };
+});
+
 /**
- * Los conjuros del catálogo que conoce: los de sus vías hasta su nivel, los de la sub-vía que eligió
- * para cada una (Arcana p.32) y los libres que eligió.
+ * Los conjuros del grimorio que conoce: los de sus vías hasta su nivel, los de la sub-vía que eligió
+ * para cada una (hasta el nivel de esa vía, Arcana p.32) y los que eligió por nombre: de libre acceso
+ * o seleccionados de cualquier vía (Core p.120).
  */
+export function conocidos(m: MagiaFicha): EntradaGrimorio[] {
+  const nivel = new Map<string, number>();
+  for (const [v, n] of Object.entries(m.vias)) nivel.set(normalizarRasgo(v), n);
+  for (const [v, sv] of Object.entries(m.subvias ?? {})) nivel.set(normalizarRasgo(sv), m.vias[v] ?? 0);
+  const libres = new Set((m.libres ?? []).map(clave));
+  return GRIMORIO.filter((e) =>
+    libres.has(clave(e.nombre)) || (e.via !== 'libre acceso' && (nivel.get(e.via) ?? 0) >= e.nivel));
+}
+
+/** Los conjuros que conoce y el simulador sabe usar en combate. */
 export function conjurosDe(m: MagiaFicha): Conjuro[] {
-  const vias = new Map(Object.entries(m.vias).map(([v, n]) => [normalizarRasgo(v), n]));
-  const subvias = new Map(Object.entries(m.subvias ?? {}).map(([v, s]) => [normalizarRasgo(v), normalizarRasgo(s)]));
-  const libres = new Set((m.libres ?? []).map(normalizarRasgo));
-  return CATALOGO.filter((c) => {
-    if (libres.has(normalizarRasgo(c.nombre))) return true;
-    if ((vias.get(c.via) ?? 0) < c.nivel) return false;
-    return !c.subvia || subvias.get(c.via) === c.subvia;
-  });
+  const sabe = new Set(conocidos(m).map((e) => clave(e.nombre)));
+  return CATALOGO.filter((c) => sabe.has(clave(c.nombre)));
+}
+
+/** Los que conoce pero el simulador todavía no usa (falta catalogar qué hacen en combate). */
+export function sinSimular(m: MagiaFicha): EntradaGrimorio[] {
+  const simula = new Set(CATALOGO.map((c) => clave(c.nombre)));
+  return conocidos(m).filter((e) => !simula.has(clave(e.nombre)));
 }
 
 /**

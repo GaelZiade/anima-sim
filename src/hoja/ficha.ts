@@ -107,7 +107,9 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
   const zeon = numero(m.zeon as string, 0);
   const vias: Record<string, number> = {};
   for (const [v, n] of Object.entries((m.Vias ?? {}) as Record<string, string>)) if (numero(n, 0) > 0) vias[v] = numero(n, 0);
-  const libres = Object.values((m.Libres ?? {}) as Record<string, string>).filter((x) => x && x !== '-');
+  // Los de libre acceso y los conjuros seleccionados (Core p.120).
+  const libres = [...Object.values((m.Libres ?? {}) as Record<string, string>), ...Object.values((m.Conjuros ?? {}) as Record<string, string>)]
+    .filter((x) => x && x !== '-');
   if (!zeon || (!Object.keys(vias).length && !libres.length)) return undefined;
   const p = json.Combate.armas.find((a) => a.tipo === 'Mistico');
   const subvias: Record<string, string> = {};

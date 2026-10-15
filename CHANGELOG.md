@@ -3,6 +3,19 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 15/10/2026: el grimorio completo
+
+- **Grimorio** generado desde la hoja "Tablas Magia" de la planilla (`npm run grimorio`): los 640
+  conjuros de todas las vías, sub-vías y libre acceso, con sus números por grado. Sólo nombres y
+  números.
+- El **catálogo** pasa a ser el comportamiento de cada conjuro sobre esos números (mismos valores que
+  antes, verificado grado por grado).
+- `conocidos` y `sinSimular`: qué conjuros conoce cada personaje y cuáles faltan simular (Stéphan: 62
+  conocidos, 20 simulados).
+- La planilla suma los conjuros seleccionados (columna "Conjuros") a los elegidos por nombre.
+- `npm run validar-grimorio`: compara el grimorio con los manuales.
+- Sin cambios en las mediciones ni en la huella del bench. La página pesa 20 KB más (comprimida).
+
 ## 14/10/2026 (noche): magia, parte 2 (los conjuros de Stéphan)
 
 - **Catálogo** de combate de Stéphan: Flash Cegador, Arma Ígnea, Aumentar el Crítico, Secar, Cuerpo a

@@ -119,7 +119,7 @@ export interface MagiaFicha {
   proyeccionDefensa?: number;
   /** Nivel en cada vía: "Fuego" 80 conoce los conjuros de Fuego hasta el nivel 80 (Core p.120). */
   vias: Record<string, number>;
-  /** Conjuros de libre acceso que eligió, por nombre. */
+  /** Conjuros que eligió por nombre: los de libre acceso y los seleccionados de cualquier vía (Core p.120). */
   libres?: string[];
   /** Sub-vía elegida para cada vía: "Fuego" → "Guerra" (Arcana p.32). */
   subvias?: Record<string, string>;
