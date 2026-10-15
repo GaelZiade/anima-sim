@@ -12,6 +12,7 @@ import { negativoCansancio, posicionPorOrden, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
+import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
   asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
@@ -1179,7 +1180,7 @@ function fracasoRf(def: Luchador, dificultad: number, extra = 0): { p: number; m
 /** Lo que vale para `atk`, en PV, que `def` sufra este Estado sobrenatural (Dominus p.67) si falla la RF. */
 function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golpes: number): number {
   // Miedo, Terror y Fascinación afectan el ánimo: suma la Frialdad (Core p.54), como en el motor.
-  const animo = est.estado === 'miedo' || est.estado === 'terror' || est.estado === 'fascinacion';
+  const animo = ESTADOS_DE_ANIMO.has(est.estado);
   const { p, medio } = fracasoRf(def, est.rf, animo ? frialdadDe(def) : 0);
   if (!p) return 0;
   const pv = Math.max(0, def.pv);

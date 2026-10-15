@@ -21,6 +21,8 @@ export interface Motor {
   tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra?: number): Resistencia;
   perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number): void;
   huir(ctx: Contexto, l: Luchador): void;
+  /** Queda fuera de combate: inconsciente o muerto. */
+  caer(ctx: Contexto, atk: Luchador, def: Luchador, estado: Luchador['estado']): void;
   /** Lo suelta de una presa. */
   soltar(l: Luchador): void;
   desarmar(ctx: Contexto, l: Luchador, por: Luchador): void;

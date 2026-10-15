@@ -1,6 +1,6 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
-import type { Atributo, Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario, Tecnica } from './modelo';
+import type { Contexto, Equipo, Evento, Ficha, Luchador, OpcionesEscenario, Tecnica } from './modelo';
 import { crearRng, dado, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
@@ -22,6 +22,7 @@ import {
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
+import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
 import { blancosConjuro, radioArea, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import {
@@ -151,7 +152,7 @@ function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<E
 
 /** Lo que el motor le presta a los efectos de conjuro (efectos/). */
 const MOTOR: Motor = {
-  log, tirarResistencia, tirarRf, perderPv, huir, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha, prender, mitigarFuego,
+  log, tirarResistencia, tirarRf, perderPv, huir, caer, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha, prender, mitigarFuego,
 };
 
 /** Índice de un luchador, para el registro. */
@@ -1578,125 +1579,15 @@ function tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: s
   return controlResistencia(ctx, l, usa, (usa === 'RF' ? rf : rm) + bono, dificultad, que);
 }
 
-const NOMBRE_ESTADO: Record<EstadoSobrenatural['estado'], string> = {
-  ceguera: 'la Ceguera', coma: 'el Coma', control: 'el Control', dano: 'el Daño', dobleDano: 'el Doble daño',
-  dolor: 'el Dolor', dolorExtremo: 'el Dolor extremo', drenajeVida: 'el Drenaje de vida', drenajeKi: 'el Drenaje de Ki',
-  fascinacion: 'la Fascinación', inconsciencia: 'la Inconsciencia', miedo: 'el Miedo', terror: 'el Terror',
-  muerte: 'la Muerte', paralisisParcial: 'la Paralización parcial', paralisisTotal: 'la Paralización total',
-  penalizacionMenor: 'la Penalización a toda acción', penalizacionMayor: 'la Penalización a toda acción mayor',
-  reduccionCaracteristicas: 'la Reducción de características', reduccionCaracteristica: 'la Reducción de una característica',
-  reduccionRf: 'la Reducción de RF', ilusion: 'la Ilusión',
-};
-
 /**
- * Estado sobrenatural (Dominus p.67): RF contra su Resistencia; el fracaso decide la intensidad. Los
- * que duran minutos u horas duran todo el combate. Ilusión no se simula; Control lo deja fuera del
- * combate y Terror lo hace huir (interpretaciones).
+ * Estado sobrenatural (Dominus p.67): RF contra su Resistencia; el fracaso decide la intensidad
+ * (efectos/estados.ts).
  */
 function estadoSobrenatural(ctx: Contexto, atk: Luchador, def: Luchador, est: EstadoSobrenatural) {
   if (est.estado === 'ilusion') return;
   // Miedo, Terror y Fascinación afectan el ánimo: suma la Frialdad (Core p.54).
-  const animo = est.estado === 'miedo' || est.estado === 'terror' || est.estado === 'fascinacion';
-  const { falla, fracaso } = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado], animo ? frialdadDe(def) : 0);
-  if (!falla) return;
-  const f = def.ficha;
-  switch (est.estado) {
-    case 'dano':
-    case 'dobleDano':
-    case 'drenajeVida': {
-      const pv = est.estado === 'dobleDano' ? 2 * fracaso : fracaso;
-      perderPv(ctx, atk, def, pv);
-      if (est.estado === 'drenajeVida' && activo(atk)) {
-        const cura = Math.min(pv, atk.ficha.pv - atk.pv);
-        if (cura > 0) {
-          atk.pv += cura;
-          log(ctx, () => `  ${atk.ficha.nombre} absorbe ${cura} PV (${atk.pv}/${atk.ficha.pv}).`);
-        }
-      }
-      return;
-    }
-    case 'drenajeKi': {
-      const quita = Math.min(fracaso, def.ki?.reserva ?? 0);
-      if (def.ki) def.ki.reserva -= quita;
-      const gana = recuperarKi(atk, quita);
-      log(ctx, () => `  ${def.ficha.nombre} pierde ${quita} de Ki${gana ? ` y ${atk.ficha.nombre} recupera ${gana}` : ''}.`);
-      return;
-    }
-    case 'dolor':
-    case 'dolorExtremo': {
-      const dolor = est.estado === 'dolor' ? 'normal' : 'extremo';
-      if (f.estados?.dolor !== 'extremo') cambiarFicha(def, { ...f, estados: { ...f.estados, dolor } });
-      log(ctx, () => `  ${def.ficha.nombre} sufre ${dolor === 'normal' ? 'Dolor (−40' : 'Dolor extremo (−80'} a toda acción).`);
-      return;
-    }
-    case 'miedo':
-      if (!f.estados?.miedo) cambiarFicha(def, { ...f, estados: { ...f.estados, miedo: true } });
-      log(ctx, () => `  ${def.ficha.nombre} queda con Miedo (−60 a toda acción).`);
-      return;
-    case 'ceguera':
-      cambiarFicha(def, { ...f, estados: { ...f.estados, ceguera: 'absoluta' } });
-      log(ctx, () => `  ${def.ficha.nombre} queda ciego.`);
-      return;
-    case 'paralisisParcial':
-    case 'paralisisTotal': {
-      const grado = est.estado === 'paralisisParcial' ? 2 : 3;
-      if (def.paralisisTurnos <= 0 || def.paralisisInducida <= grado) {
-        def.paralisisInducida = grado;
-        def.paralisisTurnos = Math.max(def.paralisisTurnos, fracaso);
-      }
-      log(ctx, () => `  ${def.ficha.nombre} queda en ${grado === 2 ? 'parálisis parcial' : 'parálisis completa'} ${fracaso} asaltos.`);
-      return;
-    }
-    case 'penalizacionMenor':
-      def.penDolor += fracaso;
-      log(ctx, () => `  ${def.ficha.nombre} sufre −${fracaso} a toda acción (baja 5 por asalto).`);
-      return;
-    case 'penalizacionMayor':
-      def.penFisico += fracaso;
-      log(ctx, () => `  ${def.ficha.nombre} sufre −${fracaso} a toda acción.`);
-      return;
-    case 'reduccionRf':
-      cambiarFicha(def, { ...f, rf: f.rf - fracaso });
-      log(ctx, () => `  ${def.ficha.nombre} pierde ${fracaso} de RF.`);
-      return;
-    case 'reduccionCaracteristica':
-    case 'reduccionCaracteristicas': {
-      const puntos = Math.floor(fracaso / 10);
-      if (!puntos) return;
-      const cuales: Atributo[] = est.estado === 'reduccionCaracteristicas' ? ['AGI', 'CON', 'DES', 'FUE', 'INT', 'PER', 'POD', 'VOL'] : [est.atributo ?? 'FUE'];
-      let g = f;
-      for (const a of cuales) {
-        const v = g.atributos?.[a] ?? 5;
-        g = a === 'AGI' || a === 'CON' || a === 'DES' || a === 'FUE'
-          ? fichaConAumento(g, a, v, Math.max(1, v - puntos))
-          : { ...g, atributos: { ...g.atributos, [a]: Math.max(1, v - puntos) } };
-      }
-      cambiarFicha(def, g);
-      log(ctx, () => `  ${def.ficha.nombre} pierde ${puntos} en ${cuales.join(', ')}.`);
-      return;
-    }
-    case 'fascinacion':
-      def.fascinado = est.rf;
-      log(ctx, () => `  ${def.ficha.nombre} queda fascinado: no puede hacer acciones activas.`);
-      return;
-    case 'inconsciencia':
-    case 'coma':
-      log(ctx, () => `  ${def.ficha.nombre} queda inconsciente.`);
-      caer(ctx, atk, def, 'inconsciente');
-      return;
-    case 'muerte':
-      log(ctx, () => `  ${def.ficha.nombre} muere.`);
-      caer(ctx, atk, def, 'muerto');
-      return;
-    case 'control':
-      log(ctx, () => `  ${def.ficha.nombre} queda bajo el control de ${atk.ficha.nombre}: deja de pelear.`);
-      huir(ctx, def);
-      return;
-    case 'terror':
-      log(ctx, () => `  ${def.ficha.nombre} queda aterrorizado.`);
-      huir(ctx, def);
-      return;
-  }
+  const { falla, fracaso } = tirarRf(ctx, def, est.rf, NOMBRE_ESTADO[est.estado], ESTADOS_DE_ANIMO.has(est.estado) ? frialdadDe(def) : 0);
+  if (falla) aplicarEstado(MOTOR, ctx, atk, def, est.estado, fracaso, { dificultad: est.rf, atributo: est.atributo });
 }
 
 /** Ficha nueva por un estado que dura el combate: las capacidades se derivan de la ficha. */
