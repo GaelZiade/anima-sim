@@ -712,9 +712,11 @@ export interface PlanAtaque {
 const NORMAL: PlanAtaque = { maniobra: 'normal', especial: false };
 
 /** Valor de inducir un estado con Mushin arcano, en PV equivalentes. */
-function valorEstadoMushin(estado: EstadoMushin, def: Luchador, amen: number): number {
+function valorEstadoMushin(estado: EstadoMushin, def: Luchador, amen: number, fallo: number, negativo: (pen: number) => number): number {
   switch (estado) {
-    case 'debilidad': return 0;
+    // −1 a las cuatro características físicas cada 10 de fracaso (Core p.233): cerca de −5 a lo que
+    // hace con cada una (aproximación: el bono de característica cambia de a 5 en la zona 5-10).
+    case 'debilidad': return negativo(5 * Math.floor(fallo / 10));
     case 'dolor': return 0.4 * 2 * amen;
     case 'dolorExtremo': return 0.8 * 2 * amen;
     case 'paralisisMenor': return 0.3 * 2 * amen;
@@ -895,7 +897,7 @@ function mejorManiobra(
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
       const { p: pFalla, fracaso: fallo } = fallaResistencia(rfDe(def), dif);
       v += p.pImpacto * pFalla * (Math.min(2 * fallo, def.pv) + valorNegativo(atk, def, fallo, golpesSiguientes, 2 * fallo));
-      if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen);
+      if (estadoMushin) v += p.pImpacto * pFalla * valorEstadoMushin(estadoMushin, def, amen, fallo, (pen) => valorNegativo(atk, def, pen, golpesSiguientes, 2 * fallo));
     }
     // Ataque adicional (Ki): cada golpe vale lo mismo y arriesga su contra; el asalto se le quita
     // una vez, si lo impacta alguno (Dominus p.55).

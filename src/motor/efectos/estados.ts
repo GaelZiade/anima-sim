@@ -16,7 +16,7 @@ export const NOMBRE_ESTADO: Record<NombreEstado, string> = {
   muerte: 'la Muerte', paralisisParcial: 'la Paralización parcial', paralisisTotal: 'la Paralización total',
   penalizacionMenor: 'la Penalización a toda acción', penalizacionMayor: 'la Penalización a toda acción mayor',
   reduccionCaracteristicas: 'la Reducción de características', reduccionCaracteristica: 'la Reducción de una característica',
-  reduccionRf: 'la Reducción de RF', ilusion: 'la Ilusión',
+  reduccionRf: 'la Reducción de RF', ilusion: 'la Ilusión', debilidad: 'la Debilidad',
 };
 
 /** Estados que afectan el ánimo: se resisten sumando la Frialdad (Core p.54). */
@@ -90,11 +90,15 @@ export function aplicarEstado(
       m.cambiarFicha(def, { ...f, rf: f.rf - fracaso });
       m.log(ctx, () => `  ${def.ficha.nombre} pierde ${fracaso} de RF.`);
       return;
+    // Debilidad: −1 a Fuerza, Destreza, Agilidad y Constitución por cada 10 de fracaso; se recupera
+    // por horas, o sea que dura el combate (Core p.233).
+    case 'debilidad':
     case 'reduccionCaracteristica':
     case 'reduccionCaracteristicas': {
       const puntos = Math.floor(fracaso / 10);
       if (!puntos) return;
-      const cuales: Atributo[] = estado === 'reduccionCaracteristicas' ? ['AGI', 'CON', 'DES', 'FUE', 'INT', 'PER', 'POD', 'VOL'] : [o.atributo ?? 'FUE'];
+      const cuales: Atributo[] = estado === 'reduccionCaracteristicas' ? ['AGI', 'CON', 'DES', 'FUE', 'INT', 'PER', 'POD', 'VOL']
+        : estado === 'debilidad' ? ['FUE', 'DES', 'AGI', 'CON'] : [o.atributo ?? 'FUE'];
       let g = f;
       for (const a of cuales) {
         const v = g.atributos?.[a] ?? 5;

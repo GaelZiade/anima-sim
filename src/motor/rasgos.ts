@@ -3,7 +3,7 @@
 // `armour_reduction_rules.dart`, `damage_barrier_rules.dart`, `combat_traits.dart`,
 // `penalty_rules.dart`), que citan Core Exxet y Dominus Exxet.
 
-import type { ArmaDistancia, Ficha } from './modelo';
+import type { ArmaDistancia, DetalleArma, Ficha } from './modelo';
 import { MAX_CANSANCIO_ASALTO, umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
 
@@ -82,6 +82,22 @@ const TAMANO_POR_NOMBRE: Record<string, TamanoArma> = {
 const ORDEN_TAMANO: TamanoArma[] = ['P', 'M', 'G'];
 
 /** Tamaño deducido del nombre. Con dos armas manda la más grande; lo desconocido no cuenta. */
+/** Fuerza propia de las armas con regla Presa (Core p.77): presan con ella, no con la del portador. */
+const FUERZA_PRESA: Record<string, number> = { latigo: 8, lazo: 9, 'red de gladiador': 10, 'kusari-gama': 8 };
+
+/**
+ * Fuerza con que presa un arma con regla Presa: la de la tabla o la que diga su descripción
+ * ("Presa (Fuerza 8)"), +1 por cada +5 de calidad (Core p.76). 0 si el arma no presa.
+ */
+export function fuerzaPresaArma(arma: DetalleArma | undefined): number {
+  if (!arma?.nombre) return 0;
+  const descripcion = normalizarRasgo(arma.descripcion ?? '').match(/presa \(fuerza (\d+)\)/);
+  const nombre = normalizarRasgo(arma.nombre);
+  let base = descripcion ? Number(descripcion[1]) : 0;
+  if (!base) for (const [clave, fuerza] of Object.entries(FUERZA_PRESA)) if (nombre.includes(clave)) base = Math.max(base, fuerza);
+  return base ? base + Math.floor(Math.max(0, arma.calidad ?? 0) / 5) : 0;
+}
+
 export function tamanoPorNombre(nombre: string): TamanoArma | null {
   let resultado: TamanoArma | null = null;
   for (const parte of normalizarRasgo(nombre).split(/\s+y\s+|\s*[+/,&]\s*/)) {

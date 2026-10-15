@@ -6,7 +6,7 @@
 // (Dominus p.45), salvo la patada del Tae Kwon Do (p.36).
 
 import type { Ficha } from './modelo';
-import { gradoArteMarcial, tiene } from './rasgos';
+import { fuerzaPresaArma, gradoArteMarcial, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
 export interface Estilos {
@@ -15,8 +15,10 @@ export interface Estilos {
   penDerribo: number;
   /** Penalizador a Presa. Core −40; Pankration/Grappling a la mitad; Grappling avanzado 0. */
   penPresa: number;
-  /** Puede apresar: sin armas, o con la Tabla de Presa Inusual (−60, Dominus p.28). */
+  /** Puede apresar: sin armas, con un arma con regla Presa o con la Tabla de Presa Inusual (−60, Dominus p.28). */
   puedePresar: boolean;
+  /** Fuerza del arma con regla Presa (látigo, lazo, red): presa con ella (Core p.76-77); 0 si no. */
+  fuerzaPresaArma: number;
   penDesarmar: number;
   /** Penalizador a Ataque en área. Core −50; Tabla de Área −25; Sambo avanzado a la mitad; Capoeira supremo −10. */
   penArea: number;
@@ -197,7 +199,9 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
   let penPresa = 40;
   if (pankration >= 1 || grappling === 1 || sambo >= 2) penPresa = 20;
   if (grappling >= 2) penPresa = 0;
-  const presaInusual = !desarmado && tiene(tablas, 'presa inusual');
+  // Un arma con regla Presa presa con la maniobra normal (−40) y su propia Fuerza (Core p.76).
+  const fuerzaPresa = desarmado ? 0 : fuerzaPresaArma(f.arma);
+  const presaInusual = !desarmado && !fuerzaPresa && tiene(tablas, 'presa inusual');
   if (presaInusual) penPresa = 60;
   let penDesarmar = 40;
   if (tiene(tablas, 'tabla de desarme') || sambo >= 1) penDesarmar = 20;
@@ -238,7 +242,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
   const ELEMENTO: Record<string, string> = { Kagutsuchi: 'CAL', Niflheim: 'FRI', Rudraksha: 'ELE' };
 
   return {
-    penDerribo, penPresa, puedePresar: desarmado || presaInusual, penDesarmar, penArea, blancosArea,
+    penDerribo, penPresa, puedePresar: desarmado || presaInusual || fuerzaPresa > 0, fuerzaPresaArma: fuerzaPresa, penDesarmar, penArea, blancosArea,
     factorApuntado: (precisa ? 0.5 : 1) * (sambo >= 3 ? 0.5 : 1),
     presaDerriboLibreEnContra: aikido >= 2,
     desarmarLibreEnContra: malla >= 3,

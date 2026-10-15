@@ -86,7 +86,7 @@ export type NombreEstado =
   | 'ceguera' | 'coma' | 'control' | 'dano' | 'dobleDano' | 'dolor' | 'dolorExtremo' | 'drenajeVida'
   | 'drenajeKi' | 'fascinacion' | 'inconsciencia' | 'miedo' | 'terror' | 'muerte' | 'paralisisParcial'
   | 'paralisisTotal' | 'penalizacionMenor' | 'penalizacionMayor' | 'reduccionCaracteristicas'
-  | 'reduccionCaracteristica' | 'reduccionRf' | 'ilusion';
+  | 'reduccionCaracteristica' | 'reduccionRf' | 'ilusion' | 'debilidad';
 
 /**
  * Condición predeterminada (Dominus p.67-68): Ataque (por defecto) y Contacto físico exigen

@@ -4,13 +4,16 @@ import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
 import { absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
-import { penManiobra } from '../src/motor/maniobras';
+import { caracteristicasControl, penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
 import { umbralEstallido } from '../src/motor/proyectiles';
 import { SIN_KI } from '../src/motor/ki';
 import { actDe, hacerOtraAccion } from '../src/motor/magia';
 import { imponer } from '../src/motor/condiciones';
+import { aplicarEstado } from '../src/motor/efectos/estados';
+import type { Motor } from '../src/motor/efectos/tipos';
+import type { Contexto } from '../src/motor/modelo';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -280,4 +283,25 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(areaDoblaDano(grande, coloso, 'area')).toBe(false);
     expect(areaDoblaDano(grande, golem, 'normal')).toBe(false);
   });
+
+  it('Debilidad: −1 a FUE, DES, AGI y CON cada 10 de fracaso, con lo que cambia de ataque y RF (Core p.233)', () => {
+    const def = crearLuchador(ficha('D', {}, { atributos: { FUE: 8, DES: 8, AGI: 8, CON: 8 } }), 'B', 0, 0);
+    const atk = crearLuchador(ficha('A'), 'A', 1, 0);
+    const motor = { log() {}, cambiarFicha: (l: typeof def, f: Ficha) => { l.ficha = f; } } as unknown as Motor;
+    const antes = def.ficha;
+    aplicarEstado(motor, {} as Contexto, atk, def, 'debilidad', 25, { dificultad: 100 });
+    expect(def.ficha.atributos).toMatchObject({ FUE: 6, DES: 6, AGI: 6, CON: 6 });
+    expect(def.ficha.ataque).toBeLessThan(antes.ataque);
+    expect(def.ficha.rf).toBeLessThan(antes.rf);
+  });
+
+  it('armas con regla Presa: presan con −40 y la Fuerza del arma, +1 cada +5 de calidad (Core p.76-77)', () => {
+    const latigo = crearLuchador(ficha('Domador', {}, { arma: { nombre: 'Látigo', calidad: 10 }, atributos: { FUE: 5, DES: 5 } }), 'A', 0, 0);
+    const def = crearLuchador(ficha('D'), 'B', 1, 0);
+    expect(penManiobra(latigo, 'presa', false)).toBe(40);
+    expect(caracteristicasControl('presa', latigo, def).atk).toBe(10);
+    const espada = crearLuchador(ficha('Espadachín', {}, { atributos: { FUE: 9, DES: 5 } }), 'A', 0, 0);
+    expect(penManiobra(espada, 'presa', false)).toBe(Infinity);
+  });
 });
+
