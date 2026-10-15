@@ -9,26 +9,27 @@ import {
   penPifiaTurno, umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, areaDoblaDano, danoAEscudo, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
-  defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
-  perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil,
-  visionEntre, PEN_COBERTURA, type ZonaArmadura,
+  absorcionContra, activo, ALCANCE, nro, areaDoblaDano, danoAEscudo, frialdadDe, rfCritico, rfDe, ataqueFinal, barreraFrena,
+  danoBase, defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno,
+  penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, defensaEscudoMagico, modProyectil, visionEntre,
+  PEN_COBERTURA, type ZonaArmadura,
 } from './calculos';
 import {
-  atributo, bonoCaracteristica, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
-  esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin,
-  modificadorPorResultado, type Maniobra,
+  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
+  esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin, modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
 import { imponer, nivelCondicion, pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
+import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
+import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
 import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
-import { blancosConjuro, radioArea, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
-import { GRADOS, type Conjuro, type Grado } from './conjuros';
+import { cruzarMuros, type Motor } from './efectos';
+import { GRADOS } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, nivelLlamas, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
-  romperEscudo, terminarAsaltoMagia, terminarMantenidos, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada,
+  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
+  rmDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
@@ -152,11 +153,12 @@ function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<E
 
 /** Lo que el motor le presta a los efectos de conjuro (efectos/). */
 const MOTOR: Motor = {
-  log, tirarResistencia, tirarRf, perderPv, huir, caer, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha, prender, mitigarFuego,
+  log, tirar, tirarResistencia, tirarRf, perderPv, huir, caer, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha,
+  verificarCaida, ofrecerContra,
+  prender: (ctx, atk, l, valor) => prender(MOTOR, ctx, atk, l, valor),
+  mitigarFuego: (ctx, l, intensidades) => mitigarFuego(MOTOR, ctx, l, intensidades),
 };
 
-/** Índice de un luchador, para el registro. */
-const nro = (ctx: Contexto, l: Luchador) => ctx.luchadores.indexOf(l);
 
 function equipoVivo(ctx: Contexto, equipo: Equipo): boolean {
   return ctx.luchadores.some((l) => l.equipo === equipo && activo(l));
@@ -335,8 +337,8 @@ function jugarAsalto(ctx: Contexto) {
   }
 
   aplicarAuras(ctx, vivos);
-  zonasMagicas(ctx);
-  percibirInvisibles(ctx);
+  zonasMagicas(MOTOR, ctx);
+  percibirInvisibles(MOTOR, ctx);
 
   // 2. Iniciativa: turno + d100 abierta. Una pifia en turno actúa automáticamente último, sin nivel
   // de pifia; para la sorpresa vale el turno con el penalizador de la Tabla 52 (Core p.98). El turno
@@ -398,7 +400,7 @@ function jugarAsalto(ctx: Contexto) {
     l.penTecnica = Math.max(0, l.penTecnica - 10);
     // Condiciones con duración: un asalto menos (parálisis inducida, ceguera).
     if (pasarAsalto(l).includes('ceguera')) log(ctx, () => `${l.ficha.nombre} vuelve a ver.`);
-    arder(ctx, l);
+    arder(MOTOR, ctx, l);
     if (!activo(l)) continue;
     sangreDeOrochi(ctx, l);
     // Si junta la técnica que declaró al empezar a acumular y no la usó, la deja en espera para no
@@ -432,12 +434,12 @@ function turno(ctx: Contexto, l: Luchador) {
     if (l.apresadoPor && !zafarse(ctx, l)) l.ataquesRestantes = 0;
     ia.prepararGodhand(ctx, l);
     // En llamas: apagarse ocupa el turno (Core p.236).
-    if (l.llamas && l.ataquesRestantes > 0 && iaMagia.quiereApagarse(ctx, l)) apagarse(ctx, l);
+    if (l.llamas && l.ataquesRestantes > 0 && iaMagia.quiereApagarse(ctx, l)) apagarse(MOTOR, ctx, l);
     // Un arma a distancia: disparar, recargar o apuntar ocupa el turno (Core p.94-96).
     // Magia: lanzar los conjuros que convengan, o esperar acumulando (Core p.117).
     const magia = l.ataquesRestantes > 0 && puedeActuar(l) ? iaMagia.accionMagica(ctx, l) : null;
     if (magia) {
-      if ('lanzar' in magia) for (const x of magia.lanzar) if (puedeActuar(l) && !terminado(ctx)) lanzarConjuro(ctx, l, x);
+      if ('lanzar' in magia) for (const x of magia.lanzar) if (puedeActuar(l) && !terminado(ctx)) lanzarConjuro(MOTOR, ctx, l, x);
       l.ataquesRestantes = 0;
       l.disparo = true;
     }
@@ -776,7 +778,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       // Una técnica de Ki a distancia es una descarga: un mago la puede interceptar (Core p.117).
       let opciones: Golpe = opcionesAtk;
       if (g === 0 && !arma && aDistancia && ki?.distancia && blanco === def) {
-        const choque = interceptar(ctx, atk, blanco, hab + tA.valor, danoBase(atk, blanco, false, ranura, ki), false);
+        const choque = interceptar(MOTOR, ctx, atk, blanco, hab + tA.valor, danoBase(atk, blanco, false, ranura, ki), false);
         if (choque === 'anulado' || choque === 'pierde') continue;
         if (choque !== null && choque !== 1) opciones = { ...opcionesAtk, factorDano: choque };
       }
@@ -863,286 +865,6 @@ function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
   log(ctx, () => `  ${l.ficha.nombre} dispara a la vez (disparos paralelos).`);
   accionADistancia(ctx, l, d);
   l.haActuado = true;
-}
-
-/**
- * Lanza un conjuro (Core p.117-122). Todo conjuro pide un control de Proyección Mágica: con pifia
- * falla aunque gaste el zeon. Los de ataque y los anímicos se resuelven contra la defensa de cada
- * blanco (en área, todos los del radio, o los que elija con Control del Espacio); los automáticos
- * alcanzan sin defensa a quien cumpla su condición; los de efecto quedan activos sobre sus blancos.
- */
-function lanzarConjuro(ctx: Contexto, l: Luchador, x: Lanzamiento) {
-  const c = x.conjuro;
-  if (x.detonar) {
-    detonarMina(MOTOR, ctx, l, x.detonar, !!x.control);
-    return;
-  }
-  const h = efecto(c.efecto);
-  const g = lanzar(l, c, x.grado, { ...(h.mantieneBlancos ? { blancos: x.blancos } : {}), ...(x.innato ? { innato: true } : {}) }, x.control);
-  const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : x.preparado ? ' preparado' : ''}`;
-  l.stats.tecnicas[nombre] = (l.stats.tecnicas[nombre] ?? 0) + 1;
-  const zeon = x.innato ? `[innato${x.control ? ', +10 de zeon (Control del Espacio)' : ''}; reserva ${l.magia!.reserva}]`
-    : `[zeon ${g.zeon}${x.control ? ' +10 (Control del Espacio)' : ''}; acumulado ${l.magia!.acumulado}, reserva ${l.magia!.reserva}]`;
-  const obj = x.objetivo;
-  const sobre = h.sobre === 'blancos' && x.blancos?.length ? ` sobre ${x.blancos.map((b) => b.ficha.nombre).join(', ')}`
-    : h.sobre === 'objetivo' && obj ? ` sobre ${obj.ficha.nombre}` : '';
-  const etiqueta = (b: Luchador) => `${l.ficha.nombre} lanza ${nombre} contra ${b.ficha.nombre}${enAlcance(l, b) ? '' : ` desde ${distancia(l, b).toFixed(0)} m`} ${zeon}`;
-  // Proyección Mágica Determinada: un valor fijo pagando zeon, si le conviene (Arcana p.26).
-  const det = obj && (c.tipos.includes('ataque') || c.tipos.includes('animico')) ? proyeccionDeterminada(l, ataqueMagico(l, obj)) : null;
-  if (det) {
-    pagarDeterminada(l, det);
-    log(ctx, () => `${l.ficha.nombre} proyecta con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
-  }
-  // Sacrificio Vital: PV por +5 cada 5 a la Proyección, declarado antes de tirar (Core p.158).
-  const vital = obj && !det && c.tipos.includes('ataque') ? iaMagia.sacrificioVitalPara(ctx, l, obj, c, g, ataqueMagico(l, obj)) : 0;
-  if (vital) {
-    l.pv -= vital;
-    log(ctx, () => `  ${l.ficha.nombre} sacrifica ${vital} PV: +${vital} a la Proyección (Sacrificio Vital).`);
-  }
-  const t = det ? DADO_FIJO : tirar(ctx, umbralPifia(l.ficha.magia!.proyeccion, l.cap.ajustePifia));
-  const habPara = (b: Luchador) => det?.valor ?? ataqueMagico(l, b) + vital;
-  if (t.pifia) {
-    // El ejemplar recién agregado (de un beneficio a un aliado puede haber uno por blanco).
-    const m = [...l.magia!.mantenidos].reverse().find((x) => x.conjuro === c);
-    if (m) dejarDeMantener(l, m);
-    log(ctx, () => `${obj && (c.tipos.includes('ataque') || c.tipos.includes('animico')) ? etiqueta(obj) : `${l.ficha.nombre} lanza ${nombre}${sobre} ${zeon}`}: ¡pifia! (sacó ${t.natural}, nivel ${t.nivelPifia}): el conjuro falla.`,
-      () => (obj ? { ataque: { de: nro(ctx, l), a: nro(ctx, obj), contra: false, resultado: null } } : {}));
-    return;
-  }
-  const lanzado: Lanzado = { ctx, l, x, c, g, obj, nombre, zeon };
-  if (h.resolver) {
-    log(ctx, () => `${l.ficha.nombre} lanza ${nombre}${sobre} ${zeon}.`);
-    h.resolver(MOTOR, lanzado);
-    return;
-  }
-  if (!obj) {
-    log(ctx, () => `${l.ficha.nombre} lanza ${nombre} ${zeon}.`);
-    return;
-  }
-  ctx.ataquesEnAsalto++;
-  l.stats.ataquesHechos++;
-  const afectados: Luchador[] = [];
-  const animico = c.tipos.includes('animico') ? { conjuro: c, grado: x.grado, afectados } : undefined;
-  // Lo que se deshace al dejar de mantenerlo (Éxtasis, Lazos de Luz): sobre cada afectado.
-  const alTerminar = h.alTerminar;
-  const mant = alTerminar ? [...l.magia!.mantenidos].reverse().find((m) => m.conjuro === c) : undefined;
-  if (mant && alTerminar) mant.alTerminar = () => {
-    for (const a of afectados) alTerminar(MOTOR, l, a);
-  };
-  h.antesDelAtaque?.(MOTOR, lanzado, afectados);
-  const blancos = h.blancos ? h.blancos(lanzado) : blancosConjuro(ctx, l, obj, c, g, !!x.control);
-  const contras: { quien: Luchador; bono: number }[] = [];
-  // Choque de descargas (Core p.117): el blanco puede interceptar un conjuro de ataque con el suyo.
-  let factor = 1;
-  if (!animico && c.tipos.includes('ataque')) {
-    const choque = interceptar(ctx, l, obj, habPara(obj) + t.valor, g.dano ?? 0, true);
-    if (choque === 'anulado' || choque === 'pierde') return;
-    if (choque !== null) factor = choque;
-  }
-  for (const b of blancos) {
-    if (!activo(b) || !activo(l)) continue;
-    const base: Golpe = {
-      maniobra: 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: RANURA_MAGIA,
-      ki: golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
-      ...(factor !== 1 ? { factorDano: factor } : {}), ...areaDeConjuro(l, obj, c, g),
-    };
-    const golpe = h.golpe ? h.golpe(lanzado, base) : base;
-    const r = resolverDefensa(ctx, l, b, habPara(b), t, golpe, etiqueta(b));
-    if (r.contra !== null) contras.push({ quien: r.defensor, bono: r.contra });
-    h.trasGolpe?.(MOTOR, lanzado, b, afectados);
-  }
-  if (mant && !afectados.length) dejarDeMantener(l, mant);
-  if (vital) verificarCaida(ctx, l, l);
-  l.sorprendeA.clear();
-  for (const k of contras) ofrecerContra(ctx, k.quien, l, k.bono);
-}
-
-/** El área de un conjuro para la defensa (Core p.101): alrededor del objetivo, o del lanzador si es su radio. */
-function areaDeConjuro(l: Luchador, obj: Luchador, c: Conjuro, g: Grado): Pick<Golpe, 'area' | 'centroArea'> {
-  const area = radioArea(c, g);
-  return area ? { area, centroArea: { ...(g.area ? obj : l).pos } } : {};
-}
-
-/**
- * Choque de descargas (Core p.117, Tabla 57). Con disparos paralelos (sin haber actuado y con menos
- * de 25 de diferencia de turno), un mago que recibe una descarga puede interceptarla con un conjuro de
- * ataque: si su Proyección llega a 50 de la del atacante, chocan. Cada uno tira 1d100 + el daño base
- * + su bono de Poder (sólo los magos): hasta 50 de diferencia se anulan; de 51 a 100, la ganadora pasa
- * con la mitad de daño; más, entera. Devuelve qué pasa con la descarga del atacante: null si no hubo
- * choque, 'anulado', 'pierde' (la del defensor lo alcanza a él) o el factor de daño con que pasa.
- */
-function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): 'anulado' | 'pierde' | number | null {
-  if (!ctx.opciones.disparosParalelos || !def.magia || def.haActuado || def === ctx.turnoDe || !puedeActuar(def) || def.ataquesRestantes <= 0) return null;
-  if (Math.abs(def.iniciativa - atk.iniciativa) >= 25) return null;
-  const x = iaMagia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago);
-  if (!x) return null;
-  const c = x.conjuro;
-  const g = lanzar(def, c, x.grado, x.innato ? { innato: true } : {}, false);
-  def.haActuado = true;
-  def.ataquesRestantes = 0;
-  const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : ''}`;
-  def.stats.tecnicas[nombre] = (def.stats.tecnicas[nombre] ?? 0) + 1;
-  const t = tirar(ctx, umbralPifia(def.ficha.magia!.proyeccion, def.cap.ajustePifia));
-  const habDef = ataqueMagico(def, atk);
-  const etiqueta = `${def.ficha.nombre} intercepta con ${nombre} [zeon ${g.zeon}; reserva ${def.magia!.reserva}]`;
-  if (t.pifia) {
-    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${t.natural}): el conjuro falla.`);
-    return null;
-  }
-  const suyo = habDef + t.valor;
-  const golpeDef: Golpe = { maniobra: 'normal', esContra: false, tipo: c.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(c, g), aDistancia: !enAlcance(def, atk) };
-  if (suyo < resultado - 50) {
-    // No llega a interceptarla: es un disparo paralelo común.
-    log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} no llega a 50 de ${resultado}; no chocan.`);
-    resolverDefensa(ctx, def, atk, habDef, t, golpeDef, `${def.ficha.nombre} lanza ${nombre} contra ${atk.ficha.nombre}`);
-    return activo(atk) ? null : 'anulado';
-  }
-  // Magia por Capacidades: zeon por Poder hasta el fin del turno, para el bono del choque (Core p.159).
-  const extraPod = (l: Luchador, mago: boolean) => {
-    const k = mago ? iaMagia.poderPorCapacidades(l) : 0;
-    if (k) {
-      l.magia!.reserva -= 25 * k;
-      log(ctx, () => `  ${l.ficha.nombre} gasta ${25 * k} de zeon por +${k} al Poder (Magia por Capacidades).`);
-    }
-    return k;
-  };
-  const podAtk = extraPod(atk, atkEsMago), podDef = extraPod(def, true);
-  const poder = (l: Luchador, mago: boolean) => (mago ? bonoCaracteristica(atributo(l, 'POD') + (l === atk ? podAtk : podDef)) : 0);
-  const dA = tirarD100Cerrada(ctx.rng), dD = tirarD100Cerrada(ctx.rng);
-  const totA = dA + baseAtk + poder(atk, atkEsMago);
-  const totD = dD + (g.dano ?? 0) + poder(def, true);
-  const dif = Math.abs(totA - totD);
-  const factor = dif > 100 ? 1 : dif > 50 ? 0.5 : 0;
-  log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} contra ${resultado} → ¡chocan! ${atk.ficha.nombre} ${totA} [${dA}+${baseAtk}${atkEsMago ? `+${poder(atk, true)}` : ''}] contra ${def.ficha.nombre} ${totD} [${dD}+${g.dano ?? 0}+${poder(def, true)}]: ${factor === 0 ? 'se anulan' : `${totA > totD ? atk.ficha.nombre : def.ficha.nombre} pasa${factor === 0.5 ? ' con la mitad de daño' : ''}`} (Tabla 57).`);
-  if (factor === 0) return 'anulado';
-  if (totA > totD) return factor;
-  resolverDefensa(ctx, def, atk, habDef, t, { ...golpeDef, ...(factor !== 1 ? { factorDano: factor } : {}) }, `  La descarga de ${def.ficha.nombre} sigue hacia ${atk.ficha.nombre}`);
-  return 'pierde';
-}
-
-/** Mitigar Fuego: cada intensidad que quita baja 20 su estado en la Tabla 76 (Core p.155, p.236). */
-function mitigarFuego(ctx: Contexto, quien: Luchador, intensidades: number) {
-  quien.llamas = Math.max(0, quien.llamas - 20 * intensidades);
-  if (quien.llamas < 100) quien.llamas = 0;
-  log(ctx, () => `  ${quien.ficha.nombre} ${quien.llamas ? `sigue ${estadoLlamas(quien.llamas)} (${quien.llamas})` : 'deja de arder'}.`);
-}
-
-/** Quién lo prendió fuego (para las estadísticas del daño de las llamas). */
-const quienPrendio = new WeakMap<Luchador, Luchador>();
-
-/**
- * Tabla 76 (Core p.236): con 100 o más se prende; un ser con acumulación divide el resultado entre 5.
- * Si ya ardía, queda el peor de los dos.
- */
-function prender(ctx: Contexto, atk: Luchador, l: Luchador, valor: number) {
-  const nivel = nivelLlamas(l, valor);
-  if (nivel < 100 || nivel <= l.llamas || l.bono?.cuerpoFuego) return;
-  l.llamas = nivel;
-  quienPrendio.set(l, atk);
-  log(ctx, () => `  ${l.ficha.nombre} queda ${estadoLlamas(nivel)} (Tabla 76: ${nivel}).`);
-}
-
-/** Al final del asalto: el fuego quema y, si no intentó apagarlo, crece 10 (Core p.236-237). */
-function arder(ctx: Contexto, l: Luchador) {
-  if (!l.llamas) return;
-  const dano = danoLlamas(l);
-  if (dano > 0) {
-    log(ctx, () => `${l.ficha.nombre} se quema (${estadoLlamas(l.llamas)}).`);
-    perderPv(ctx, quienPrendio.get(l) ?? l, l, dano);
-  }
-  if (!l.apagando) l.llamas += 10;
-  l.apagando = false;
-}
-
-/**
- * Apagarse (Core p.236): acción con la que tira un dado, le suma su Destreza o Agilidad y lo resta del
- * nivel en la Tabla 76; por debajo de 100 se apaga. Ocupa su turno (interpretación).
- */
-function apagarse(ctx: Contexto, l: Luchador) {
-  const caract = Math.max(atributo(l, 'DES'), atributo(l, 'AGI'));
-  const dado = tirarD100Cerrada(ctx.rng);
-  l.llamas -= dado + caract;
-  l.apagando = true;
-  l.ataquesRestantes = 0;
-  if (l.llamas < 100) l.llamas = 0;
-  log(ctx, () => `${l.ficha.nombre} intenta apagarse (${dado}+${caract}): ${l.llamas ? `sigue ${estadoLlamas(l.llamas)} (${l.llamas})` : 'se apaga'}.`);
-}
-
-/**
- * Invisibilidad (Core p.190): cada asalto, quien enfrenta a alguien invisible hace un control de
- * Advertir contra la dificultad del grado; si lo supera nota las alteraciones (ceguera parcial), si no,
- * no lo ve (absoluta).
- */
-function percibirInvisibles(ctx: Contexto) {
-  for (const l of ctx.luchadores) {
-    l.percibe.clear();
-    for (const x of l.detecta) l.percibe.add(x);
-    if (!activo(l)) continue;
-    // Holograma (Core p.127): Advertir contra 240 o Buscar contra 140 para darse cuenta de que es una imagen.
-    for (const x of ctx.luchadores) {
-      if (!x.holograma || x.equipo === l.equipo || l.descubre.has(x)) continue;
-      const adv = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.advertir ?? 0, l.cap.ajustePifia)).valor;
-      const bus = (l.ficha.buscar ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.buscar ?? 0, l.cap.ajustePifia)).valor;
-      if (adv >= 240 || bus >= 140) {
-        l.descubre.add(x);
-        log(ctx, () => `${l.ficha.nombre} se da cuenta de que la imagen de ${x.ficha.nombre} es un holograma.`);
-      }
-    }
-    for (const x of ctx.luchadores) {
-      const dif = x.bono?.invisible;
-      if (!dif || x.equipo === l.equipo || !activo(x) || l.percibe.has(x)) continue;
-      const advertir = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l);
-      const t = tirar(ctx, umbralPifia(l.ficha.advertir ?? 0, l.cap.ajustePifia));
-      const ve = !t.pifia && advertir + t.valor >= dif;
-      if (ve) l.percibe.add(x);
-      log(ctx, () => `${l.ficha.nombre} ${ve ? 'nota' : 'no nota'} a ${x.ficha.nombre}, invisible (Advertir ${textoTirada(advertir, t)} contra ${dif === Infinity ? 'nada' : dif}).`);
-    }
-  }
-}
-
-/**
- * Tormenta de Fuego (Core p.159): cada asalto desde el siguiente al lanzamiento, todos los que estén
- * en la zona sufren un ataque automático con la habilidad final del grado; con Control del Espacio
- * deja fuera a los suyos. Se resuelve al empezar el asalto (interpretación).
- */
-function zonasMagicas(ctx: Contexto) {
-  for (const l of ctx.luchadores) {
-    for (const x of l.magia?.mantenidos ?? []) {
-      // Destrucción de Sombras, Dominio Lumínico: una RM nueva cada asalto mientras se mantenga.
-      efecto(x.conjuro.efecto).cadaAsalto?.(MOTOR, ctx, l, x);
-      const z = x.zona;
-      if (!z || ctx.asalto < z.desde) continue;
-      const g = x.conjuro.grados[x.grado];
-      for (const b of ctx.luchadores) {
-        if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || (z.excluye === 'aliados' && b.equipo === l.equipo)) continue;
-        const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
-        resolverDefensa(ctx, l, b, g.habilidad ?? 0, DADO_FIJO, golpe, `${x.conjuro.nombre} de ${l.ficha.nombre} ataca a ${b.ficha.nombre}`);
-        if (terminado(ctx)) return;
-      }
-    }
-  }
-}
-
-/**
- * Lo que hace un conjuro anímico al alcanzar (Core p.122): RM contra su dificultad (con Romper
- * Resistencias, +5 o +10 por cada 50% de daño, Arcana p.30); el fracaso decide el efecto.
- */
-function efectoAnimico(ctx: Contexto, atk: Luchador, def: Luchador, a: NonNullable<Golpe['animico']>, porcentaje: number) {
-  const g = a.conjuro.grados[a.grado];
-  const romper = (atk.ficha.magia?.romperResistencias ?? 0) * 5 * Math.floor(porcentaje / 50);
-  const rm = (g.rm ?? 0) + romper;
-  const que = `${a.conjuro.nombre}${romper ? ` (+${romper} por Romper Resistencias)` : ''}`;
-  efecto(a.conjuro.efecto).alAlcanzar?.(MOTOR, { ctx, atk, def, conjuro: a.conjuro, g, rm, que, afectados: a.afectados });
-}
-
-/**
- * Cuerpo a Fuego (Core p.158): quien toca sus llamas hace una RF contra el doble de su Presencia (+5
- * por punto de TA contra calor) o pierde la mitad del fracaso. Se toca con un golpe sin armas que
- * alcanza, dado o recibido (interpretación).
- */
-function quemarAlTocar(ctx: Contexto, llamas: Luchador, quien: Luchador) {
-  const { fracaso } = tirarResistencia(ctx, quien, 2 * presenciaDe(llamas), `las llamas de ${llamas.ficha.nombre}`, 'RF', 5 * (quien.ficha.ta.CAL ?? 0) + resistenciaCalor(quien));
-  if (fracaso >= 2) perderPv(ctx, llamas, quien, Math.floor(fracaso / 2));
 }
 
 
@@ -1403,7 +1125,7 @@ function resolverDefensa(
       log(ctx, () => `  No alcanza un resultado de daño contra su TA de energía: el conjuro no lo afecta.`);
       return { defensor: def, contra: null, impacto: false };
     }
-    efectoAnimico(ctx, atk, def, o.animico, pct);
+    efectoAnimico(MOTOR, ctx, atk, def, o.animico, pct);
     return { defensor: def, contra: null, impacto: true };
   }
 
@@ -1412,10 +1134,10 @@ function resolverDefensa(
   const sinArmasCerca = o.ranura.sinArmas && !o.aDistancia && !o.ki?.conjuro;
   if (def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, tipoGolpe, o.ki)) {
     log(ctx, () => `  El golpe atraviesa las llamas del cuerpo de ${def.ficha.nombre} sin dañarlo.`);
-    if (sinArmasCerca && activo(atk)) quemarAlTocar(ctx, def, atk);
+    if (sinArmasCerca && activo(atk)) quemarAlTocar(MOTOR, ctx, def, atk);
     return { defensor: def, contra: null, impacto: false };
   }
-  if (atk.bono?.cuerpoFuego && sinArmasCerca && activo(def)) quemarAlTocar(ctx, atk, def);
+  if (atk.bono?.cuerpoFuego && sinArmasCerca && activo(def)) quemarAlTocar(MOTOR, ctx, atk, def);
   if (!activo(def)) return { defensor: def, contra: null, impacto: true };
 
   // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
@@ -1520,7 +1242,7 @@ function resolverDefensa(
   if (dano > 0) {
     aplicarDano(ctx, atk, def, dano, resiste, m, o.ki);
     // Daño por calor: 1d100 (cerrada) + el daño en la Tabla 76 (Core p.236).
-    if (tipo === 'CAL' && activo(def)) prender(ctx, atk, def, tirarD100Cerrada(ctx.rng) + dano);
+    if (tipo === 'CAL' && activo(def)) prender(MOTOR, ctx, atk, def, tirarD100Cerrada(ctx.rng) + dano);
   } else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
   else if (!esManiobraDeControl(m) && !absorbido) {
     log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);

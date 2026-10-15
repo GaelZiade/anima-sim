@@ -888,3 +888,5 @@ export function areaDoblaDano(atk: Luchador, def: Luchador, maniobra: Maniobra, 
   return maniobra === 'area' && atk.cap.est.blancosArea >= 5 && (tamanoDe(def) ?? 0) <= TAMANO_HUMANO;
 }
 
+/** Índice de un luchador, para el registro. */
+export const nro = (ctx: { luchadores: Luchador[] }, l: Luchador) => ctx.luchadores.indexOf(l);

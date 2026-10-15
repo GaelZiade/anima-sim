@@ -15,6 +15,12 @@ import type { Resistencia } from '../reglas';
 
 /** Lo que el motor le presta a los efectos. */
 export interface Motor {
+  /** Tirada de d100 abierta con ese umbral de pifia. */
+  tirar(ctx: Contexto, umbral: number): TiradaD100;
+  /** Si quedó fuera de combate por los PV, cae o muere. */
+  verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador): void;
+  /** Le ofrece un contraataque con ese bono. */
+  ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number): void;
   log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<Evento, 'asalto' | 'texto'>): void;
   /** Resistencia contra una dificultad: si falla y por cuánto (Core p.13). */
   tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono?: number): Resistencia;
