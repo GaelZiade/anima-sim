@@ -370,14 +370,27 @@ diez lugares.
   el daño que recibe es `danoAEscudo` (Dominus p.13, p.60).
 - **Áreas sobrenaturales:** el `Golpe` lleva `area` y `centroArea`; la defensa (Core p.101) y el doble
   daño contra la acumulación (Core p.99) salen de ahí, en el motor y en el pronóstico.
+- **Condiciones con duración** (`condiciones.ts`): ceguera y parálisis inducida viven en
+  `l.condiciones` (nivel y asaltos que quedan) y se descuentan juntas al terminar el asalto. Una
+  condición nueva es un tipo más. El estado con que empieza (la planilla) queda en `ficha.estados`.
+- **Modificadores propios** (`propioAtaque`, `propioDefensa`, `propioTurno` en `calculos.ts`): lo que
+  el luchador tiene sin importar contra quién (modos de estilo, bono variable, Orochi, beneficios). Lo
+  que depende del rival o de la maniobra sigue siendo un término de cada fórmula.
+- **El motor partido por dominio:** `combate.ts` (asalto, turno, ataque, defensa, daño, críticos),
+  `combate-magia.ts` (lanzar, choque de descargas, anímicos, zonas, invisibles), `combate-ki.ts`
+  (Aura, Estados, Impacto, Destrucción, Interrupción, Reflectar, puntos de presión), `llamas.ts`
+  (Tabla 76) y `rotura.ts` (opcional). Todos reciben el `Motor`.
+- **La defensa en etapas:** `EVITAN_EL_GOLPE` (lista ordenada: intangible, holograma), la tirada,
+  los escudos, `defensaGana` y `golpeQueEntra`.
 - **IA:** `ia.ts` (cuerpo a cuerpo, Ki, distancia), `ia-magia.ts` (turno de magia, escudos) y
   `efectos/valorar.ts` (lo que comparten las valoraciones de conjuros). Las hipótesis ("¿y si lo
   bendigo?") se prueban con `conCambio`, que siempre deshace.
 - **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
 
 Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de
-efectos con `resolver`/`valorar` que reciba el mismo `Motor`, `aplicarEstado` con la RP, `bendecir`
-para los bonos y `escudoRecibe` para los escudos.
+efectos con `resolver`/`valorar` que reciba el mismo `Motor`, `aplicarEstado` con la RP, `imponer`
+para lo que dura unos asaltos, `bendecir` para los bonos, `escudoRecibe` para los escudos y, si algo
+evita un golpe sin defensa, una entrada en `EVITAN_EL_GOLPE`.
 
 ## Mapa
 
@@ -457,6 +470,8 @@ siguientes del asalto vale más que su zeon, y se defiende con él si su Proyecc
 
 **Interpretaciones confirmadas** (14/10/2026):
 
+0. (Auditoría, 15/10/2026) "Otra acción" baja el ACT a la mitad **en el momento** en que la hace
+   (`hacerOtraAccion`), como Serenade al declararlo; ver AUDITORIA.md 7.
 1. El alcance de los conjuros es el del Recuadro X según su Proyección Mágica, sin tirada (140: 250 m),
    salvo que el conjuro diga otro.
 2. Los conjuros de ataque no sufren la cobertura (es de la Tabla 47, que no usan).

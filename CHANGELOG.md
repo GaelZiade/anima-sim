@@ -3,6 +3,18 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)
+
+- **Decisiones** (AUDITORIA.md 7): ACT a la mitad en el momento de hacer otra cosa; Ataque en área
+  con arma grande dobla el daño a la acumulación de Tamaño humano; el crítico del Impacto y el Dolor
+  quedan como estaban.
+- **Estructura:** condiciones con duración (`condiciones.ts`: ceguera y parálisis inducida, que antes
+  eran campos sueltos y dos cegueras distintas); modificadores propios en un lugar; `combate.ts`
+  partido en `combate-magia.ts`, `combate-ki.ts`, `llamas.ts` y `rotura.ts` (2.611 → ~1.570 líneas
+  en toda la auditoría); `resolverDefensa` en etapas (interceptores, `defensaGana`, `golpeQueEntra`).
+  Huella idéntica en todo lo estructural.
+- **Medición** (500): Stéphan vs Teseo 86; Kael vs Teseo 56; grupo 63; resto igual.
+
 ## 15/10/2026: auditoría completa (reglas, estructura, velocidad)
 
 - **Reglas** (AUDITORIA.md, sección 7; correcciones 17 a 35): ataques en área sobrenaturales (−120 a

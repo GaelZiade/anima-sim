@@ -120,6 +120,8 @@ src/motor/      el motor (sin DOM)
   magia.ts        zeon, ACT, lanzar y mantener, beneficios (bendecir), Tabla 76
   conjuros.ts, grimorio.ts   catálogo de conjuros (datos) y grimorio generado de la planilla
   efectos/        registro de efectos de conjuro (resolver + valorar), estados, valoración compartida
+  combate-magia.ts, combate-ki.ts, llamas.ts, rotura.ts   partes del motor por dominio (reciben el Motor)
+  condiciones.ts  condiciones con duración (ceguera, parálisis inducida)
   ki.ts           acumulación, técnicas, mantener, en espera, Límites
   maniobras.ts    maniobras, controles de características, estados (parálisis, vuelo, carga)
   estilos.ts      artes marciales, tablas de combate, ventajas → capacidades
@@ -153,7 +155,7 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 1. **Psíquica** (CV, potencial; Rita), sobre la arquitectura de DISENO.md ("Arquitectura: cómo se
    extiende sin romper"). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
    confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
-   (`sinSimular` dice qué falta). Antes, responder los 4 puntos de AUDITORIA.md sección 7.
+   (`sinSimular` dice qué falta).
 2. **IA:** la "moneda del puntaje" (DISENO.md, "Pendiente: la moneda del puntaje"); moverse con
    acción activa sólo cuando conviene.
 3. Detalles abiertos: la velocidad de la Tabla 25 es "una vez en movimiento" (hoy se corre a tope
