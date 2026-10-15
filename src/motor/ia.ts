@@ -914,12 +914,14 @@ function mejorManiobra(
       if (pierdeElAsalto(def)) base += p.pImpacto * amen;
       if (def.ataquesRestantes > 0 && puedeActuar(def)) base -= lambda(atk) * p.pContra * golpeDe(def, atk);
       for (let extra = 0; extra <= tope; extra++) {
-        // Fracaso = margen − d100 (1-99; el 100 resiste): su media y la chance de dejarlo a 0 PV.
-        const margen = dificultadDestruccion(atk, extra) - rf;
-        let medio = 0;
-        for (let d = 1; d <= 99 && d < margen; d++) medio += (margen - d) / 100;
-        const pBaja = Math.max(0, Math.min(99, margen - Math.max(1, def.pv))) / 100;
-        const ve = base + p.pImpacto * (medio + pBaja * 2 * amen) - precioKi(atk) * (1 + extra);
+        // Pierde el fracaso de la RF en PV (Core p.104): su media, la chance de dejarlo a 0 PV y la de
+        // criticar (el daño llega a la mitad de sus PV), como cualquier daño en el motor.
+        const dif = dificultadDestruccion(atk, extra);
+        const { p: pFalla, fracaso } = fallaResistencia(rf, dif);
+        const pBaja = fallaResistencia(rf + Math.max(1, def.pv), dif).p;
+        const pCrit = fallaResistencia(rf + Math.max(1, Math.ceil(def.pv / 2)), dif).p;
+        const ve = base + p.pImpacto * (pFalla * fracaso + pBaja * 2 * amen +
+          valorCritico(atk, def, pCrit - pBaja, def.pv / 2, null, 'normal', golpesSiguientes, pFalla * fracaso)) - precioKi(atk) * (1 + extra);
         if (ve > mejorValor) {
           mejorValor = ve;
           mejor = { maniobra: m, tipo, especial: false, kiDestruccion: extra };
