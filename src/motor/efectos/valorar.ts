@@ -15,7 +15,7 @@ import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
 import { amenaza, base, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
-import { blancosConjuro } from './comun';
+import { blancosConjuro, radioArea } from './comun';
 
 /**
  * Precio de un punto de zeon en PV, como el del Ki: gastar toda la reserva tiene que rendir la mitad
@@ -28,15 +28,16 @@ export function precioZeon(l: Luchador): number {
 }
 
 /** Defensa de `def` contra un conjuro de ataque de `atk`: su escudo mágico, o parar (si para energía) o esquivar. */
-export function defensaContraConjuro(def: Luchador, atk: Luchador, ki: ModKi): number {
+export function defensaContraConjuro(def: Luchador, atk: Luchador, ki: ModKi, area = 0): number {
   if (def.magia?.escudo) return defensaEscudoMagico(def, atk, ki);
-  return defensaFinal(def, atk, { kiAtk: ki, proyectil: enAlcance(atk, def) ? undefined : 'disparo' });
+  return defensaFinal(def, atk, { kiAtk: ki, proyectil: enAlcance(atk, def) ? undefined : 'disparo', area });
 }
 
 /** Lo que vale para `atk` un conjuro de ataque contra `def`: el golpe, el tempo y la contra si lo toca. */
 export function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: Grado): number {
   const ki = golpeDeConjuro(c, g);
-  const p = pronostico(atk, def, ataqueMagico(atk, def), defensaContraConjuro(def, atk, ki), { ki, tipo: c.ta, ranura: RANURA_MAGIA });
+  const area = radioArea(c, g);
+  const p = pronostico(atk, def, ataqueMagico(atk, def), defensaContraConjuro(def, atk, ki, area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area });
   let v = valorGolpe(atk, def, p, 0);
   if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) v += p.pImpacto * amenaza(def, atk);
   if (enAlcance(atk, def) && def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
@@ -62,7 +63,7 @@ export function resistencias(l: Luchador): { rm: number; rf: number } {
 export function pAlcanzaAnimico(atk: Luchador, def: Luchador, c: Conjuro, g: Grado): number {
   const ki = golpeDeConjuro(c, g);
   const abs = absorcionContra(def, atk, 'normal', 'ENE', RANURA_MAGIA, ki);
-  return tablaPara(atk, def).pPorcentajeAlMenos(ataqueMagico(atk, def) - defensaContraConjuro(def, atk, ki), abs, 10);
+  return tablaPara(atk, def).pPorcentajeAlMenos(ataqueMagico(atk, def) - defensaContraConjuro(def, atk, ki, radioArea(c, g)), abs, 10);
 }
 
 /**

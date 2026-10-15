@@ -3,10 +3,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, ataqueFinal, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad } from '../src/motor/reglas';
+import { SIN_KI } from '../src/motor/ki';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -156,5 +157,34 @@ describe('respuestas a la auditoría', () => {
 describe('16. Frialdad (Core p.54, Tabla 13)', () => {
   it('suma su bono a resistir efectos sobre el ánimo: el Aura de combate, el Miedo y el Terror', () => {
     expect([bonoFrialdad(10), bonoFrialdad(40), bonoFrialdad(80), bonoFrialdad(140), bonoFrialdad(320)]).toEqual([0, 5, 10, 20, 40]);
+  });
+});
+
+describe('segunda auditoría: ataques sobrenaturales (Core p.99-101)', () => {
+  const conjuro = (elemento: string) => ({ ...SIN_KI, sobrenatural: true, danaEnergia: true, conjuro: true, elemento });
+
+  it('un conjuro de energía no se para; uno de fuego se para con −120 (Core p.100)', () => {
+    const atk = crearLuchador(ficha('Mago'), 'A', 0, 0);
+    const def = crearLuchador(ficha('Guerrero'), 'B', 10, 0);
+    const normal = defensaFinal(def, atk);
+    expect(defensaFinal(def, atk, { kiAtk: conjuro('ENE') })).toBe(0);
+    expect(defensaFinal(def, atk, { kiAtk: conjuro('CAL') })).toBe(normal - 120);
+  });
+
+  it('área: −120 a parar sin parar energía; −80 a esquivar si no le alcanza el movimiento para salir (Core p.101)', () => {
+    const atk = crearLuchador(ficha('Mago'), 'A', 0, 0);
+    const parador = crearLuchador(ficha('Parador'), 'B', 10, 0);
+    expect(defensaFinal(parador, atk, { area: 5 }) - defensaFinal(parador, atk)).toBe(-120);
+    const esquiva = crearLuchador(ficha('Ágil', {}, { tipoDefensa: 'esquiva' }), 'B', 10, 0);
+    // Tipo de movimiento 6: 15 m por asalto (Tabla 18). Sale de un área de 10 m, no de una de 50.
+    expect(defensaFinal(esquiva, atk, { area: 10 })).toBe(defensaFinal(esquiva, atk));
+    expect(defensaFinal(esquiva, atk, { area: 50 }) - defensaFinal(esquiva, atk)).toBe(-80);
+  });
+
+  it('un área dobla el daño contra un ser con acumulación (Core p.99)', () => {
+    const atk = crearLuchador(ficha('Mago'), 'A', 0, 0);
+    const def = crearLuchador(ficha('Golem', {}, { acumulacion: true }), 'B', 10, 0);
+    const sin = danoEsperado(atk, def, 200, 0);
+    expect(danoEsperado(atk, def, 200, 0, { area: 5 })).toBeCloseTo(2 * sin);
   });
 });

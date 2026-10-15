@@ -25,5 +25,5 @@ export function efecto(e: EfectoConjuro): ManejadorEfecto {
 }
 
 export type { Lanzamiento, Lanzado, Meta, Motor, Valoracion, ManejadorEfecto } from './tipos';
-export { blancosConjuro } from './comun';
+export { blancosConjuro, radioArea } from './comun';
 export { cruzarMuros, detonarMina, habilidadMina } from './fuego';

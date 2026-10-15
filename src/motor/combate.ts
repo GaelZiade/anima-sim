@@ -22,8 +22,8 @@ import {
 import type { Golpe, ResultadoDefensa } from './golpe';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
-import { blancosConjuro, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
-import { GRADOS } from './conjuros';
+import { blancosConjuro, radioArea, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
+import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, nivelLlamas, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
   romperEscudo, terminarAsaltoMagia, terminarMantenidos, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada,
@@ -773,6 +773,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
         if (choque === 'anulado' || choque === 'pierde') continue;
         if (choque !== null && choque !== 1) opciones = { ...opcionesAtk, factorDano: choque };
       }
+      // Un área de Ki se centra en el blanco elegido (Dominus p.58).
+      if (ki?.area) opciones = { ...opciones, centroArea: { ...def.pos } };
       const r = resolverDefensa(ctx, atk, blanco, hab, tA, opciones, etiquetaPara(blanco));
       if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
       if (r.contra !== null) {
@@ -935,7 +937,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: Lanzamiento) {
     const base: Golpe = {
       maniobra: 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: RANURA_MAGIA,
       ki: golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
-      ...(factor !== 1 ? { factorDano: factor } : {}),
+      ...(factor !== 1 ? { factorDano: factor } : {}), ...areaDeConjuro(l, obj, c, g),
     };
     const golpe = h.golpe ? h.golpe(lanzado, base) : base;
     const r = resolverDefensa(ctx, l, b, habPara(b), t, golpe, etiqueta(b));
@@ -946,6 +948,12 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: Lanzamiento) {
   if (vital) verificarCaida(ctx, l, l);
   l.sorprendeA.clear();
   for (const k of contras) ofrecerContra(ctx, k.quien, l, k.bono);
+}
+
+/** El área de un conjuro para la defensa (Core p.101): alrededor del objetivo, o del lanzador si es su radio. */
+function areaDeConjuro(l: Luchador, obj: Luchador, c: Conjuro, g: Grado): Pick<Golpe, 'area' | 'centroArea'> {
+  const area = radioArea(c, g);
+  return area ? { area, centroArea: { ...(g.area ? obj : l).pos } } : {};
 }
 
 /**
@@ -1100,7 +1108,7 @@ function zonasMagicas(ctx: Contexto) {
       const g = x.conjuro.grados[x.grado];
       for (const b of ctx.luchadores) {
         if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || (z.excluye === 'aliados' && b.equipo === l.equipo)) continue;
-        const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true };
+        const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
         resolverDefensa(ctx, l, b, g.habilidad ?? 0, DADO_FIJO, golpe, `${x.conjuro.nombre} de ${l.ficha.nombre} ataca a ${b.ficha.nombre}`);
         if (terminado(ctx)) return;
       }
@@ -1264,7 +1272,7 @@ function resolverDefensa(
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk, o.ki) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined }) - (proteccion?.pen ?? 0) - trasAtrapar;
+  const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk, o.ki) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined, area: o.area, centroArea: o.centroArea }) - (proteccion?.pen ?? 0) - trasAtrapar;
   quienDefiende.previenePendiente.delete(atk);
   const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
   // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
@@ -1431,6 +1439,8 @@ function resolverDefensa(
   let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
   // Sangre de Aeon: daño de su elemento a la mitad.
   if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
+  // Un área sobrenatural contra un ser con acumulación: el doble de daño (Core p.99).
+  if (def.ficha.acumulacion && (o.area || o.ki?.area)) dano *= 2;
   // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
   // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
   const ki = o.ki;

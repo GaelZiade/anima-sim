@@ -36,4 +36,10 @@ export interface Golpe {
   animico?: { conjuro: Conjuro; grado: number; afectados?: Luchador[] };
   /** Multiplica el daño base (una descarga que pasa un choque con la mitad, Tabla 57). */
   factorDano?: number;
+  /**
+   * Ataque en área sobrenatural (Core p.101): su radio (un área de Ki lo trae en `ki`) y su centro (sin
+   * dato, el defensor). Penaliza la defensa y dobla el daño contra la acumulación (Core p.99).
+   */
+  area?: number;
+  centroArea?: { x: number; y: number };
 }

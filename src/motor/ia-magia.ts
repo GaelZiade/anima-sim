@@ -102,7 +102,7 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
     for (const b of ctx.luchadores) {
       const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
       if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
-      const dano = danoEsperado(l, b, habilidadMina(d, z.radio) - 55, defensaContraConjuro(b, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+      const dano = danoEsperado(l, b, habilidadMina(d, z.radio) - 55, defensaContraConjuro(b, l, ki, z.radio), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: z.radio });
       if (b.equipo !== l.equipo) enemigosDentro++;
       v += (b.equipo === l.equipo ? -lambda(l) : 1) * dano;
     }

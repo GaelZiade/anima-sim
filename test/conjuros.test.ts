@@ -160,9 +160,10 @@ describe('Tabla 76: En llamas (Core p.236)', () => {
 describe('anímicos y automáticos', () => {
   it('un anímico es invisible: sin ver la magia se defiende cegado (Core p.122)', () => {
     const l = crearLuchador(mago({}), 'A', 0, 0);
-    const s = crearLuchador(soldado, 'B', 10, 0);
+    // Esquivando, para que no cuente que la energía no se para (Core p.100).
+    const s = crearLuchador({ ...soldado, tipoDefensa: 'esquiva' }, 'B', 10, 0);
     const c = conjuro('Crítico Directo');
-    const normal = defensaFinal(s, l, { kiAtk: golpeDeConjuro(conjuro('Descarga de Calor'), conjuro('Descarga de Calor').grados[0]) });
+    const normal = defensaFinal(s, l, { kiAtk: golpeDeConjuro(conjuro('Descarga de Luz'), conjuro('Descarga de Luz').grados[0]) });
     const ciego = defensaFinal(s, l, { kiAtk: golpeDeConjuro(c, c.grados[0]) });
     expect(ciego).toBeLessThan(normal);
   });

@@ -346,15 +346,39 @@ export interface OpcionesDefensa {
   samiel?: number;
   /** Efectos de Ki de esta defensa. Por defecto, los de Asalto activos. */
   ki?: ModKi;
+  /** Radio de un ataque en área sobrenatural (un conjuro); el de un área de Ki sale de `kiAtk`. */
+  area?: number;
+  /** Centro del área (sin dato, el defensor está en el centro: es el blanco). */
+  centroArea?: { x: number; y: number };
+}
+
+/** Un conjuro de calor, frío o electricidad ("como una descarga ígnea", Core p.100). */
+function conjuroElemental(kiAtk?: ModKi): boolean {
+  return !!kiAtk?.conjuro && (kiAtk.elemento === 'CAL' || kiAtk.elemento === 'FRI' || kiAtk.elemento === 'ELE');
 }
 
 /**
- * Velez arcano o un Ataque sobrenatural de Ki (Dominus p.64): sólo lo para quien para energía; con un
- * escudo de energía sí se puede.
+ * Velez arcano, un Ataque sobrenatural de Ki (Dominus p.64) o un conjuro de energía ("descargas mágicas
+ * intangibles", Core p.100): sólo lo para quien para energía; con un escudo de energía sí se puede.
  */
 function paradaAnulada(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
-  return (atk.cap.est.intangible || !!kiAtk?.sobrenatural) && (def.ficha.tipoDefensa ?? 'parada') === 'parada' &&
+  return (atk.cap.est.intangible || (!!kiAtk?.sobrenatural && !conjuroElemental(kiAtk))) && (def.ficha.tipoDefensa ?? 'parada') === 'parada' &&
     !def.cap.est.paraEnergia && !(def.escudoKi > 0);
+}
+
+/** Parar un conjuro de calor, frío o electricidad sin parar energía: −120 (Core p.100). */
+const PEN_PARAR_ELEMENTAL = 120;
+
+/**
+ * Ataque en área sobrenatural (Core p.101): pararlo sin parar energía, −120; esquivarlo, −80 si no le
+ * alcanza el movimiento del asalto para salir del área. Un escudo sobrenatural no sufre nada de esto.
+ */
+const PEN_AREA = { parada: 120, esquiva: 80 } as const;
+
+function penArea(def: Luchador, radio: number, campo: 'parada' | 'esquiva', centro?: { x: number; y: number }): number {
+  if (campo === 'parada') return def.cap.est.paraEnergia ? 0 : PEN_AREA.parada;
+  const salir = radio - (centro ? Math.hypot(def.pos.x - centro.x, def.pos.y - centro.y) : 0);
+  return metrosTotales(def) >= salir ? 0 : PEN_AREA.esquiva;
 }
 
 /** Los ataques de Velez arcano son invisibles para quien no detecta la energía (ceguera absoluta). */
@@ -423,6 +447,9 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   // Contra un proyectil disparado (Tabla 49, Core p.96); un escudo sobrenatural no lo sufre (p.100).
   if (o.proyectil && !escudo) h -= penDefensaProyectil(campo, esMaestro(def.ficha.defensa), o.proyectil === 'lanzamiento' ? 'lanzamiento' : 'disparo', !!def.ficha.escudo);
   if (paradaAnulada(def, atk, o.kiAtk)) h = Math.min(h, 0);
+  else if (campo === 'parada' && conjuroElemental(o.kiAtk) && !def.cap.est.paraEnergia && !escudo) h -= PEN_PARAR_ELEMENTAL;
+  const area = o.area ?? o.kiAtk?.area ?? 0;
+  if (area > 0 && !escudo) h -= penArea(def, area, campo, o.centroArea);
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
 }
@@ -632,6 +659,8 @@ export interface OpcionesPronostico {
   /** Efectos de Ki del atacante en este ataque y del defensor (por defecto, sus efectos de Asalto). */
   ki?: ModKi;
   kiDef?: ModKi;
+  /** Radio de un ataque en área sobrenatural (un conjuro; el de Ki sale de `ki`): dobla el daño contra la acumulación. */
+  area?: number;
 }
 
 /** Lo que comparten `pronostico` y `danoEsperado`: tabla, ventaja, absorciones y daño base. */
@@ -648,6 +677,8 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
   const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura, o.ki, kiDef) : abs;
   const nulo = base === 0 || barreraFrena(def, atk, base, o.ki) ||
     (!!def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque, o.ki ?? atk.ki?.activo));
+  // Un área sobrenatural contra un ser con acumulación: el doble de daño (Core p.99).
+  if (def.ficha.acumulacion && (o.area || o.ki?.area)) base *= 2;
   return { t: tablaPara(atk, def), s: habAtaque - habDefensa, abs, absDano, base, nulo };
 }
 

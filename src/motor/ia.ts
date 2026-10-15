@@ -680,7 +680,7 @@ function mejorManiobra(
   // Un proyectil a bocajarro se defiende como un golpe; de lejos, con la Tabla 49 (Core p.96).
   const lejos = !enAlcance(atk, def);
   const proyectil = aDistancia && lejos ? ranura?.proyectil?.clase ?? 'disparo' : undefined;
-  const habDef = ki?.sobrenatural || proyectil ? defensaFinal(def, atk, { kiAtk: ki, proyectil }) : defensaFinal(def, atk);
+  const habDef = ki?.sobrenatural || ki?.area || proyectil ? defensaFinal(def, atk, { kiAtk: ki, proyectil }) : defensaFinal(def, atk);
   // Tope de 280 de los proyectiles (Core p.95): se aproxima topeando la habilidad en 280 − 50.
   const tope = ranura?.proyectil && !superaTope(atk.ficha) ? TOPE_PROYECTIL - 50 : Infinity;
   const golpesSiguientes = Math.max(0, atk.ataquesRestantes - 1) + aliadosSobre(ctx, atk, def) / 2;
@@ -1144,7 +1144,7 @@ function valorAreaKi(
     if (b === def) continue;
     // La maniobra (y su penalizador) es la misma para todos los del área.
     const hab = ki.ataqueFijo || ataqueFinal(atk, b, { bono, tipo, ki, maniobra });
-    const p = pronostico(atk, b, hab, defensaFinal(b, atk), { tipo, ki });
+    const p = pronostico(atk, b, hab, defensaFinal(b, atk, { kiAtk: ki, centroArea: def.pos }), { tipo, ki });
     if (b.equipo === atk.equipo) {
       v -= p.dano + p.pBaja * amenaza(atk, b);
       continue;

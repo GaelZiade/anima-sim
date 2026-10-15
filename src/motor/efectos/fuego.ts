@@ -93,7 +93,7 @@ export function detonarMina(m: Motor, ctx: Contexto, l: Luchador, x: Mantenido, 
   for (const b of ctx.luchadores) {
     const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
     if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
-    const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true };
+    const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
     m.resolverDefensa(ctx, l, b, habilidadMina(d, z.radio), DADO_FIJO, golpe, `La mina alcanza a ${b.ficha.nombre} (a ${d.toFixed(0)} m)`);
     if (m.terminado(ctx)) return;
   }
@@ -137,7 +137,7 @@ export const tormenta: ManejadorEfecto = {
       for (const b of ctx.luchadores) {
         if (!activo(b) || distancia(b, obj) > g.area! || (control && b.equipo === l.equipo)) continue;
         // El ataque automático no tira: su habilidad es la final (aproximación: la media de una tirada menos).
-        const dano = danoEsperado(l, b, (g.habilidad ?? 0) - 55, defensaContraConjuro(b, l, ki), { ki, tipo: c.ta, ranura: RANURA_MAGIA });
+        const dano = danoEsperado(l, b, (g.habilidad ?? 0) - 55, defensaContraConjuro(b, l, ki, g.area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area: g.area });
         v += signo(b) * Math.min(Math.max(0, b.pv), (ASALTOS_EFECTO - 1) * dano);
       }
       probar({ conjuro: c, grado: i, objetivo: obj, control }, v, (control ? ZEON_CONTROL_DEL_ESPACIO : 0) * precioZeon(l));
@@ -203,7 +203,7 @@ export const mina: ManejadorEfecto = {
       let v = 0;
       for (const b of ctx.luchadores) {
         if (!activo(b) || distancia(b, obj) > (g.area ?? 0)) continue;
-        const dano = danoEsperado(l, b, 280 - 55, defensaContraConjuro(b, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+        const dano = danoEsperado(l, b, 280 - 55, defensaContraConjuro(b, l, ki, g.area), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: g.area });
         v += (b.equipo === l.equipo ? (l.ficha.magia?.controlDelEspacio ? 0 : -lambda(l)) : 1) * dano;
       }
       probar({ conjuro: c, grado: i, objetivo: obj }, 0.6 * v);
