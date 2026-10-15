@@ -192,7 +192,9 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
  * penalizadores de flanco y espalda (Dominus p.11). Se supone que la tirada de detección sale.
  */
 export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
-  const propia = l.cegado > 0 ? 'absoluta' : l.ficha.estados?.ceguera;
+  // Cegado por un destello: el asalto previo a recuperar la vista, sólo ceguera parcial (Core p.233).
+  const destello = l.cegado > 1 ? 'absoluta' : l.cegado === 1 ? 'parcial' : undefined;
+  const propia = destello === 'absoluta' || l.ficha.estados?.ceguera === 'absoluta' ? 'absoluta' : destello ?? l.ficha.estados?.ceguera;
   const casos: Ceguera[] = [
     propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,
     cegueraPorOscuridad(l),
@@ -365,6 +367,9 @@ function paradaAnulada(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
     !def.cap.est.paraEnergia && !(def.escudoKi > 0);
 }
 
+/** Fascinación: −20 a las acciones pasivas, como defenderse (Core p.233). */
+const PEN_FASCINACION = 20;
+
 /** Parar un conjuro de calor, frío o electricidad sin parar energía: −120 (Core p.100). */
 const PEN_PARAR_ELEMENTAL = 120;
 
@@ -449,6 +454,8 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
   else if (campo === 'parada' && conjuroElemental(o.kiAtk) && !def.cap.est.paraEnergia && !escudo) h -= PEN_PARAR_ELEMENTAL;
   const area = o.area ?? o.kiAtk?.area ?? 0;
   if (area > 0 && !escudo) h -= penArea(def, area, campo, o.centroArea);
+  // Fascinado: −20 a las acciones pasivas (Core p.233).
+  if (def.fascinado) h -= PEN_FASCINACION;
   if (o.resistir) h = Math.max(0, h - PEN_RESISTIR_GOLPE);
   return h;
 }
@@ -821,7 +828,7 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
   return (m.proyeccionDefensa ?? m.proyeccion) - Math.max(0, penAccion(def)) +
     conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
-    (def.amenazadoPor === atk ? AMENAZADO.parada : 0);
+    (def.amenazadoPor === atk ? AMENAZADO.parada : 0) - (def.fascinado ? PEN_FASCINACION : 0);
 }
 
 /** Bono de la Frialdad (con lo que le sume Moral) a resistir efectos sobre el ánimo (Core p.54, Tabla 13). */

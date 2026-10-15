@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, ataqueMagico, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, type TipoAtaque } from '../src/motor/reglas';
@@ -219,5 +219,24 @@ describe('segunda auditoría: daño a los escudos (Dominus p.13, p.60)', () => {
     const base = danoAEscudo(comun, def, false, r);
     expect(danoAEscudo(bueno, def, false, r) - danoBase(bueno, def, false, r)).toBe(10 * bueno.cap.reduccionTA);
     expect(danoAEscudo(comun, def, false, r, { ...SIN_KI, sinArmadura: true })).toBe(base + 200);
+  });
+});
+
+describe('segunda auditoría: estados (Core p.233)', () => {
+  it('cegado por un destello: ceguera parcial el asalto previo a recuperar la vista', () => {
+    const l = crearLuchador(ficha('Cegado'), 'A', 0, 0);
+    const r = crearLuchador(ficha('Rival'), 'B', 1, 0);
+    l.cegado = 2;
+    expect(cegueraContra(l, r).nivel).toBe(2);
+    l.cegado = 1;
+    expect(cegueraContra(l, r).nivel).toBe(1);
+  });
+
+  it('fascinado: −20 a defenderse (acción pasiva)', () => {
+    const l = crearLuchador(ficha('Fascinado'), 'A', 0, 0);
+    const r = crearLuchador(ficha('Rival'), 'B', 1, 0);
+    const antes = defensaFinal(l, r);
+    l.fascinado = 120;
+    expect(defensaFinal(l, r)).toBe(antes - 20);
   });
 });
