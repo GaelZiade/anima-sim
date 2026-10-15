@@ -3,6 +3,22 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 15/10/2026: magia, parte 3 (Stéphan completo)
+
+- **Reglas**: conjuro preparado (sostenerlo Poder asaltos, +40 a la concentración, Conjuro
+  Especialista +10 al ACT), magia innata (Tabla 58), cansancio al ACT (Explotación de la Energía
+  Física), choque de descargas (Tabla 57, también contra técnicas de Ki a distancia), Proyección Mágica
+  Determinada, conjuros de mantenimiento diario.
+- **Frialdad** (Core p.54): se suma a resistir el Aura de combate y el Miedo, Terror y Fascinación del
+  Ki (corrección 16 de AUDITORIA.md).
+- **Conjuros**: los 21 que faltaban de Stéphan con uso en combate (Lazos de Luz, Éxtasis, Invisibilidad,
+  Barrera y Mina de Fuego, Fundir, Transporte Rápido, Sacrificios, Moral, Reparación…). Los 22 que no
+  tienen uso en combate quedan listados con el motivo.
+- **Medición** (misma semilla, % de victorias de Stéphan, 500 combates): Teseo 91,8 → 91,6; Kaito
+  1,8 → 1,4; Kiran 0 → 0,6; cuatro soldados 100 → 100. Stéphan, Kael y Kaito contra Teseo, Kiran y
+  cuatro soldados (100): 55 → 67.
+- Huella del bench sin cambios.
+
 ## 15/10/2026: el grimorio completo
 
 - **Grimorio** generado desde la hoja "Tablas Magia" de la planilla (`npm run grimorio`): los 640

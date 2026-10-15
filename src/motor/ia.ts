@@ -1984,7 +1984,22 @@ function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe: number
 function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: Grado): number {
   const antes = intercambio(ctx, a);
   bendecir(a, l, c, g.bono!);
-  const despues = intercambio(ctx, a);
+  let despues = intercambio(ctx, a);
+  // Invisible: cada enemigo puede notarlo con Advertir (ceguera parcial); se pondera por esa chance.
+  const dif = g.bono!.invisible;
+  if (dif) {
+    let pNota = 0;
+    const rivales = enemigos(ctx, a);
+    for (const e of rivales) {
+      const advertir = (e.ficha.advertir ?? 0) + (e.bono?.advertir ?? 0) - penAccion(e);
+      pNota += dif === Infinity ? 0 : tabla(umbralPifia(e.ficha.advertir ?? 0), 0, true).pImpacto(advertir - dif + 1);
+      e.percibe.add(a);
+    }
+    const notado = intercambio(ctx, a);
+    for (const e of rivales) e.percibe.delete(a);
+    const p = rivales.length ? pNota / rivales.length : 0;
+    despues = { hace: despues.hace, recibe: (1 - p) * despues.recibe + p * notado.recibe };
+  }
   quitarBendicion(a, l, c);
   const turno = ((g.bono!.turno ?? 0) / 100) * (antes.hace + lambda(l) * antes.recibe);
   // Moral: sólo vale si hay un Aura de combate o efectos de miedo enfrente (aproximación: 10% de lo que recibe).
@@ -2223,9 +2238,10 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
     case 'transporte': {
       // Salir de un cuerpo a cuerpo: se ahorra lo que le pegarían este asalto y el siguiente.
       if (!trabadoConAlguien(l)) return null;
+      // Si lo alcanzan de nuevo enseguida (corren más que lo que se aleja), apenas gana un respiro.
       let v = 0;
-      for (const x of enemigos(ctx, l)) if (enAlcance(l, x)) v += amenaza(x, l);
-      probar({ conjuro: c, grado: i, objetivo: l }, lambda(l) * 1.5 * v);
+      for (const x of enemigos(ctx, l)) if (enAlcance(l, x)) v += amenaza(x, l) * (metrosTotales(x) < (g.metros ?? 0) ? 1.5 : 0.25);
+      probar({ conjuro: c, grado: i, objetivo: l }, lambda(l) * v);
       return mejor;
     }
     case 'reparar': {

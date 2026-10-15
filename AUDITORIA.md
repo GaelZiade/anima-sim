@@ -3,7 +3,7 @@
 Revisión línea por línea del motor (`src/motor/`) contra los markdown de Core Exxet, Dominus Exxet y
 Gaia I. Las páginas son las del PDF (las del índice impreso son 2 menos), como en el resto del código.
 
-- **Corregido:** 15 diferencias con el manual. 3 venían de la sesión en la nube, 11 eran del código
+- **Corregido:** 16 diferencias con el manual. 3 venían de la sesión en la nube, 12 eran del código
   anterior.
 - **Decisiones:** 9 puntos donde la regla no era literal, todos respondidos y aplicados.
 - **Falta modelar:** reglas del manual que el simulador todavía no tiene.
@@ -28,6 +28,7 @@ Gaia I. Las páginas son las del PDF (las del índice impreso son 2 menos), como
 | 13 | **Berserker** podía huir | "Incapaz […] de comprender cuándo debe retirarse." Dominus p.84 | `ia.ts` |
 | 14 | **Mala suerte y armas Complejas** no cambiaban la pifia (la nube agregó Buena suerte y se quedó ahí) | Mala suerte: pifia con 5 (4 con maestría), Core p.25. Compleja: "fracasando con un resultado de 5 […] Si alcanza la maestría con ella, desaparece", Core p.76. Compleja se lee de la descripción del arma; sólo cuenta al parar, no al esquivar | `reglas.ts`, `rasgos.ts` |
 | 15 | **Armadura en los apuntados** usaba la TA del cuerpo | "En los golpes apuntados se aplica únicamente el tipo de armadura de la zona" (Core p.92). El peto cubre el torso, la camisola también los brazos, la completa todo menos la cabeza, y el yelmo sólo la cabeza (Core p.83, p.85). Se lee la Localización de cada capa de la planilla; lo que la planilla suma fuera de las capas (armaduras especiales, como la de Energía por Ki) cubre todo el cuerpo. Inutilizar va a la pierna (sólo la protege una completa). La rotura opcional sólo controla las capas de la zona golpeada | `calculos.ts`, `combate.ts`, `hoja/ficha.ts` |
+| 16 | **Frialdad** no se aplicaba (15/10/2026) | "Si un personaje es blanco de un efecto sobrenatural que afecte a su ánimo o emociones, podrá añadir el bono a la Resistencia que corresponda empleando la Tabla 13" (Core p.54); el Aura de combate la nombra (Dominus p.21). Se suma al resistir el Aura y los estados de Miedo, Terror y Fascinación del Ki, y Éxtasis. Se lee de la planilla | `combate.ts`, `reglas.ts`, `hoja/ficha.ts` |
 
 ## 2. Decisiones (respondidas el 14/10/2026)
 

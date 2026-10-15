@@ -349,12 +349,13 @@ celda con otro luchador da **cobertura** (−40, Tabla 47).
 2. Interfaz web (Vite) + workers en paralelo + mapa + combate en vivo ← hecho
 3. **Ki** ← hecho (lo que no se simula, en "Pendiente del Ki")
 4. **Proyectiles y línea de visión** ← hecho (ver "Proyectiles")
-5. **Magia** ← en curso (ver "Magia": partes 1 y 2 hechas); después psíquica
+5. **Magia** ← hecha para Stéphan (ver "Magia"); sigue la psíquica
 
 ## Magia (fase 5)
 
-Por partes: **1. núcleo** (hecho), **2. catálogo de combate de las vías de Stéphan** (hecho), 3. reglas avanzadas (conjuro preparado, magia innata, choque de
-descargas, el resto de la metamagia), 4. psíquica. Los conjuros no tienen una forma genérica: cada
+Por partes: **1. núcleo**, **2. catálogo de combate de las vías de Stéphan** y **3. reglas avanzadas y
+el resto de los conjuros de Stéphan**, hechas: Stéphan usa todo lo que tiene que sirve en combate.
+Sigue la psíquica (Rita) y catalogar las vías de otros magos cuando haga falta. Los conjuros no tienen una forma genérica: cada
 uno se cataloga y se resuelve caso por caso (`Conjuro.efecto`).
 
 ### Datos
@@ -504,10 +505,71 @@ contra 12) y Consumir Esencia (12 contra 14). Manda el manual. Incinerar trae ma
 
 Las Inteligencias en que la planilla y el manual no coinciden quedan con el manual.
 
-**Pendiente de la parte 2:** Barrera de Fuego (un muro en el mapa), Lazos de Luz (Presa con los
-lazos), Invisibilidad (hace falta leer Advertir y Buscar de la planilla), Éxtasis, Moral (Frialdad),
-la mina de fuego de nivel 40, Sacrificio Vital y de Poder, Magia por Capacidades, Consumir Vida por
-Magia. La IA no se aparta de una Tormenta de Fuego.
+### Parte 3: reglas avanzadas y el resto de Stéphan
+
+| Regla | Fuente |
+|---|---|
+| Preparar un conjuro determinado: el ACT va sólo a él; listo, se sostiene tantos asaltos como el Poder y después vuelve a la reserva menos 10; mientras, acumula magia pura | Core p.117 |
+| Preparando un conjuro determinado, +40 a Resistir el dolor para no perderlo | Core p.118 |
+| Conjuro Especialista: +10 al ACT al prepararlo | Arcana p.30 |
+| Magia innata (Tabla 58): sin gastar zeon, conjuros de hasta lo que dé el ACT (110: 40); ese asalto no acumula ni lanza otros; un innato mantenido no cuesta, pero impide otro | Core p.117 |
+| Cansancio al ACT: +15 por punto; Explotación de la Energía Física, +25 / +40 | Arcana p.27 |
+| Choque de descargas (Tabla 57): con disparos paralelos, interceptar un conjuro de ataque o una técnica de Ki a distancia con un conjuro de ataque; Proyección a no menos de 50; 1d100 + daño base + bono de Poder (sólo magos) | Core p.117 |
+| Proyección Mágica Determinada: habilidad final fija (120 / 140 / 180 / 240 / 280) pagando 10 / 20 / 40 / 60 / 80 de zeon de la reserva | Arcana p.26 |
+| Frialdad (Tabla 13): +5 a +40 a la Resistencia contra efectos sobre el ánimo | Core p.54 |
+| Conjuros de mantenimiento diario: una vez lanzados, quedan sin pagar por asalto | Core p.122 |
+
+Conjuros agregados: Crear Luz, Imbuir Calma, Percibir, Lazos de Luz, Éxtasis, Destruir Sentimientos
+Negativos (Luz); Mitigar Fuego, Inmunidad contra el Fuego, Barrera de Fuego, Mina de Fuego, Fundir,
+Sacrificio Vital, Sacrificio de Poder, Magia por Capacidades, Consumir Vida por Magia (Fuego); Moral
+(Guerra); Reparación, Modificar el Tamaño, Transporte Rápido, Invisibilidad (libres).
+
+**IA**: al empezar el asalto decide (`planMagia`) entre acumular magia pura, preparar su Conjuro
+Especialista o usar la magia innata (si su mejor innato rinde más que un asalto de espera), y gasta
+cansancio o Sacrificio de Poder si con eso lanza su meta ese mismo asalto; con Consumir Vida por Magia
+convierte PV en zeon cuando la reserva se le acaba. Intercepta una descarga si su Proyección
+probablemente llega y su daño no queda muy abajo. Cada conjuro nuevo se valora a su manera (Invisibilidad,
+con la chance de que lo noten; Transporte, según si lo alcanzan enseguida).
+
+**Interpretaciones nuevas, a confirmar:**
+
+1. La IA prepara un conjuro determinado sólo si es su Conjuro Especialista (por el +10); si no, la magia
+   pura le da más libertad. Lanzar el preparado no hace volver la magia pura acumulada.
+2. Lo reunido preparando un conjuro también queda a la mitad si ese asalto hace otra cosa.
+3. Usando la magia innata, puede interceptar con su innato.
+4. Al gastar cansancio en el ACT conserva 5 puntos (por debajo empiezan los negativos).
+5. Los conjuros de mantenimiento diario se lanzan en el combate (no se suponen lanzados de antes).
+6. Si la Proyección de quien intercepta no llega a 50 de la otra, su conjuro sale igual como un disparo
+   paralelo contra el atacante.
+7. Proyección Determinada: la usa si su Proyección con la tirada media (55) no llega al valor fijo; al
+   ser habilidad final, no sufre negativos.
+8. Frialdad: cuenta contra el Aura de combate, el Miedo, el Terror y la Fascinación del Ki, y el Éxtasis.
+9. Lazos de Luz: sujetan los lazos, no el mago (él queda libre); siguen aunque esté inconsciente y se
+   sueltan si muere o deja de mantenerlos. No se simula que un tercero los rompa.
+10. Éxtasis: los aliados elegidos lo aceptan sin tirada (sirve a quien tiene muchos negativos).
+11. Imbuir Calma y Destruir Sentimientos Negativos quitan el Miedo; no la Ira de Ira Ancestral.
+12. Barrera de Fuego: el muro va a 2 m del mago, perpendicular hacia el enemigo más cercano; se cruza
+    si el movimiento en línea recta lo atraviesa; la IA enemiga no lo rodea. Escudo, sólo si no tiene
+    otro.
+13. Mina de Fuego: se pone donde está un enemigo; estallarla es una acción; 320 a menos de 1 m.
+14. Fundir: el arma resiste con su Presencia (20, más la calidad) + 1d100 contra la RF del grado; si
+    falla, su portador la suelta. Sólo armas, no armaduras.
+15. Transporte Rápido: se aleja de quienes lo traban, hasta los metros del grado.
+16. Invisibilidad: cada asalto, Advertir contra la dificultad; si lo supera, ceguera parcial.
+17. Inmunidad contra el Fuego también baja 20 por intensidad su estado en la Tabla 76.
+18. Magia por Capacidades: en la simulación sólo cambia algo el Poder de un choque.
+19. Moral dura todo el combate (no tiene mantenimiento).
+20. Reparación devuelve el arma rota (los pedazos quedan a mano).
+21. Crear Luz va sobre el mago y anula la oscuridad natural a los suyos del radio.
+22. Sacrificio Vital: sólo en conjuros de ataque, de a 10 PV, sin bajar de la mitad de sus PV.
+
+**Lo que Stéphan conoce y no tiene uso en el combate simulado** (`sinSimular`): Destrucción de Sombras
+y Dominio Lumínico (sólo contra seres de oscuridad o de luz, que no se modelan), Detectar lo Negativo,
+Detectar Vida, Sentir el Calor (detección), Holograma (un señuelo: la IA no modela engaños), Espía de
+Luz, Crear Fuego, Control sobre el Fuego (contra seres de fuego), Ver en las Cenizas, Aumentar la
+Temperatura Ambiental, Atar (hacen falta sogas en la escena), Bolsa Infinita, Enviar Mensaje,
+Protección Anticonceptiva, Olvido, Marcha Implacable, Órdenes Precisas, Categorizar, Conocimiento,
+Saber Debilidad y Saber la Verdad.
 
 **Tabla 57 (choque de descargas)**, dada por el usuario (la copia del manual está cortada): diferencia
 1-50, se anulan; 51-100, la ganadora pasa con la mitad del daño base; 101 o más, pasa con el daño

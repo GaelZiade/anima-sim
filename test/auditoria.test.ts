@@ -6,6 +6,7 @@ import { crearLuchador } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
+import { bonoFrialdad } from '../src/motor/reglas';
 
 function ficha(nombre: string, rasgos: Rasgos = {}, extra: Partial<Ficha> = {}): Ficha {
   return {
@@ -149,5 +150,11 @@ describe('respuestas a la auditoría', () => {
     expect(ciegoEspalda - espaldaSola).toBe(-40); // −120 en total, no −80 − 80
     esquiva.trabados = [velez];
     expect(defensaFinal(esquiva, velez) - defensaFinal(esquiva, rivales[0])).toBe(-80);
+  });
+});
+
+describe('16. Frialdad (Core p.54, Tabla 13)', () => {
+  it('suma su bono a resistir efectos sobre el ánimo: el Aura de combate, el Miedo y el Terror', () => {
+    expect([bonoFrialdad(10), bonoFrialdad(40), bonoFrialdad(80), bonoFrialdad(140), bonoFrialdad(320)]).toEqual([0, 5, 10, 20, 40]);
   });
 });
