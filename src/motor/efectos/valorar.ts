@@ -13,7 +13,7 @@ import { fallaResistencia, tabla } from '../probabilidades';
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, conCambio, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, cacheDeDecision, conCambio, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 import { blancosConjuro, radioArea } from './comun';
 
@@ -124,13 +124,17 @@ export function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe:
   return { hace, recibe };
 }
 
+const sinBeneficio = cacheDeDecision<Luchador, { hace: number; recibe: number }>();
+
 /**
  * Valor de un beneficio sobre `a` en los próximos asaltos: el daño de más que hace a su mejor blanco
  * y el que deja de recibir (por λ de quien lo lanza). El turno se valora como tempo: cada +10, un
  * 10% más de lo que hace y recibe (aproximación).
  */
 export function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: Grado): number {
-  const antes = intercambio(ctx, a);
+  // Sin el beneficio es lo mismo para todos los conjuros y grados que se prueban en esta decisión.
+  let antes = sinBeneficio.get(a);
+  if (!antes) sinBeneficio.set(a, (antes = intercambio(ctx, a)));
   const despues = conCambio(() => {
     bendecir(a, l, c, g.bono!);
     return () => quitarBendicion(a, l, c);

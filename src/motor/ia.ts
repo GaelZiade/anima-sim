@@ -91,9 +91,20 @@ const memo = new Map<Luchador, Map<Luchador, Base>>();
 const rodean = new Map<Luchador, Luchador[]>();
 let ctxActual: Contexto | null = null;
 
+/** Cachés de otros módulos que valen lo que dura una decisión (el estado real no cambia en ella). */
+const cachesDeDecision: { clear(): void }[] = [];
+
+/** Una caché que se vacía con cada decisión nueva, como la de `base`. */
+export function cacheDeDecision<K, V>(): Map<K, V> {
+  const m = new Map<K, V>();
+  cachesDeDecision.push(m);
+  return m;
+}
+
 export function nuevaDecision(ctx?: Contexto) {
   memo.clear();
   rodean.clear();
+  for (const c of cachesDeDecision) c.clear();
   if (ctx) ctxActual = ctx;
 }
 
