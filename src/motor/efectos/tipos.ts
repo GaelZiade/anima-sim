@@ -7,7 +7,7 @@
 
 import type { Conjuro, Grado } from '../conjuros';
 import type { TiradaD100 } from '../dados';
-import type { Golpe, ResultadoDefensa } from '../golpe';
+import type { Golpe, OpcionesCritico, ResultadoDefensa } from '../golpe';
 import type { EstadoMagia, Mantenido } from '../magia';
 import type { Maniobra } from '../maniobras';
 import type { Contexto, Evento, Ficha, Luchador } from '../modelo';
@@ -24,7 +24,7 @@ export interface Motor {
   /** Lo suelta de una presa. */
   soltar(l: Luchador): void;
   desarmar(ctx: Contexto, l: Luchador, por: Luchador): void;
-  critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, bonoKi?: number, nivelFijo?: number): void;
+  critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, o?: OpcionesCritico): void;
   resolverDefensa(ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string): ResultadoDefensa;
   /** El combate ya tiene un ganador. */
   terminado(ctx: Contexto): boolean;

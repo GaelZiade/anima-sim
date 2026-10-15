@@ -454,11 +454,12 @@ export function mantenidoCon(l: Luchador, c: Conjuro): Mantenido | undefined {
  * conservar lo acumulado; si ni siquiera llega al daño, lo pierde; si no, vuelve a la reserva.
  * Devuelve qué pasó, para narrarlo.
  */
-export function danoAlAcumular(l: Luchador, dano: number, rng: Rng): { tirada: number; resultado: 'conserva' | 'vuelve' | 'pierde' } | null {
+export function danoAlAcumular(l: Luchador, dano: number, rng: Rng, critico = false): { tirada: number; resultado: 'conserva' | 'vuelve' | 'pierde' } | null {
   const e = l.magia;
   // Un conjuro determinado que todavía prepara también está en juego; uno listo, no (ya no acumula).
   const prep = e?.preparado && !preparadoListo(e) && e.preparado.zeon > 0 ? e.preparado : null;
-  if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || l.ficha.acumulacion) return null;
+  // Con acumulación de daño no lo hace, salvo que el ataque le cause un crítico (Core p.118).
+  if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || (l.ficha.acumulacion && !critico)) return null;
   // Preparando un conjuro determinado (y sin magia pura en juego), +40 (Core p.118).
   const habilidad = (l.ficha.resistirDolor ?? 0) + (e.acumulado <= 0 ? 40 : 0);
   const t = tirarD100(rng, umbralPifia(habilidad, l.cap.ajustePifia));

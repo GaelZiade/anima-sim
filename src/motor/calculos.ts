@@ -828,7 +828,9 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
   return (m.proyeccionDefensa ?? m.proyeccion) - Math.max(0, penAccion(def)) +
     conCeguera('frente', 0, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), 'parada') +
     (atk.sorprendeA.has(def) ? MOD_SORPRESA_DEFENSA : 0) +
-    (def.amenazadoPor === atk ? AMENAZADO.parada : 0) - (def.fascinado ? PEN_FASCINACION : 0);
+    (def.amenazadoPor === atk ? AMENAZADO.parada : 0) - (def.fascinado ? PEN_FASCINACION : 0) -
+    // Con acumulación de daño, −80 a la Proyección para usar un escudo mágico (Core p.99).
+    (def.ficha.acumulacion ? 80 : 0);
 }
 
 /** Bono de la Frialdad (con lo que le sume Moral) a resistir efectos sobre el ánimo (Core p.54, Tabla 13). */

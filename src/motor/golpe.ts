@@ -43,3 +43,14 @@ export interface Golpe {
   area?: number;
   centroArea?: { x: number; y: number };
 }
+
+/** Cómo se calcula un crítico. */
+export interface OpcionesCritico {
+  /** Potenciar Crítico (Ki): suma a la tirada (Dominus p.70). */
+  bonoKi?: number;
+  /** Nivel ya dado, sin tirada (Crítico Directo). */
+  nivelFijo?: number;
+  /** No viene del arma del atacante (el choque de un Impacto): sin sus bonos al crítico (Dominus p.12). */
+  sinBonos?: boolean;
+}
+

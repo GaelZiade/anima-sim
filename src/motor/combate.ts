@@ -19,7 +19,7 @@ import {
   esManiobraDeControl, esNoLetal, gradoPresa, localizacionApuntada, type EstadoMushin,
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
-import type { Golpe, ResultadoDefensa } from './golpe';
+import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { blancosConjuro, radioArea, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
@@ -1259,7 +1259,7 @@ function resolverDefensa(
   }
   // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
   // defiende con él (no se combina con parar o esquivar).
-  if (!proteccion && def.magia && !def.ficha.acumulacion) {
+  if (!proteccion && def.magia) {
     const nuevo = iaMagia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
     if (nuevo) {
       const g = lanzar(def, nuevo.conjuro, nuevo.grado);
@@ -1305,6 +1305,8 @@ function resolverDefensa(
     // Una pifia resta su nivel directamente de la defensa, sin mínimo (Core p.98), como en el pronóstico.
     const total = fija || habDef + valorDef;
     resultado = habAtk + tA.valor - total;
+    // Con acumulación, si superan la defensa de su escudo mágico pierde la acción (Core p.99).
+    if (conEscudo && def.ficha.acumulacion && resultado > 0) def.aLaDefensiva = true;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
     const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${def.magia!.escudo!.conjuro.nombre}` : '';
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
@@ -1775,7 +1777,7 @@ function impacto(ctx: Contexto, atk: Luchador, def: Luchador, fuerza: number, at
   const dano = Math.max(0, DANO_GRADO[grado] - 10 * (def.ficha.ta.CON ?? 0));
   if (dano > 0) {
     perderPv(ctx, atk, def, dano);
-    if (grado >= 4 && activo(def)) critico(ctx, atk, def, 2 * dano, false, 'normal');
+    if (grado >= 4 && activo(def)) critico(ctx, atk, def, 2 * dano, false, 'normal', { sinBonos: true });
   }
 }
 
@@ -2135,7 +2137,6 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
   // Samiel: el daño recibido de este enemigo se acumula como bono contra él (Dominus p.92).
   if (def.cap.est.samiel && !def.ficha.acumulacion) def.samiel.set(atk, (def.samiel.get(atk) ?? 0) + dano);
   log(ctx, () => `  ${def.ficha.nombre} pierde ${dano} PV (${def.pv}/${def.ficha.pv}).`, () => ({ dano: { quien: nro(ctx, def), cantidad: dano } }));
-  limitePorDano(ctx, def, dano);
   // Puntos vulnerables: un ataque apuntado a cabeza, corazón o (para inutilizar) una extremidad
   // critica con 1/10 de los PV actuales (Core p.91, p.97). Inutilizar no funciona con acumulación.
   // Ojos de la Muerte: todo golpe que daña es crítico; contra acumulación, en cambio, todo su cuerpo
@@ -2146,17 +2147,18 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
   const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
   const critica =
     (ojos && !acumula) || esCritico(danoPleno, pvAntes) || (vulnerable && pvAntes > 0 && danoPleno * 10 >= pvAntes);
+  limitePorDano(ctx, def, dano, critica);
   const enuthArcano = atk.cap.est.enuth >= 3;
-  if (critica) critico(ctx, atk, def, danoPleno, resistia, m, ki?.critico ?? 0);
+  if (critica) critico(ctx, atk, def, danoPleno, resistia, m, { bonoKi: ki?.critico ?? 0 });
   // Enuth arcano: todo ataque que dañe obliga a un control de inconsciencia (Dominus p.43).
   else if (enuthArcano && activo(def)) critico(ctx, atk, def, danoPleno, resistia, 'inconsciencia');
   verificarCaida(ctx, atk, def);
 }
 
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */
-function limitePorDano(ctx: Contexto, l: Luchador, dano: number) {
+function limitePorDano(ctx: Contexto, l: Luchador, dano: number, critico = false) {
   // Perder PV mientras acumula magia: Resistir el dolor para no perder la concentración (Core p.118).
-  const conc = l.magia ? danoAlAcumular(l, dano, ctx.rng) : null;
+  const conc = l.magia ? danoAlAcumular(l, dano, ctx.rng, critico) : null;
   if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva (menos 10)' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
   const limite = alPerderPv(l, dano);
   if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);
@@ -2175,7 +2177,8 @@ function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
 }
 
 /** Crítico (Core p.96). Con `nivelFijo` (Crítico Directo) no se tira: ese es el nivel. */
-function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, bonoKi = 0, nivelFijo?: number) {
+function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resistia: boolean, m: Maniobra, o: OpcionesCritico = {}) {
+  const { bonoKi = 0, nivelFijo } = o;
   atk.stats.criticosCausados++;
   if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
   const e = atk.cap.est;
@@ -2184,9 +2187,10 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   // Enuth: +20 al crítico para dejar inconsciente; arcano +50 (Dominus p.43).
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
   // Potenciar Crítico (Ki) suma a la tirada del crítico (Dominus p.70).
-  let bono = atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
+  // Un crítico que no viene del arma del atacante (el choque de un Impacto) no suma sus bonos (Dominus p.12).
+  let bono = o.sinBonos ? 0 : atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
   // Aumentar el Crítico: conjuro pasivo que se declara antes de tirar (Core p.157).
-  const aumento = nivelFijo === undefined && atk.magia ? iaMagia.aumentarCritico(ctx, atk, def, dano + bono) : null;
+  const aumento = nivelFijo === undefined && !o.sinBonos && atk.magia ? iaMagia.aumentarCritico(ctx, atk, def, dano + bono) : null;
   if (aumento) {
     const g = lanzar(atk, aumento.conjuro, aumento.grado);
     const nombre = `${aumento.conjuro.nombre} (${GRADOS[aumento.grado]})`;

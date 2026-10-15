@@ -73,7 +73,7 @@ export const consumirEsencia: ManejadorEfecto = {
 /** Crítico Directo (Core p.159): si falla la RM, un crítico del nivel del grado. */
 export const criticoDirecto: ManejadorEfecto = {
   alAlcanzar(m, { ctx, atk, def, g, rm, que }) {
-    if (m.tirarResistencia(ctx, def, rm, que, 'RM').falla) m.critico(ctx, atk, def, 0, false, 'normal', 0, g.critico);
+    if (m.tirarResistencia(ctx, def, rm, que, 'RM').falla) m.critico(ctx, atk, def, 0, false, 'normal', { nivelFijo: g.critico });
   },
   valorar: (v) => valorarPorFracaso(v, 'critico'),
 };
