@@ -509,7 +509,7 @@ function elegirModos(
   const base = { seraphite: 0 as 0 | 1 | 3, berserker: false, ataqueFinal: l.modo.ataqueFinal || activarAtaqueFinal };
   let mejor = { modo: base, bonoVariableEn: null as Luchador['bonoVariableEn'], valor: -Infinity };
   const seraphites: (0 | 1 | 3)[] = e.seraphite === 3 ? [0, 1, 3] : e.seraphite === 1 ? [0, 1] : [0];
-  // Kung Fu: el bono va al ataque, la defensa, el daño o el turno (Dominus p.31). El turno no cambia lo
+  // Kung Fu: el bono va al ataque, la defensa, el daño o el turno (Dominus p.32). El turno no cambia lo
   // que pega ni lo que recibe en el asalto: vale por actuar antes y sorprender (`valorTurno`).
   const bonos: Luchador['bonoVariableEn'][] = e.bonoVariable ? ['ataque', 'defensa', 'dano', 'turno'] : [null];
   const conTurno = e.bonoVariable

@@ -320,7 +320,7 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(danoRecibido([{ nombre: 'Peto', clase: 'dura', localizacion: 'peto', ta: {}, calidad: 0, entereza: 25 }])).toBeGreaterThan(0);
   });
 
-  it('Maniobra Especial: deja de servir sólo contra quien ya la presenció o sufrió (Dominus p.84)', () => {
+  it('Maniobra Especial: deja de servir sólo contra quien ya la presenció o sufrió (Dominus p.86)', () => {
     const atk = crearLuchador(ficha('A', { ventajas: [], artesMarciales: [] }), 'A', 0, 0);
     atk.cap = { ...atk.cap, est: { ...atk.cap.est, maniobraEspecial: true } };
     const b1 = crearLuchador(ficha('B1'), 'B', 1, 0);

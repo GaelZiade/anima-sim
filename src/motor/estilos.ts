@@ -99,7 +99,7 @@ export interface Estilos {
   bonoCriticoVital: number;
   /** Tabla de Ataque Inusual: crítico secundario sin el −10 (Dominus p.28). */
   criticoSecundarioLibre: boolean;
-  /** Tablas de daño que el estilo deja elegir sin penalizador: Dumah FIL o PEN (p.38), Kung Fu supremo PEN (p.31). */
+  /** Tablas de daño que el estilo deja elegir sin penalizador: Dumah FIL o PEN (p.41), Kung Fu supremo PEN (p.32). */
   tablasLibres: readonly TipoAtaque[];
   /** Emp arcano: cada defensa con éxito contra un arma permite un control para desarmar (p.39). */
   desarmaAlDefender: boolean;

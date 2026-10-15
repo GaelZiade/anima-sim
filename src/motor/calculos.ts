@@ -305,7 +305,7 @@ function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolea
 
 /**
  * Da su +20 contra `def` si `def` no la presenció ni sufrió y no la supera por 60 de habilidad base
- * (Dominus p.84).
+ * (Dominus p.86).
  */
 export function puedeManiobraEspecial(atk: Luchador, def: Luchador): boolean {
   return atk.cap.est.maniobraEspecial && !atk.maniobraEspecialVista.has(def) && def.ficha.defensa < atk.ficha.ataque + 60;

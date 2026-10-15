@@ -442,7 +442,7 @@ export interface Luchador {
   godhandListo: boolean;
   godhandPreparado: boolean;
   ataqueFinalUsado: boolean;
-  /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.84). */
+  /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.86). */
   maniobraEspecialVista: Set<Luchador>;
   /** Kardad supremo: ya repitió este asalto un control fallado al defenderse (Dominus p.37). */
   repitioControl: boolean;
