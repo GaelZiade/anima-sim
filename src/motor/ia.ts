@@ -4,7 +4,7 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
-  absorcionContra, activo, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  absorcionContra, activo, rfBase, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, tablaPara, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
 } from './calculos';
 import { pLlegaArea, tabla } from './probabilidades';
@@ -165,7 +165,7 @@ export function valorCritico(
   const vital = m === 'cabeza' || m === 'corazon';
   const bonoEnuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
   const base = danoPleno + atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
-  const ef = efectoCritico(base, def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano, loc, {
+  const ef = efectoCritico(base, rfBase(def) + def.cap.est.bonoRfCritico, loc, {
     inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
   });
   // Quien reduce el dolor de los críticos (Inmunidad, Eliminación) sufre más o menos la mitad.
@@ -783,7 +783,7 @@ function mejorManiobra(
     if (m === 'puntosPresion') {
       // RF contra daño + 20: si falla, −fracaso a toda acción y −2×fracaso PV (Dominus p.42).
       const dif = dificultadPuntosPresion(danoSiImpacta, e.mushin >= 3);
-      const margen = dif - def.ficha.rf - def.cap.est.bonoRfDano;
+      const margen = dif - rfBase(def);
       // Falla si el d100 de la RF sale por debajo del margen; el fracaso medio es la mitad del margen.
       const pFalla = Math.max(0, Math.min(1, (margen - 1) / 100));
       const fallo = Math.max(0, Math.min(margen, 100) / 2);
@@ -860,7 +860,7 @@ function mejorManiobra(
       // Destrucción por Ki: se prueba cada cantidad de Ki extra (+5 a la dificultad cada una).
       const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo });
       const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
-      const rf = def.ficha.rf + def.cap.est.bonoRfDano;
+      const rf = rfBase(def);
       const tope = Math.min(Math.floor(presenciaBase(atk.ficha) / 5), atk.ki!.reserva - 1);
       let base = 0;
       if (!def.haActuado && puedeActuar(def) && !def.ficha.acumulacion) base += p.pImpacto * amen;
@@ -1162,7 +1162,7 @@ function valorAreaKi(
  * 100 natural siempre resiste.
  */
 function fracasoRf(def: Luchador, dificultad: number): { p: number; medio: number } {
-  const margen = dificultad - (def.ficha.rf + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0));
+  const margen = dificultad - (rfBase(def) + (def.ki?.activo.rf ?? 0));
   const tope = Math.min(99, margen - 1);
   if (tope < 1) return { p: 0, medio: 0 };
   return { p: tope / 100, medio: margen - (tope + 1) / 2 };

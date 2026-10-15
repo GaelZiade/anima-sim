@@ -11,7 +11,7 @@ import {
   actPara, actPorCansancio, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
   preparadoListo, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
 } from './magia';
-import {
+import { rfCritico,
   activo, ataqueMagico, defensaEscudoMagico, ALCANCE, defensaFinal, distancia, danoBase, danoEsperado, pronostico, puedeActuar,
 } from './calculos';
 import { tabla } from './probabilidades';
@@ -285,7 +285,7 @@ export function aumentarCritico(ctx: Contexto, atk: Luchador, def: Luchador, bas
   const e = atk.magia;
   if (!e || perfil(atk) === 'bestia') return null;
   nuevaDecision(ctx);
-  const rf = def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0) + (def.bono?.resistencias ?? 0);
+  const rf = rfCritico(def);
   const valor = (b: number) => {
     const ef = efectoCritico(b, rf, null, { sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion });
     return ef.pFuera * (Math.max(0, def.pv) + 2 * amenaza(def, atk)) + ef.pNegativo * valorNegativo(atk, def, ef.negativo, 0, 0);

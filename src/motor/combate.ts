@@ -9,7 +9,7 @@ import {
   penPifiaTurno, umbralPifia, porcentajeDano,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, frialdadDe, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
+  absorcionContra, activo, ALCANCE, frialdadDe, rfBase, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
   enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, type ZonaArmadura,
 } from './calculos';
 import {
@@ -1500,7 +1500,7 @@ function resolverDefensa(
 function destruccionPorKi(ctx: Contexto, atk: Luchador, def: Luchador, extra: number, resistia: boolean) {
   const dif = dificultadDestruccion(atk, extra);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfDano;
+  const baseRf = rfBase(def);
   const fracaso = dadoRf === 100 ? 0 : dif - (baseRf + dadoRf);
   const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dif}`;
   if (fracaso <= 0) {
@@ -1535,7 +1535,7 @@ function efectosAlImpactar(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModK
 /** RF del defensor contra una dificultad (las Resistencias no sufren negativos, Core p.232). Devuelve el fracaso (0 si resiste). */
 function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, extra = 0): number {
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = l.ficha.rf + l.cap.est.bonoRfDano + (l.ki?.activo.rf ?? 0) + (l.bono?.resistencias ?? 0) + extra;
+  const baseRf = rfDe(l) + extra;
   const fracaso = dadoRf === 100 ? 0 : dificultad - (baseRf + dadoRf);
   const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dificultad}`;
   if (fracaso <= 0) log(ctx, () => `  ${l.ficha.nombre} resiste ${que} (${tirada}).`);
@@ -1548,10 +1548,10 @@ function tirarRf(ctx: Contexto, l: Luchador, dificultad: number, que: string, ex
  * mejor (interpretación). Un 100 natural siempre resiste. Devuelve el fracaso (0 si resiste).
  */
 function tirarResistencia(ctx: Contexto, l: Luchador, dificultad: number, que: string, cual: 'RM' | 'RF' | 'RM o RF', bono = 0): number {
-  const rf = l.ficha.rf + l.cap.est.bonoRfDano + (l.ki?.activo.rf ?? 0);
-  const rm = rmDe(l);
+  const rf = rfDe(l);
+  const rm = rmDe(l) + (l.bono?.resistencias ?? 0);
   const usa = cual === 'RF' || (cual === 'RM o RF' && rf > rm) ? 'RF' : 'RM';
-  const base = (usa === 'RF' ? rf : rm) + (l.bono?.resistencias ?? 0) + bono;
+  const base = (usa === 'RF' ? rf : rm) + bono;
   const dado = tirarD100Cerrada(ctx.rng);
   const fracaso = dado === 100 ? 0 : dificultad - (base + dado);
   const tirada = `${usa} ${base + dado} [${base}+${dado}] contra ${dificultad}`;
@@ -1835,7 +1835,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfDano;
+  const baseRf = rfBase(def);
   const res = baseRf + dadoRf;
   if (dadoRf === 100 || res >= dif) {
     log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);
@@ -2183,7 +2183,7 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
   // Incremento de Resistencia Física (Ki) suma a la RF durante el asalto (Dominus p.61).
-  const baseRf = def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0) + (def.bono?.resistencias ?? 0);
+  const baseRf = rfCritico(def);
   const res = baseRf + dadoRf;
   const tiradas = () => {
     if (nivelFijo !== undefined) return `Crítico ${nivel} contra RF ${res} [${baseRf}+${dadoRf}]`;

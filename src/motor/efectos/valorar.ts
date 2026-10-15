@@ -4,7 +4,7 @@
 import type { Contexto, Luchador } from '../modelo';
 import type { Conjuro, Grado } from '../conjuros';
 import { golpeDeConjuro, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
-import {
+import { rfCritico, rfDe,
   absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar,
   metrosTotales, danoEsperado, penAccion, pronostico, puedeActuar, tablaPara, visionEntre,
 } from '../calculos';
@@ -66,7 +66,7 @@ export function fallaResistencia(base: number, dif: number): { p: number; fracas
 /** RM (con lo que la sube) y RF de `l`, como en `tirarResistencia`. */
 export function resistencias(l: Luchador): { rm: number; rf: number } {
   const extra = l.bono?.resistencias ?? 0;
-  return { rm: rmDe(l) + extra, rf: l.ficha.rf + l.cap.est.bonoRfDano + (l.ki?.activo.rf ?? 0) + extra };
+  return { rm: rmDe(l) + extra, rf: rfDe(l) };
 }
 
 /** P(un conjuro anímico de `atk` alcanza a `def` con un resultado de daño contra su TA de energía). */
@@ -81,7 +81,7 @@ export function pAlcanzaAnimico(atk: Luchador, def: Luchador, c: Conjuro, g: Gra
  * combate pasados 150 (o 50 en la cabeza, 100 en cabeza o corazón) y negativos si no.
  */
 export function valorCriticoFijo(atk: Luchador, def: Luchador, nivel: number): number {
-  const rf = def.ficha.rf + def.cap.est.bonoRfCritico + def.cap.est.bonoRfDano + (def.ki?.activo.rf ?? 0) + (def.bono?.resistencias ?? 0);
+  const rf = rfCritico(def);
   let pFuera = 0, pNeg = 0, suma = 0;
   for (let d = 1; d <= 99; d++) {
     const f = nivel - rf - d;

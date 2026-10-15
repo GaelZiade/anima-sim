@@ -779,3 +779,24 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
 export function frialdadDe(l: Luchador): number {
   return bonoFrialdad((l.ficha.frialdad ?? 0) + (l.bono?.frialdad ?? 0));
 }
+
+// --------------------------------------------------------------------------- Resistencias
+
+/** RF de la ficha con lo que la sube contra el daño (ventajas y artes marciales). Las Resistencias no sufren el negativo a toda acción (Core p.232). */
+export function rfBase(l: Luchador): number {
+  return l.ficha.rf + l.cap.est.bonoRfDano;
+}
+
+/**
+ * RF con lo que la sube durante el combate: Incremento de Resistencia Física del Ki (Dominus p.61) y
+ * el "+ a todas las Resistencias" de un conjuro (Protección Final, Arcana p.35).
+ */
+export function rfDe(l: Luchador): number {
+  return rfBase(l) + (l.ki?.activo.rf ?? 0) + (l.bono?.resistencias ?? 0);
+}
+
+/** RF contra un crítico: con los bonos que sólo valen contra críticos. */
+export function rfCritico(l: Luchador): number {
+  return rfDe(l) + l.cap.est.bonoRfCritico;
+}
+
