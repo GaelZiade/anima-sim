@@ -403,6 +403,12 @@ diez lugares.
   `mejorDestruccionKi`).
 - **Lo que se ve de un luchador** (`estadoVisible` en `condiciones.ts`): una fila por estado; la
   página y el registro lo muestran solos.
+- **Una regla, una función:** quién golpea un punto vulnerable (`golpeAPuntoVulnerable`), con qué
+  característica se hace un control de maniobra (`mejorCaracteristica`, con el Poder de Velez), con
+  qué Fuerza presa un arma (`fuerzaPresaArma`, datos en `rasgos.ts`) y qué tablas de daño deja elegir
+  un estilo (`tablasLibres`). Motor, pronóstico e IA las usan igual.
+- **Hipótesis aisladas:** `conCambio` aparta la memoria de la decisión mientras dura y la recupera al
+  deshacer; ningún valor calculado con el estado cambiado sobrevive.
 - **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
 
 Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de

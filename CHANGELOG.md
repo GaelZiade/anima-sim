@@ -14,6 +14,10 @@ retomar el trabajo, empezar por README.md.
   motor (`Evento.sujeto`); quien huye deja el tablero; selector de maniobras; el compendio muestra Ki
   y magia sin releer planillas; progreso dentro de cada tanda; canvas y guardado sin trabas;
   `main.ts` en módulos.
+- **Reglas que faltaban** (AUDITORIA.md, correcciones 48 a 56): Debilidad, parada sin armas con
+  armadura, armas con regla Presa, Maniobra Especial por rival, Inutilizar a la pantorrilla, Dumah y
+  Kung Fu (tablas, bono al turno), Enuth arcano, Velez arcano y Ojos de la Muerte.
+- **IA:** cada hipótesis corre con su propia memoria.
 - **Medición** (500): sin cambios fuera del ruido.
 
 ## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)

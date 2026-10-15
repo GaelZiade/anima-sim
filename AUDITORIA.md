@@ -52,24 +52,17 @@ Gaia I. Las páginas son las del PDF (las del índice impreso son 2 menos), como
 
 ## 3. Falta modelar (reglas del manual que no están)
 
-**Afectan combates comunes:**
+Todo lo que figuraba acá quedó resuelto el 15/10/2026 (sección 8, correcciones 48 a 56): Debilidad,
+parar sin armas con armadura dura, armas con regla Presa, Kung Fu (bono al turno, PEN), Dumah (FIL o
+PEN), Inutilizar a la pantorrilla, Ojos de la Muerte (líneas existenciales, invisibles), Velez
+arcano (Poder en los controles), Enuth arcano contra la acumulación y la Maniobra Especial por rival.
 
-1. Mushin arcano, **Debilidad**: −1 a FUE, DES, AGI y CON por cada 10 de fracaso (Core p.233). Hoy sólo
-   se registra.
-2. Parar sin armas con armadura dura de camisola o completa usa la entereza de la armadura (Core p.93).
-3. Armas con regla **Presa** (látigo, lazo, red): presan con la Fuerza del arma, +1 por cada +5 de
-   calidad (Core p.76).
+**No hace falta modelar:** Enuth puede reducir su daño a voluntad (Dominus p.43), pero eso nunca ayuda
+a ganar un combate; Ojos de la Muerte ignora la Barrera de Daño de los *objetos* (Dominus p.78), no
+la de las criaturas.
 
-**Opciones que la IA no considera (la regla está, la decisión no):**
-
-4. Kung Fu: poner el bono variable al turno; Kung Fu supremo atacando en PEN; Dumah eligiendo FIL o PEN.
-5. Inutilizar a la pantorrilla (−10) en vez del muslo o el brazo (−20).
-6. Ojos de la Muerte: ignorar la barrera de daño y apuntar a las líneas (−10, +40 al crítico).
-7. Velez arcano: usar el Poder en los controles enfrentados.
-8. Enuth: reducir el daño a voluntad; contra acumulación, todos sus ataques cuentan como apuntados a
-   puntos vulnerables.
-9. Maniobra Especial: se pierde por cada rival que la vio (hoy, una vez para todos) y compara
-    habilidades base (hoy, finales).
+**Pendiente de decisión:** la Tabla 25 da la velocidad "una vez que ya se encuentra en movimiento"
+(Core p.62) sin decir cuánto avanza quien arranca de parado; hoy corre a tope desde el primer asalto.
 
 ## 4. Verificado correcto
 
@@ -245,8 +238,8 @@ la foto de cada línea lleva los estados (`estadoVisible`), Ki y zeon.
 **Efecto medido** (500 combates): sin cambios fuera del ruido (Stéphan contra Teseo 86 → 89; grupo
 63 ± 2).
 
-**Queda como está, a propósito:** `conCambio` no vacía la memoria de la decisión (las hipótesis de
-hoy no la leen; si una nueva la leyera, tiene que llamar a `nuevaDecision`, como `elegirAumento`).
+**Cerrado después:** `conCambio` aparta la memoria de la decisión mientras prueba el cambio (ver al
+final).
 
 **Cerrado después:** de quién habla cada línea es un dato del evento (`Evento.sujeto`: quien ataca,
 quien recibe el daño o, si no, el primer nombre de la línea, calculado en el motor sólo con el
@@ -254,4 +247,21 @@ registro prendido); el compendio muestra Ki y magia y ya no relee la planilla en
 progreso de "Simular muchos" avanza dentro de cada tanda; `aliadosSobre` se recuerda por decisión.
 En el escenario más lento no hay un cuello de botella: el perfil se reparte (Dijkstra 5%,
 `preparar` 5%, el resto menos), y leer planillas pasa una sola vez.
+
+### Reglas que faltaban (cerradas el 15/10/2026)
+
+| # | Qué faltaba | Qué dice el manual | Dónde |
+|---|---|---|---|
+| 48 | **Debilidad** (Mushin arcano y conjuros) sólo se anotaba | −1 a FUE, DES, AGI y CON por cada 10 de fracaso (Core p.233); con lo que eso cambia de ataque, defensa, turno, daño y RF | `efectos/estados.ts`, `combate-ki.ts` |
+| 49 | **Parar sin armas** con armadura dura usaba la entereza del cuerpo | Con una armadura dura de camisola o completa puede bloquear con su entereza (Core p.93) | `rotura.ts` |
+| 50 | **Armas con regla Presa** (látigo, lazo, red, kusari-gama) no podían presar | Presan con la Fuerza del arma (8, 9, 10, 8), +1 cada +5 de calidad (Core p.76-77), también al sostener la presa | `rasgos.ts`, `estilos.ts`, `maniobras.ts`, `combate.ts` |
+| 51 | **Maniobra Especial** se perdía para todos al usarla una vez | Deja de servir contra quien la presenció o sufrió (Dominus p.86). Presencian el blanco y los rivales activos que ven al atacante (interpretación) | `calculos.ts`, `combate.ts` |
+| 52 | **Inutilizar** apuntaba al brazo o al muslo (−20) | Brazo o pierna; la pantorrilla es pierna y cuesta −10 (Core p.91-92) | `maniobras.ts` |
+| 53 | **Dumah y Kung Fu supremo** atacaban sólo en su tabla principal; Kung Fu no ponía el bono al turno | Dumah elige FIL o PEN (Dominus p.41); Kung Fu supremo también PEN, y el bono variable puede ir al turno (Dominus p.32) | `estilos.ts`, `calculos.ts`, `ia.ts` |
+| 54 | **Enuth arcano** contra seres con acumulación | Todos sus ataques cuentan como apuntados a puntos vulnerables (Dominus p.43). Una sola función decide el punto vulnerable para motor, pronóstico e IA | `calculos.ts` (`golpeAPuntoVulnerable`) |
+| 55 | **Velez arcano** usaba Fuerza, Destreza o Agilidad en los controles | Puede usar su Poder al hacer o sufrir cualquier maniobra con control (Dominus p.40). Una sola función para todos los controles | `maniobras.ts` (`mejorCaracteristica`) |
+| 56 | **Ojos de la Muerte** no podía apuntar a las líneas y sufría ceguera completa contra invisibles | Líneas existenciales: −10 y +40 al crítico; contra invisibles sólo ceguera parcial (Dominus p.78) | `maniobras.ts`, `calculos.ts`, `ia.ts` |
+
+**IA, hipótesis:** `conCambio` aparta la memoria de la decisión mientras prueba un cambio y la
+recupera al deshacerlo; ninguna hipótesis puede leer valores del estado real (huella idéntica).
 
