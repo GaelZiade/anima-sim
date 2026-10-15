@@ -200,3 +200,13 @@ export function pLlegaArea(umbralAtaque: number, blancos: { s: number; umbralDef
   }
   return llega;
 }
+
+/**
+ * Una Resistencia de base `base` contra `dif` con 1d100 cerrado (el 100 siempre resiste): P(fallarla)
+ * y el fracaso medio cuando falla.
+ */
+export function fallaResistencia(base: number, dif: number): { p: number; fracaso: number } {
+  const margen = dif - base;
+  const n = Math.max(0, Math.min(99, margen - 1));
+  return { p: n / 100, fracaso: n ? margen - (n + 1) / 2 : 0 };
+}

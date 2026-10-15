@@ -9,8 +9,10 @@ import {
   penPifiaTurno, umbralPifia, porcentajeDano,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, frialdadDe, rfBase, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase, defensaFinal, distancia,
-  enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion, perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA, type ZonaArmadura,
+  absorcionContra, activo, ALCANCE, frialdadDe, resistenciaCalor, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
+  defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
+  perfilDe, proximaRanura, puedeActuar, turnoFinal, capasDe, zonaDe, ataqueMagico, defensaEscudoMagico, modProyectil,
+  visionEntre, PEN_COBERTURA, type ZonaArmadura,
 } from './calculos';
 import {
   atributo, bonoCaracteristica, caracteristicasControl, controlCaracteristica, controlEnfrentado, dificultadPuntosPresion, esApuntado,
@@ -23,7 +25,7 @@ import * as iaMagia from './ia-magia';
 import { blancosConjuro, cruzarMuros, detonarMina, efecto, type Lanzado, type Lanzamiento, type Motor } from './efectos';
 import { GRADOS } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
+  crearEstadoMagia, danoAlAcumular, nivelLlamas, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, presenciaDe, rmDe,
   romperEscudo, terminarAsaltoMagia, terminarMantenidos, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
@@ -1018,8 +1020,7 @@ const quienPrendio = new WeakMap<Luchador, Luchador>();
  * Si ya ardía, queda el peor de los dos.
  */
 function prender(ctx: Contexto, atk: Luchador, l: Luchador, valor: number) {
-  // Cada intensidad de calor a la que es inmune baja 20 su estado (Core p.236).
-  const nivel = (l.ficha.acumulacion ? Math.floor(valor / 5) : valor) - 20 * (l.bono?.inmuneFuego ?? 0);
+  const nivel = nivelLlamas(l, valor);
   if (nivel < 100 || nivel <= l.llamas || l.bono?.cuerpoFuego) return;
   l.llamas = nivel;
   quienPrendio.set(l, atk);
@@ -1125,7 +1126,7 @@ function efectoAnimico(ctx: Contexto, atk: Luchador, def: Luchador, a: NonNullab
  * alcanza, dado o recibido (interpretación).
  */
 function quemarAlTocar(ctx: Contexto, llamas: Luchador, quien: Luchador) {
-  const fracaso = tirarResistencia(ctx, quien, 2 * presenciaDe(llamas), `las llamas de ${llamas.ficha.nombre}`, 'RF', 5 * (quien.ficha.ta.CAL ?? 0) + 5 * (quien.bono?.inmuneFuego ?? 0));
+  const fracaso = tirarResistencia(ctx, quien, 2 * presenciaDe(llamas), `las llamas de ${llamas.ficha.nombre}`, 'RF', 5 * (quien.ficha.ta.CAL ?? 0) + resistenciaCalor(quien));
   if (fracaso >= 2) perderPv(ctx, llamas, quien, Math.floor(fracaso / 2));
 }
 
@@ -1500,7 +1501,7 @@ function resolverDefensa(
 function destruccionPorKi(ctx: Contexto, atk: Luchador, def: Luchador, extra: number, resistia: boolean) {
   const dif = dificultadDestruccion(atk, extra);
   const dadoRf = tirarD100Cerrada(ctx.rng);
-  const baseRf = rfBase(def);
+  const baseRf = rfDe(def);
   const fracaso = dadoRf === 100 ? 0 : dif - (baseRf + dadoRf);
   const tirada = `RF ${baseRf + dadoRf} [${baseRf}+${dadoRf}] contra ${dif}`;
   if (fracaso <= 0) {
@@ -1835,7 +1836,7 @@ function puntosDePresion(ctx: Contexto, atk: Luchador, def: Luchador, dano: numb
   const dif = dificultadPuntosPresion(dano, atk.cap.est.mushin >= 3);
   const dadoRf = tirarD100Cerrada(ctx.rng);
   // Las Resistencias no sufren el negativo a toda acción (Core p.232).
-  const baseRf = rfBase(def);
+  const baseRf = rfDe(def);
   const res = baseRf + dadoRf;
   if (dadoRf === 100 || res >= dif) {
     log(ctx, () => `  ${def.ficha.nombre} resiste los puntos de presión (RF ${res} [${baseRf}+${dadoRf}] contra ${dif}).`);

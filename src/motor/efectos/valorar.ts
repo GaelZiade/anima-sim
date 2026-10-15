@@ -3,12 +3,14 @@
 
 import type { Contexto, Luchador } from '../modelo';
 import type { Conjuro, Grado } from '../conjuros';
-import { golpeDeConjuro, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
+import { golpeDeConjuro, nivelLlamas, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
 import { rfCritico, rfDe,
   absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar,
   metrosTotales, danoEsperado, penAccion, pronostico, puedeActuar, tablaPara, visionEntre,
 } from '../calculos';
-import { tabla } from '../probabilidades';
+import { fallaResistencia, tabla } from '../probabilidades';
+
+export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
 import { amenaza, base, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
@@ -49,19 +51,6 @@ export function quiereControl(ctx: Contexto, l: Luchador, obj: Luchador, c: Conj
 /** Asaltos en que se valora un efecto que dura (armadura, beneficios, tormenta). */
 export const ASALTOS_EFECTO = 4;
 
-/** P(falla una Resistencia de base `base` contra `dif`) y el fracaso medio cuando falla; el 100 resiste. */
-export function fallaResistencia(base: number, dif: number): { p: number; fracaso: number } {
-  let n = 0;
-  let suma = 0;
-  for (let d = 1; d <= 99; d++) {
-    const f = dif - base - d;
-    if (f > 0) {
-      n++;
-      suma += f;
-    }
-  }
-  return { p: n / 100, fracaso: n ? suma / n : 0 };
-}
 
 /** RM (con lo que la sube) y RF de `l`, como en `tirarResistencia`. */
 export function resistencias(l: Luchador): { rm: number; rf: number } {
@@ -113,7 +102,7 @@ export function valorPrender(def: Luchador, bono: number): number {
   if (def.bono?.cuerpoFuego) return 0;
   let v = 0;
   for (let d = 1; d <= 100; d++) {
-    const n = def.ficha.acumulacion ? Math.floor((d + bono) / 5) : d + bono;
+    const n = nivelLlamas(def, d + bono);
     if (n >= 100 && n > def.llamas) v += danoDeLlamas(def, n) - danoDeLlamas(def, def.llamas);
   }
   return v / 100;

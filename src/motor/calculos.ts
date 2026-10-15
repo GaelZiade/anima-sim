@@ -800,3 +800,11 @@ export function rfCritico(l: Luchador): number {
   return rfDe(l) + l.cap.est.bonoRfCritico;
 }
 
+/**
+ * Bono a las Resistencias contra el calor: el de Cuerpo a Fuego y +5 por cada intensidad de calor a la
+ * que es inmune (Inmunidad contra el Fuego, Core p.156, p.158).
+ */
+export function resistenciaCalor(l: Luchador): number {
+  return (l.bono?.resCalor ?? 0) + 5 * (l.bono?.inmuneFuego ?? 0);
+}
+

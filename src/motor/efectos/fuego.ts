@@ -1,7 +1,7 @@
 // Efectos de la vía del Fuego (Core p.155-159): Incinerar, Tormenta de Fuego, Mitigar Fuego, Barrera de
 // Fuego, Mina de Fuego, Crear Fuego y Control sobre el Fuego.
 
-import { activo, distancia } from '../calculos';
+import { activo, distancia, resistenciaCalor } from '../calculos';
 import { DADO_FIJO, tirarD100Cerrada } from '../dados';
 import type { Golpe } from '../golpe';
 import { dejarDeMantener, estadoLlamas, golpeDeConjuro, mantenidoCon, RANURA_MAGIA, type Mantenido } from '../magia';
@@ -17,7 +17,7 @@ import {
 
 /** Incinerar (Core p.158): RM o se prende, con una tirada con bono en la Tabla 76. */
 function intentarIncinerar(m: Motor, ctx: Contexto, l: Luchador, b: Luchador, rm: number, bono: number) {
-  if (!m.tirarResistencia(ctx, b, rm, 'Incinerar', 'RM', (b.bono?.resCalor ?? 0) + 5 * (b.bono?.inmuneFuego ?? 0))) return;
+  if (!m.tirarResistencia(ctx, b, rm, 'Incinerar', 'RM', resistenciaCalor(b))) return;
   m.prender(ctx, l, b, tirarD100Cerrada(ctx.rng) + bono);
 }
 
@@ -108,7 +108,7 @@ export const incinerar: ManejadorEfecto = {
     let v = 0;
     for (const b of enemigos(ctx, l)) {
       if (!aLaVista(ctx, l, b, g.radio ?? 0)) continue;
-      const valor = fallaResistencia(resistencias(b).rm + (b.bono?.resCalor ?? 0), g.rm ?? 0).p * valorPrender(b, g.llamas ?? 0);
+      const valor = fallaResistencia(resistencias(b).rm + resistenciaCalor(b), g.rm ?? 0).p * valorPrender(b, g.llamas ?? 0);
       if (valor > 0) {
         blancos.push(b);
         v += valor;

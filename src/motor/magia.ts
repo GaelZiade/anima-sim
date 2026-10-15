@@ -490,6 +490,14 @@ export function estadoLlamas(nivel: number): string {
   return ESTADOS_LLAMAS.find(([n]) => nivel >= n)?.[1] ?? '';
 }
 
+/**
+ * Nivel en la Tabla 76 con el que queda prendido por un resultado: un ser con acumulación lo divide entre
+ * 5, y cada intensidad de calor a la que es inmune lo baja 20 (Core p.236).
+ */
+export function nivelLlamas(l: Luchador, valor: number): number {
+  return (l.ficha.acumulacion ? Math.floor(valor / 5) : valor) - 20 * (l.bono?.inmuneFuego ?? 0);
+}
+
 /** PV que pierde por asalto en ese estado (Core p.237): la armadura contra calor resta 2 por TA, salvo calcinado. */
 export function danoLlamas(l: Luchador): number {
   const acumula = !!l.ficha.acumulacion;
