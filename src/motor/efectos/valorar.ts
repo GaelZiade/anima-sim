@@ -6,14 +6,14 @@ import type { Conjuro, Grado } from '../conjuros';
 import { golpeDeConjuro, nivelLlamas, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
 import { rfCritico, rfDe,
   absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar,
-  metrosTotales, danoEsperado, penAccion, pronostico, puedeActuar, tablaPara, visionEntre,
+  metrosTotales, danoEsperado, penAccion, pronostico, tablaPara, visionEntre,
 } from '../calculos';
 import { fallaResistencia, tabla } from '../probabilidades';
 
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, cacheDeDecision, conCambio, enemigos, golpeDe, lambda, pierdeElAsalto, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, cacheDeDecision, conCambio, enemigos, lambda, pierdeElAsalto, riesgoContra, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 import { blancosConjuro, radioArea } from './comun';
 
@@ -40,7 +40,7 @@ export function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: 
   const p = pronostico(atk, def, ataqueMagico(atk, def), defensaContraConjuro(def, atk, ki, area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area });
   let v = valorGolpe(atk, def, p, 0);
   if (pierdeElAsalto(def)) v += p.pImpacto * amenaza(def, atk);
-  if (enAlcance(atk, def) && def.ataquesRestantes > 0 && puedeActuar(def)) v -= lambda(atk) * p.pContra * golpeDe(def, atk);
+  if (enAlcance(atk, def)) v -= riesgoContra(atk, def, p);
   return v;
 }
 
