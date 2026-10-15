@@ -300,7 +300,7 @@ export function deArea(c: Conjuro, g: Grado): boolean {
 }
 
 /** Lo que cuesta lanzarlo: su zeon, más 10 si usa Control del Espacio para elegir blancos. */
-export function costeConjuro(c: Conjuro, g: Grado, control = false): number {
+export function costeConjuro(g: Grado, control = false): number {
   return g.zeon + (control ? ZEON_CONTROL_DEL_ESPACIO : 0);
 }
 
@@ -321,7 +321,7 @@ export function presenciaDe(l: Luchador): number {
 export function lanzar(l: Luchador, c: Conjuro, grado: number, extra: Omit<Mantenido, 'conjuro' | 'grado'> = {}, control = false): Grado {
   const e = l.magia!;
   const g = c.grados[grado];
-  const coste = costeConjuro(c, g, control);
+  const coste = costeConjuro(g, control);
   const pr = preparadoListo(e);
   if (extra.innato) {
     // Innato: no gasta zeon (Core p.117); Control del Espacio, sí, de la reserva.
@@ -503,9 +503,8 @@ export function nivelLlamas(l: Luchador, valor: number): number {
 }
 
 /** PV que pierde por asalto en ese estado (Core p.237): la armadura contra calor resta 2 por TA, salvo calcinado. */
-export function danoLlamas(l: Luchador): number {
+export function danoLlamas(l: Luchador, n = l.llamas): number {
   const acumula = !!l.ficha.acumulacion;
-  const n = l.llamas;
   if (n >= 300) return acumula ? 250 : 50;
   const base = n >= 240 ? 25 : n >= 180 ? 10 : 0;
   if (!base) return 0;

@@ -74,7 +74,7 @@ describe('qué conjuros conoce', () => {
 describe('Control del Espacio (Arcana p.28)', () => {
   it('cuesta 10 de zeon más y deja afuera a los suyos', () => {
     const c = conjuro('Bola de Fuego');
-    expect(costeConjuro(c, c.grados[1], true)).toBe(110);
+    expect(costeConjuro(c.grados[1], true)).toBe(110);
     const l = crearLuchador(mago({ controlDelEspacio: true }), 'A', 0, 0);
     const aliado = crearLuchador(soldado, 'A', 20, 0);
     const e1 = crearLuchador(soldado, 'B', 21, 0);

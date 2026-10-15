@@ -21,7 +21,8 @@ import type { Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { ModKi } from './ki';
 import { atributo, bonoCaracteristica } from './maniobras';
-import { alcanzable, amenaza, enemigos, lambda, nuevaDecision, perfil, trabadoConAlguien, valorGolpe, valorNegativo } from './ia';
+import { alcanzable, amenaza, enemigos, lambda, nuevaDecision, perfil, trabadoConAlguien, valorGolpe, valorNegativo, conCambio,
+} from './ia';
 
 
 /**
@@ -126,7 +127,7 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
         if (g.zeon > disponible) continue;
         const uso = mejorUso(ctx, l, c, i, alcance, res);
         if (!uso) continue;
-        const zeon = costeConjuro(c, g, uso.l.control);
+        const zeon = costeConjuro(g, uso.l.control);
         if (zeon > disponible) continue;
         const coste = precioZeon(l) * (zeon + (g.mantenimiento ?? 0) * (ASALTOS_EFECTO - 1));
         if (uso.valor - coste > (mejor?.valor ?? 0)) mejor = { l: uso.l, valor: uso.valor - coste, zeon };
@@ -157,7 +158,7 @@ export function poderPorCapacidades(l: Luchador): number {
  * que le alcanzan, si su Proyección probablemente llega a 50 del ataque y su descarga no queda muy por
  * debajo (en 1d100 + daño + Poder, perder por más de 50 la deja pasar).
  */
-export function interceptarCon(ctx: Contexto, l: Luchador, atk: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): Lanzamiento | null {
+export function interceptarCon(_ctx: Contexto, l: Luchador, atk: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): Lanzamiento | null {
   const e = l.magia!;
   if (perfil(l) === 'bestia') return null;
   const poder = bonoCaracteristica(atributo(l, 'POD'));
@@ -217,7 +218,7 @@ function metaMagica(ctx: Contexto, l: Luchador, alcance: number): Meta | null {
       if (g.zeon > zeonLibre(e) + e.acumulado + (e.preparado?.zeon ?? 0)) continue;
       const uso = mejorUso(ctx, l, c, i, alcance, []);
       if (!uso) continue;
-      const zeon = costeConjuro(c, g, uso.l.control);
+      const zeon = costeConjuro(g, uso.l.control);
       const neto = uso.valor - precioZeon(l) * (zeon + (g.mantenimiento ?? 0) * (ASALTOS_EFECTO - 1));
       if (neto <= 0) continue;
       const pr = e.preparado;
@@ -313,7 +314,7 @@ export function aumentarCritico(ctx: Contexto, atk: Luchador, def: Luchador, bas
  * Apagarse en su turno (Core p.236): si ya lo quema, o si está por empezar a quemarlo (aproximación;
  * la regla sólo dice cómo, no cuándo conviene).
  */
-export function quiereApagarse(ctx: Contexto, l: Luchador): boolean {
+export function quiereApagarse(_ctx: Contexto, l: Luchador): boolean {
   if (perfil(l) === 'bestia') return false;
   return danoLlamas(l) > 0 || l.llamas >= 170;
 }
@@ -338,9 +339,11 @@ export function escudoMagicoAlDefender(ctx: Contexto, def: Luchador, atk: Luchad
     for (const i of gradosPosibles(c, def.ficha.inteligencia ?? 6, def.ficha.magia)) {
       const gr = c.grados[i];
       if (gr.zeon > e.acumulado || (gr.resistencia ?? 0) < golpe) continue;
-      e.escudo = { conjuro: c, grado: i, resistencia: gr.resistencia ?? 0 };
-      const conEscudo = danoEsperado(atk, def, habAtk, defensaEscudoMagico(def, atk), { ki: g.ki, tipo: g.tipo, ranura: g.ranura });
-      e.escudo = null;
+      const conEscudo = conCambio(() => {
+        const previo = e.escudo;
+        e.escudo = { conjuro: c, grado: i, resistencia: gr.resistencia ?? 0 };
+        return () => { e.escudo = previo; };
+      }, () => danoEsperado(atk, def, habAtk, defensaEscudoMagico(def, atk), { ki: g.ki, tipo: g.tipo, ranura: g.ranura }));
       const neto = lambda(def) * (fisica - conEscudo) * (1 + otros) - precioZeon(def) * gr.zeon;
       if (neto > mejorNeto) {
         mejor = { conjuro: c, grado: i, objetivo: null };

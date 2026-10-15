@@ -22,6 +22,19 @@ import {
   penManiobra, pGanaControl, type EstadoMushin, type Maniobra,
 } from './maniobras';
 
+/**
+ * Evalúa `f` con un cambio temporal en el estado (lo que haría un conjuro, una armadura…) y lo deshace
+ * siempre, aunque `f` falle. `cambiar` aplica el cambio y devuelve cómo deshacerlo.
+ */
+export function conCambio<T>(cambiar: () => () => void, f: () => T): T {
+  const deshacer = cambiar();
+  try {
+    return f();
+  } finally {
+    deshacer();
+  }
+}
+
 /** Peso del daño recibido frente al causado. */
 const LAMBDA: Record<Perfil, number> = { agresivo: 0.5, equilibrado: 0.9, cauto: 1.4, bestia: 0.3 };
 
@@ -1761,7 +1774,7 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
  * no la usó. En espera su Ki queda apartado: no se pierde al terminar el asalto, puede seguir
  * acumulando y ejecutar otras sin perderla (Core p.105).
  */
-export function tecnicaParaEspera(ctx: Contexto, l: Luchador): Tecnica | null {
+export function tecnicaParaEspera(_ctx: Contexto, l: Luchador): Tecnica | null {
   const t = l.ki?.objetivo;
   if (!t || !puedePonerEnEspera(l, t)) return null;
   return t;

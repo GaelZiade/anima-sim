@@ -13,7 +13,7 @@ import { fallaResistencia, tabla } from '../probabilidades';
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, conCambio, enemigos, golpeDe, lambda, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 import { blancosConjuro, radioArea } from './comun';
 
@@ -88,13 +88,8 @@ export function valorCriticoFijo(atk: Luchador, def: Luchador, nivel: number): n
 /** PV que perdería en llamas desde ese nivel de la Tabla 76 en los próximos asaltos, sin apagarse. */
 export function danoDeLlamas(l: Luchador, desde: number): number {
   if (desde < 100) return 0;
-  const antes = l.llamas;
   let total = 0;
-  for (let i = 0, n = desde; i < ASALTOS_EFECTO - 1; i++, n += 10) {
-    l.llamas = n;
-    total += danoLlamas(l);
-  }
-  l.llamas = antes;
+  for (let i = 0, n = desde; i < ASALTOS_EFECTO - 1; i++, n += 10) total += danoLlamas(l, n);
   return Math.min(total, Math.max(0, l.pv));
 }
 
@@ -136,24 +131,29 @@ export function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe:
  */
 export function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: Grado): number {
   const antes = intercambio(ctx, a);
-  bendecir(a, l, c, g.bono!);
-  let despues = intercambio(ctx, a);
-  // Invisible: cada enemigo puede notarlo con Advertir (ceguera parcial); se pondera por esa chance.
-  const dif = g.bono!.invisible;
-  if (dif) {
+  const despues = conCambio(() => {
+    bendecir(a, l, c, g.bono!);
+    return () => quitarBendicion(a, l, c);
+  }, () => {
+    const d = intercambio(ctx, a);
+    // Invisible: cada enemigo puede notarlo con Advertir (ceguera parcial); se pondera por esa chance.
+    const dif = g.bono!.invisible;
+    if (!dif) return d;
     let pNota = 0;
     const rivales = enemigos(ctx, a);
     for (const e of rivales) {
       const advertir = (e.ficha.advertir ?? 0) + (e.bono?.advertir ?? 0) - penAccion(e);
       pNota += dif === Infinity ? 0 : tabla(umbralPifia(e.ficha.advertir ?? 0), 0, true).pImpacto(advertir - dif + 1);
-      e.percibe.add(a);
     }
-    const notado = intercambio(ctx, a);
-    for (const e of rivales) e.percibe.delete(a);
+    // Si lo notan todos: se agrega a lo que perciben sólo quien todavía no lo percibía, y se deshace eso.
+    const notado = conCambio(() => {
+      const nuevos = rivales.filter((e) => !e.percibe.has(a));
+      for (const e of nuevos) e.percibe.add(a);
+      return () => { for (const e of nuevos) e.percibe.delete(a); };
+    }, () => intercambio(ctx, a));
     const p = rivales.length ? pNota / rivales.length : 0;
-    despues = { hace: despues.hace, recibe: (1 - p) * despues.recibe + p * notado.recibe };
-  }
-  quitarBendicion(a, l, c);
+    return { hace: d.hace, recibe: (1 - p) * d.recibe + p * notado.recibe };
+  });
   const turno = ((g.bono!.turno ?? 0) / 100) * (antes.hace + lambda(l) * antes.recibe);
   // Moral: sólo vale si hay un Aura de combate o efectos de miedo enfrente (aproximación: 10% de lo que recibe).
   const moral = g.bono!.frialdad && enemigos(ctx, a).some((x) => x.ki?.auraActiva || x.ficha.ki?.tecnicas.some((t) => t.efectos.some((ef) => /miedo|terror/i.test(ef.opciones.join(' ')))))
@@ -195,9 +195,11 @@ export function valorArmaduraMagica(ctx: Contexto, l: Luchador, g: Grado): numbe
   for (const x of enemigos(ctx, l)) {
     const b = base(x, l);
     sin += b.golpe;
-    e.armadura = { energia: g.taEnergia!, resto: g.taResto ?? 0 };
-    con += danoEsperado(x, l, b.hab, b.def);
-    e.armadura = null;
+    con += conCambio(() => {
+      const previa = e.armadura;
+      e.armadura = { energia: g.taEnergia!, resto: g.taResto ?? 0 };
+      return () => { e.armadura = previa; };
+    }, () => danoEsperado(x, l, b.hab, b.def));
   }
   return lambda(l) * (sin - con) * Math.max(1, ...enemigos(ctx, l).map((x) => x.ataquesDeclarados || 1)) * ASALTOS_EFECTO;
 }

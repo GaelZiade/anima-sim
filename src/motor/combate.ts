@@ -1543,7 +1543,7 @@ function efectosAlImpactar(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModK
     def.marcas.set(atk, ki.marca);
     log(ctx, () => `  ${def.ficha.nombre} queda marcado por ${atk.ficha.nombre} (+${ki.marca} a sus ataques contra él).`);
   }
-  if (ki.interrumpe && dano > 0) interrupcion(ctx, atk, def, dano + ki.interrupcion);
+  if (ki.interrumpe && dano > 0) interrupcion(ctx, def, dano + ki.interrupcion);
   for (const est of ki.estados) {
     if (!activo(def)) return;
     const alcanza = est.condicion === 'contacto' ? porcentajeContacto > 0 : est.condicion !== 'automatico' && dano > 0;
@@ -1724,7 +1724,7 @@ function repetirFascinacion(ctx: Contexto, l: Luchador) {
  * Interrupción del Ki (Dominus p.69): RF contra el daño más el valor de la técnica (entre cinco
  * contra acumulación); si falla, pierde lo acumulado, las mantenidas y las que tenía en espera.
  */
-function interrupcion(ctx: Contexto, atk: Luchador, def: Luchador, dificultad: number) {
+function interrupcion(ctx: Contexto, def: Luchador, dificultad: number) {
   const e = def.ki;
   if (!e) return;
   const dif = def.ficha.acumulacion ? Math.floor(dificultad / 5) : dificultad;
