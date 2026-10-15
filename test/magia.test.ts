@@ -7,7 +7,7 @@ import { crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueMagico, defensaEscudoMagico, defensaFinal } from '../src/motor/calculos';
 import { CATALOGO, conjurosDe, gradosPosibles } from '../src/motor/conjuros';
 import { actPorCansancio, alcanceMagico, danoAlAcumular, empezarAsaltoMagia, lanzar, maximoInnato, proyeccionDeterminada, puedeLanzar, terminarAsaltoMagia } from '../src/motor/magia';
-import { golpeDeConjuro } from '../src/motor/ia';
+import { golpeDeConjuro } from '../src/motor/magia';
 import { absorcion } from '../src/motor/reglas';
 import { hojaAFicha } from '../src/hoja/ficha';
 

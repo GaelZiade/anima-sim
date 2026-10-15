@@ -7,6 +7,8 @@ import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { umbralPifia } from './reglas';
+import { SIN_KI, type ModKi } from './ki';
+import type { Ranura } from './rasgos';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
 export interface Mantenido {
@@ -95,6 +97,21 @@ export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
     escudo: null, armadura: null, otraAccion: false, preparado: null, innato: false, ganadoEn: 'puro',
   };
 }
+
+/**
+ * Un conjuro de ataque o anímico como un golpe sobrenatural: daña energía, en su TA y con su daño.
+ * Los anímicos no tienen daño y son invisibles para quien no ve la magia (Core p.122).
+ */
+export function golpeDeConjuro(c: Conjuro, g: Grado): ModKi {
+  const animico = c.tipos.includes('animico');
+  return {
+    ...SIN_KI, sobrenatural: true, danaEnergia: true, elemento: animico ? 'ENE' : c.ta ?? 'ENE', danoFijo: g.dano ?? 0, conjuro: true,
+    invisible: animico && !c.tipos.includes('ataque'),
+  };
+}
+
+/** Los conjuros no usan la calidad del arma: se resuelven como sin armas (y con su propio daño). */
+export const RANURA_MAGIA: Ranura = { pen: 0, sinArmas: true };
 
 /** Lo que pierde al soltar lo acumulado sin usarlo: 10 de zeon (Core p.117). */
 const PERDIDA_AL_SOLTAR = 10;

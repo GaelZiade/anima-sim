@@ -9,7 +9,8 @@ import { bonoFrialdad } from '../src/motor/reglas';
 import { CATALOGO, conjurosDe, conocidos, gradosPosibles, sinSimular } from '../src/motor/conjuros';
 import { GRIMORIO } from '../src/motor/grimorio';
 import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
-import { blancosConjuro, golpeDeConjuro } from '../src/motor/ia';
+import { blancosConjuro } from '../src/motor/ia-magia';
+import { golpeDeConjuro } from '../src/motor/magia';
 
 const conjuro = (n: string) => CATALOGO.find((c) => c.nombre === n)!;
 const abel: Ficha[] = JSON.parse(readFileSync(new URL('../ejemplos/arquetipos-abel.json', import.meta.url), 'utf8')).fichas;

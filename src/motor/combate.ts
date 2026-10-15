@@ -18,9 +18,10 @@ import {
   modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import * as ia from './ia';
+import * as iaMagia from './ia-magia';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, dejarDeMantener, empezarAsaltoMagia, lanzar, mantenidoCon, presenciaDe, rmDe, romperEscudo,
+  crearEstadoMagia, danoAlAcumular, golpeDeConjuro, RANURA_MAGIA, dejarDeMantener, empezarAsaltoMagia, lanzar, mantenidoCon, presenciaDe, rmDe, romperEscudo,
   terminarAsaltoMagia, terminarMantenidos, type Mantenido, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada, proyeccionDeterminada,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
@@ -272,7 +273,7 @@ function jugarAsalto(ctx: Contexto) {
     if (modos.length) log(ctx, () => `${l.ficha.nombre}: ${modos.join(', ')}.`);
     // Magia: paga los conjuros mantenidos y acumula su ACT (pasivo, Core p.117).
     if (l.magia) {
-      const plan = ia.planMagia(ctx, l);
+      const plan = iaMagia.planMagia(ctx, l);
       if (plan.cansancio) {
         gastarCansancio(l, plan.cansancio);
         log(ctx, () => `${l.ficha.nombre} gasta ${plan.cansancio} de cansancio en su ACT (+${actPorCansancio(l) * plan.cansancio!}).`);
@@ -416,10 +417,10 @@ function turno(ctx: Contexto, l: Luchador) {
     if (l.apresadoPor && !zafarse(ctx, l)) l.ataquesRestantes = 0;
     ia.prepararGodhand(ctx, l);
     // En llamas: apagarse ocupa el turno (Core p.236).
-    if (l.llamas && l.ataquesRestantes > 0 && ia.quiereApagarse(ctx, l)) apagarse(ctx, l);
+    if (l.llamas && l.ataquesRestantes > 0 && iaMagia.quiereApagarse(ctx, l)) apagarse(ctx, l);
     // Un arma a distancia: disparar, recargar o apuntar ocupa el turno (Core p.94-96).
     // Magia: lanzar los conjuros que convengan, o esperar acumulando (Core p.117).
-    const magia = l.ataquesRestantes > 0 && puedeActuar(l) ? ia.accionMagica(ctx, l) : null;
+    const magia = l.ataquesRestantes > 0 && puedeActuar(l) ? iaMagia.accionMagica(ctx, l) : null;
     if (magia) {
       if ('lanzar' in magia) for (const x of magia.lanzar) if (puedeActuar(l) && !terminado(ctx)) lanzarConjuro(ctx, l, x);
       l.ataquesRestantes = 0;
@@ -851,7 +852,7 @@ function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
  * blanco (en área, todos los del radio, o los que elija con Control del Espacio); los automáticos
  * alcanzan sin defensa a quien cumpla su condición; los de efecto quedan activos sobre sus blancos.
  */
-function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
+function lanzarConjuro(ctx: Contexto, l: Luchador, x: iaMagia.Lanzamiento) {
   const c = x.conjuro;
   if (x.detonar) {
     detonarMina(ctx, l, x.detonar, !!x.control);
@@ -873,7 +874,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
     log(ctx, () => `${l.ficha.nombre} proyecta con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
   }
   // Sacrificio Vital: PV por +5 cada 5 a la Proyección, declarado antes de tirar (Core p.158).
-  const vital = obj && !det && c.tipos.includes('ataque') ? ia.sacrificioVitalPara(ctx, l, obj, c, g, ataqueMagico(l, obj)) : 0;
+  const vital = obj && !det && c.tipos.includes('ataque') ? iaMagia.sacrificioVitalPara(ctx, l, obj, c, g, ataqueMagico(l, obj)) : 0;
   if (vital) {
     l.pv -= vital;
     log(ctx, () => `  ${l.ficha.nombre} sacrifica ${vital} PV: +${vital} a la Proyección (Sacrificio Vital).`);
@@ -974,7 +975,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
     }
   }
   const blancos = c.efecto === 'extasis' ? (x.blancos ?? []).filter((b) => b.equipo !== l.equipo)
-    : c.efecto === 'fundir' ? (x.blancos ?? []) : ia.blancosConjuro(ctx, l, obj, c, g, !!x.control);
+    : c.efecto === 'fundir' ? (x.blancos ?? []) : iaMagia.blancosConjuro(ctx, l, obj, c, g, !!x.control);
   const contras: { quien: Luchador; bono: number }[] = [];
   // Choque de descargas (Core p.117): el blanco puede interceptar un conjuro de ataque con el suyo.
   let factor = 1;
@@ -987,8 +988,8 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
     if (!activo(b) || !activo(l)) continue;
     const lazos = c.efecto === 'lazos';
     const golpe: Golpe = {
-      maniobra: lazos ? 'presa' : 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: ia.RANURA_MAGIA,
-      ki: lazos ? { ...ia.golpeDeConjuro(c, g), apresamiento: g.fuerza ?? 0 } : ia.golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
+      maniobra: lazos ? 'presa' : 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: RANURA_MAGIA,
+      ki: lazos ? { ...golpeDeConjuro(c, g), apresamiento: g.fuerza ?? 0 } : golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
       ...(factor !== 1 ? { factorDano: factor } : {}),
     };
     const r = resolverDefensa(ctx, l, b, habPara(b), t, golpe, etiqueta(b));
@@ -1018,7 +1019,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
 function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): 'anulado' | 'pierde' | number | null {
   if (!ctx.opciones.disparosParalelos || !def.magia || def.haActuado || def === ctx.turnoDe || !puedeActuar(def) || def.ataquesRestantes <= 0) return null;
   if (Math.abs(def.iniciativa - atk.iniciativa) >= 25) return null;
-  const x = ia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago);
+  const x = iaMagia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago);
   if (!x) return null;
   const c = x.conjuro;
   const g = lanzar(def, c, x.grado, x.innato ? { innato: true } : {}, false);
@@ -1034,7 +1035,7 @@ function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: num
     return null;
   }
   const suyo = habDef + t.valor;
-  const golpeDef: Golpe = { maniobra: 'normal', esContra: false, tipo: c.ta, ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(c, g), aDistancia: !enAlcance(def, atk) };
+  const golpeDef: Golpe = { maniobra: 'normal', esContra: false, tipo: c.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(c, g), aDistancia: !enAlcance(def, atk) };
   if (suyo < resultado - 50) {
     // No llega a interceptarla: es un disparo paralelo común.
     log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} no llega a 50 de ${resultado}; no chocan.`);
@@ -1043,7 +1044,7 @@ function interceptar(ctx: Contexto, atk: Luchador, def: Luchador, resultado: num
   }
   // Magia por Capacidades: zeon por Poder hasta el fin del turno, para el bono del choque (Core p.159).
   const extraPod = (l: Luchador, mago: boolean) => {
-    const k = mago ? ia.poderPorCapacidades(l) : 0;
+    const k = mago ? iaMagia.poderPorCapacidades(l) : 0;
     if (k) {
       l.magia!.reserva -= 25 * k;
       log(ctx, () => `  ${l.ficha.nombre} gasta ${25 * k} de zeon por +${k} al Poder (Magia por Capacidades).`);
@@ -1094,7 +1095,7 @@ function reparar(ctx: Contexto, l: Luchador) {
  */
 function atar(ctx: Contexto, l: Luchador, b: Luchador, habilidad: number) {
   const fuerza = ctx.opciones.cuerdas === 'cadena' ? 12 : 10;
-  const golpe: Golpe = { maniobra: 'presa', esContra: false, tipo: 'CON', ranura: ia.RANURA_MAGIA, ki: { ...ia.golpeDeConjuro(l.magia!.conjuros.find((c) => c.efecto === 'atar')!, { zeon: 0, int: 0 }), apresamiento: fuerza, danoFijo: 0 } };
+  const golpe: Golpe = { maniobra: 'presa', esContra: false, tipo: 'CON', ranura: RANURA_MAGIA, ki: { ...golpeDeConjuro(l.magia!.conjuros.find((c) => c.efecto === 'atar')!, { zeon: 0, int: 0 }), apresamiento: fuerza, danoFijo: 0 } };
   resolverDefensa(ctx, l, b, habilidad, DADO_FIJO, golpe, `Las ${ctx.opciones.cuerdas === 'cadena' ? 'cadenas' : 'sogas'} se lanzan sobre ${b.ficha.nombre}`);
   if (b.apresadoPor === l && !b.lazos && !b.atadura) {
     b.atadura = fuerza;
@@ -1202,7 +1203,7 @@ function cruzarMuros(ctx: Contexto, l: Luchador, desde: { x: number; y: number }
       const w = x.muro;
       if (!w || !activo(l) || !seCruzan(desde, l.pos, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 })) continue;
       const g = x.conjuro.grados[x.grado];
-      const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(x.conjuro, g), aDistancia: true };
+      const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true };
       resolverDefensa(ctx, dueno, l, g.habilidad ?? 240, DADO_FIJO, golpe, `${l.ficha.nombre} atraviesa la Barrera de Fuego de ${dueno.ficha.nombre}`);
     }
   }
@@ -1229,7 +1230,7 @@ function detonarMina(ctx: Contexto, l: Luchador, m: Mantenido, control: boolean)
     const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
     if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
     const habilidad = d < 1 ? 320 : d < z.radio / 2 ? 280 : 240;
-    const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(m.conjuro, g), aDistancia: true };
+    const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: RANURA_MAGIA, ki: golpeDeConjuro(m.conjuro, g), aDistancia: true };
     resolverDefensa(ctx, l, b, habilidad, DADO_FIJO, golpe, `La mina alcanza a ${b.ficha.nombre} (a ${d.toFixed(0)} m)`);
     if (terminado(ctx)) return;
   }
@@ -1373,7 +1374,7 @@ function zonasMagicas(ctx: Contexto) {
       const g = x.conjuro.grados[x.grado];
       for (const b of ctx.luchadores) {
         if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || (z.excluye === 'aliados' && b.equipo === l.equipo)) continue;
-        const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: ia.RANURA_MAGIA, ki: ia.golpeDeConjuro(x.conjuro, g), aDistancia: true };
+        const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true };
         resolverDefensa(ctx, l, b, g.habilidad ?? 0, DADO_FIJO, golpe, `${x.conjuro.nombre} de ${l.ficha.nombre} ataca a ${b.ficha.nombre}`);
         if (terminado(ctx)) return;
       }
@@ -1595,14 +1596,14 @@ function resolverDefensa(
   // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
   // defiende con él (no se combina con parar o esquivar).
   if (!proteccion && def.magia && !def.ficha.acumulacion) {
-    const nuevo = ia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
+    const nuevo = iaMagia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
     if (nuevo) {
       const g = lanzar(def, nuevo.conjuro, nuevo.grado);
       def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] = (def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] ?? 0) + 1;
       log(ctx, () => `${def.ficha.nombre} levanta ${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]}, ${g.resistencia} de resistencia) [zeon ${g.zeon}; reserva ${def.magia!.reserva}].`);
     }
   }
-  const conEscudo = !proteccion && ia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
+  const conEscudo = !proteccion && iaMagia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
   // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
   if (quienDefiende.magia && !conEscudo) quienDefiende.magia.otraAccion = true;
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
@@ -2519,7 +2520,7 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   // Potenciar Crítico (Ki) suma a la tirada del crítico (Dominus p.70).
   let bono = atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + bonoEnuth + bonoKi;
   // Aumentar el Crítico: conjuro pasivo que se declara antes de tirar (Core p.157).
-  const aumento = nivelFijo === undefined && atk.magia ? ia.aumentarCritico(ctx, atk, def, dano + bono) : null;
+  const aumento = nivelFijo === undefined && atk.magia ? iaMagia.aumentarCritico(ctx, atk, def, dano + bono) : null;
   if (aumento) {
     const g = lanzar(atk, aumento.conjuro, aumento.grado);
     const nombre = `${aumento.conjuro.nombre} (${GRADOS[aumento.grado]})`;
