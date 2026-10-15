@@ -113,34 +113,39 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   danoReducido: 0, soloContra: '',
 });
 
-/** Dos conjuntos de efectos sobre una misma acción: de cada efecto vale el mayor (Core p.106). */
+/**
+ * Dos conjuntos de efectos sobre una misma acción: de cada efecto vale el mayor (Core p.106). Va por
+ * tipo de valor, así un efecto nuevo no hay que agregarlo acá: número, el mayor; sí/no, cualquiera de
+ * los dos; texto, el primero que tenga; lista (los Estados añadidos), todos, que se tiran por separado
+ * (Dominus p.66).
+ */
 export function combinar(a: Readonly<ModKi>, b: Readonly<ModKi>): ModKi {
-  return {
-    ataque: Math.max(a.ataque, b.ataque), contraataque: Math.max(a.contraataque, b.contraataque),
-    parada: Math.max(a.parada, b.parada), esquiva: Math.max(a.esquiva, b.esquiva),
-    sinContra: a.sinContra || b.sinContra,
-    ataqueFijo: Math.max(a.ataqueFijo, b.ataqueFijo), defensaFija: Math.max(a.defensaFija, b.defensaFija),
-    dano: Math.max(a.dano, b.dano), multDano: Math.max(a.multDano, b.multDano), danoFijo: Math.max(a.danoFijo, b.danoFijo),
-    reduccionTA: Math.max(a.reduccionTA, b.reduccionTA), sinArmadura: a.sinArmadura || b.sinArmadura,
-    precision: Math.max(a.precision, b.precision), distancia: Math.max(a.distancia, b.distancia), area: Math.max(a.area, b.area),
-    eleccionBlanco: a.eleccionBlanco || b.eleccionBlanco,
-    ataquesAdicionales: Math.max(a.ataquesAdicionales, b.ataquesAdicionales),
-    defensasAdicionales: Math.max(a.defensasAdicionales, b.defensasAdicionales),
-    turno: Math.max(a.turno, b.turno), ta: Math.max(a.ta, b.ta), rf: Math.max(a.rf, b.rf),
-    danaEnergia: a.danaEnergia || b.danaEnergia,
-    critico: Math.max(a.critico, b.critico), criticoAuto: a.criticoAuto || b.criticoAuto,
-    sobrenatural: a.sobrenatural || b.sobrenatural, elemento: a.elemento || b.elemento,
-    marca: Math.max(a.marca, b.marca), impacto: Math.max(a.impacto, b.impacto), atraer: a.atraer || b.atraer,
-    apresamiento: Math.max(a.apresamiento, b.apresamiento),
-    // Cada Estado añadido se tira por separado (Dominus p.66).
-    estados: !b.estados.length ? a.estados : !a.estados.length ? b.estados : [...a.estados, ...b.estados],
-    interrumpe: a.interrumpe || b.interrumpe, interrupcion: Math.max(a.interrupcion, b.interrupcion),
-    escudo: Math.max(a.escudo, b.escudo), pantalla: Math.max(a.pantalla, b.pantalla),
-    intangible: a.intangible || b.intangible, reflectar: a.reflectar || b.reflectar,
-    absorcionKi: Math.max(a.absorcionKi, b.absorcionKi), indirecto: a.indirecto || b.indirecto,
-    danoReducido: Math.max(a.danoReducido, b.danoReducido), soloContra: a.soloContra || b.soloContra,
-  };
+  const r = { ...a } as Record<string, unknown>;
+  const x = a as unknown as Record<string, unknown>;
+  const y = b as unknown as Record<string, unknown>;
+  for (const k of CLAVES.numeros) if ((y[k] as number) > (x[k] as number)) r[k] = y[k];
+  for (const k of CLAVES.sino) if (y[k]) r[k] = true;
+  for (const k of CLAVES.textos) if (!x[k] && y[k]) r[k] = y[k];
+  for (const k of CLAVES.listas) {
+    const vb = y[k] as unknown[];
+    if (vb.length) r[k] = (x[k] as unknown[]).length ? [...(x[k] as unknown[]), ...vb] : vb;
+  }
+  // Los campos que no tienen valor por defecto (conjuro, invisible): el que los tenga.
+  for (const k of CLAVES.opcionales) if (x[k] === undefined && y[k] !== undefined) r[k] = y[k];
+  return r as unknown as ModKi;
 }
+
+/** Las claves de `ModKi` por tipo de valor, sacadas de `SIN_KI` una sola vez (para `combinar`). */
+const CLAVES = (() => {
+  const c = { numeros: [] as string[], sino: [] as string[], textos: [] as string[], listas: [] as string[], opcionales: ['conjuro', 'invisible'] };
+  for (const [k, v] of Object.entries(SIN_KI)) {
+    if (typeof v === 'number') c.numeros.push(k);
+    else if (typeof v === 'boolean') c.sino.push(k);
+    else if (typeof v === 'string') c.textos.push(k);
+    else if (Array.isArray(v)) c.listas.push(k);
+  }
+  return c;
+})();
 
 // --------------------------------------------------------------------------- catálogo de efectos
 
