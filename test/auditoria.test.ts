@@ -343,5 +343,12 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(golpeAPuntoVulnerable(comun, humano, 'cabeza')).toBe(true);
     expect(golpeAPuntoVulnerable(enuth, humano, 'normal')).toBe(false);
   });
+
+  it('Velez arcano usa su Poder en los controles de maniobras, al hacerlas y al sufrirlas (Dominus p.40)', () => {
+    const velez = crearLuchador(ficha('V', { artesMarciales: ['Velez (Arcano)'] }, { arma: { nombre: 'Desarmado', desarmado: true }, atributos: { FUE: 5, DES: 6, AGI: 6, POD: 12 } }), 'A', 0, 0);
+    const otro = crearLuchador(ficha('O', {}, { atributos: { FUE: 8, DES: 6, AGI: 6, POD: 12 } }), 'B', 1, 0);
+    expect(caracteristicasControl('derribo', velez, otro)).toEqual({ atk: 12, def: 8 });
+    expect(caracteristicasControl('derribo', otro, velez)).toEqual({ atk: 8, def: 12 });
+  });
 });
 

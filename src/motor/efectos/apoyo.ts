@@ -6,7 +6,7 @@ import { activo, distancia } from '../calculos';
 import { DADO_FIJO } from '../dados';
 import type { Golpe } from '../golpe';
 import { actDe, golpeDeConjuro, RANURA_MAGIA, zeonLibre } from '../magia';
-import { atributo, pGanaControl } from '../maniobras';
+import { mejorCaracteristica, pGanaControl } from '../maniobras';
 import { celdaLibreCerca, indice } from '../mapa';
 import type { Contexto, Luchador } from '../modelo';
 import { tabla } from '../probabilidades';
@@ -144,7 +144,7 @@ export const atar: ManejadorEfecto = {
     for (const obj of enemigos(ctx, l)) {
       if (!aLaVista(ctx, l, obj, alcance) || obj.apresadoPor || obj.ficha.acumulacion) continue;
       const p = tabla(0, obj.cap.umbralDefensa, false).pImpacto((g.habilidad ?? 0) - 55 - defensaFinal(obj, l));
-      const control = pGanaControl(fuerza, Math.max(atributo(obj, 'FUE'), atributo(obj, 'AGI')));
+      const control = pGanaControl(fuerza, mejorCaracteristica(obj, ['FUE', 'AGI']));
       probar({ conjuro: c, grado: i, objetivo: obj }, p * control * valorNegativo(l, obj, 80, 1, 0));
     }
   },

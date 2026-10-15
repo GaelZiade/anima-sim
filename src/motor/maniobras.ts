@@ -138,9 +138,20 @@ export function pGanaControl(a: number, b: number): number {
   return gana / 100;
 }
 
+/**
+ * La mejor de estas características para un control enfrentado de una maniobra (hacerla o sufrirla:
+ * Derribo, Presa, Desarmar, zafarse). Velez arcano puede usar su Poder en lugar de Fuerza, Destreza o
+ * Agilidad (Dominus p.40).
+ */
+export function mejorCaracteristica(l: Luchador, as: readonly Atributo[]): number {
+  let v = -Infinity;
+  for (const a of as) v = Math.max(v, atributo(l, a));
+  return l.cap.est.intangible ? Math.max(v, atributo(l, 'POD')) : v;
+}
+
 /** Mejor característica del atacante y del defensor para cada maniobra (Core p.91-92). */
 export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador, apresamiento = 0) {
-  const mejor = (l: Luchador, as: Atributo[]) => Math.max(...as.map((x) => atributo(l, x)));
+  const mejor = mejorCaracteristica;
   if (m === 'desarmar') return { atk: mejor(atk, ['FUE', 'DES']), def: mejor(def, ['FUE', 'DES']) };
   // Apresamiento (Ki): usa el valor de la técnica en lugar de su Fuerza o Destreza (Dominus p.64).
   if (m === 'presa' && apresamiento) return { atk: apresamiento, def: mejor(def, ['FUE', 'AGI']) };

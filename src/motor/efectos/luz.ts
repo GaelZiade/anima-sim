@@ -6,7 +6,7 @@ import { activo, distancia } from '../calculos';
 import type { Grado } from '../conjuros';
 import { condicion, imponer } from '../condiciones';
 import { golpeDeConjuro, mantenidoCon, RANURA_MAGIA, ZEON_CONTROL_DEL_ESPACIO } from '../magia';
-import { atributo, pGanaControl } from '../maniobras';
+import { mejorCaracteristica, pGanaControl } from '../maniobras';
 import type { Contexto, Luchador } from '../modelo';
 import { tabla } from '../probabilidades';
 import { umbralPifia } from '../reglas';
@@ -102,7 +102,7 @@ export const lazos: ManejadorEfecto = {
     for (const obj of enemigos(ctx, l)) {
       if (!aLaVista(ctx, l, obj, alcance) || obj.apresadoPor || obj.ficha.acumulacion) continue;
       const p = pronostico(l, obj, ataqueMagico(l, obj), defensaContraConjuro(obj, l, ki), { maniobra: 'presa', ki, tipo: 'ENE', ranura: RANURA_MAGIA });
-      const control = pGanaControl(g.fuerza ?? 0, Math.max(atributo(obj, 'FUE'), atributo(obj, 'AGI')));
+      const control = pGanaControl(g.fuerza ?? 0, mejorCaracteristica(obj, ['FUE', 'AGI']));
       probar({ conjuro: c, grado: i, objetivo: obj }, p.pManiobra * control * 2 * valorNegativo(l, obj, 80, 1, 0));
     }
   },

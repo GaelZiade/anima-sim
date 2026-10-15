@@ -15,7 +15,7 @@ import {
   golpeAPuntoVulnerable,
 } from './calculos';
 import {
-  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, esManiobraDeControl, esNoLetal,
+  atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esManiobraDeControl, esNoLetal,
   gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
@@ -1410,7 +1410,7 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
   }
   if (l.atadura) {
     // Atado: contra la Fuerza de las sogas o cadenas, no la del mago.
-    const yo = Math.max(atributo(l, 'FUE'), atributo(l, 'AGI')) + modControl(l);
+    const yo = mejorCaracteristica(l, ['FUE', 'AGI']) + modControl(l);
     if (controlEnfrentado(ctx.rng, yo, l.atadura) > 0) {
       l.atadura = 0;
       soltar(l);
@@ -1426,8 +1426,9 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
     return true;
   }
   if (l.paralisis >= 3) return false; // presa perfecta: ya no puede librarse
-  const yo = Math.max(atributo(l, 'FUE'), atributo(l, 'AGI')) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
-  const el = Math.max(atributo(captor, 'FUE'), atributo(captor, 'DES')) + modControl(captor);
+  const yo = mejorCaracteristica(l, ['FUE', 'AGI']) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
+  // Quien presa con un arma con regla Presa sostiene con la Fuerza del arma (Core p.76).
+  const el = (captor.cap.est.fuerzaPresaArma || mejorCaracteristica(captor, ['FUE', 'DES'])) + modControl(captor);
   let dif = controlEnfrentado(ctx.rng, yo, el);
   if (dif <= 0 && l.cap.est.repiteControlDefensivo && !l.repitioControl) {
     l.repitioControl = true;
