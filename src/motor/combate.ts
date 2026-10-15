@@ -24,7 +24,7 @@ import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, destruccionPorKi, efectosAlImpactar, estadosAutomaticos, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, puntosDePresion, reflectar, repetirFascinacion,
 } from './combate-ki';
 import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
@@ -81,7 +81,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -344,6 +344,7 @@ function jugarAsalto(ctx: Contexto) {
   aplicarAuras(MOTOR, ctx, vivos);
   zonasMagicas(MOTOR, ctx);
   percibirInvisibles(MOTOR, ctx);
+  detectarPresencias(MOTOR, ctx);
 
   // 2. Iniciativa: turno + d100 abierta. Una pifia en turno actúa automáticamente último, sin nivel
   // de pifia; para la sorpresa vale el turno con el penalizador de la Tabla 52 (Core p.98). El turno

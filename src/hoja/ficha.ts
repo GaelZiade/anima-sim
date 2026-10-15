@@ -294,6 +294,7 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
     ...(json.Habilidades['T. Manos'] !== undefined ? { trucosDeManos: numero(json.Habilidades['T. Manos'], 0) } : {}),
     ...(json.Habilidades['Res. Dolor'] !== undefined ? { resistirDolor: numero(json.Habilidades['Res. Dolor'], 0) } : {}),
     ...(json.Habilidades.Advertir !== undefined ? { advertir: numero(json.Habilidades.Advertir, 0) } : {}),
+    ...(numero(json.Ki?.cmTotal ?? '', 0) > 0 ? { cm: numero(json.Ki.cmTotal, 0) } : {}),
     ...(json.Habilidades.Frialdad !== undefined ? { frialdad: numero(json.Habilidades.Frialdad, 0) } : {}),
     ...(json.Habilidades.Buscar !== undefined ? { buscar: numero(json.Habilidades.Buscar, 0) } : {}),
     ...(json.Resistencias.RM !== undefined ? { rm: numero(json.Resistencias.RM, 0) } : {}),

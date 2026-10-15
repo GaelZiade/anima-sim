@@ -228,7 +228,8 @@ export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): 
   ];
   const valor = (c: Ceguera) => (c.nivel ? CEGUERA[c.nivel].ataque * c.factor : 0);
   const peor = casos.reduce((a, b) => (valor(b) < valor(a) ? b : a));
-  if (peor.nivel === 2 && l.cap.est.deteccionKi) return { nivel: 1, factor: 1, localiza: true };
+  // Detección del Ki: si este asalto lo localiza (`detectarPresencias`), pelea como con ceguera parcial (Dominus p.11).
+  if (peor.nivel === 2 && l.radioDeteccionKi > 0 && distancia(l, rival) <= l.radioDeteccionKi) return { nivel: 1, factor: 1, localiza: true };
   // Ojos de la Muerte ve las líneas de los invisibles: contra ellos, sólo ceguera parcial (Dominus p.78).
   if (peor.nivel === 2 && l.cap.est.criticoAutomatico && (invisible || rival.bono?.invisible) && propia !== 'absoluta' && cegueraPorOscuridad(l).nivel < 2)
     return { nivel: 1, factor: 1, localiza: false };

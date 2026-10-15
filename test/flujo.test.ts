@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Contexto, Ficha, Luchador } from '../src/motor/modelo';
+import { radioDeteccion } from '../src/motor/combate-ki';
 import { atacar, crearLuchador, simularCombate } from '../src/motor/combate';
 import { absorcionContra, ataqueFinal, defensaFinal, turnoFinal } from '../src/motor/calculos';
 import { modEstados } from '../src/motor/maniobras';
@@ -146,9 +147,23 @@ describe('situaciones de la Tabla 43 que faltaban', () => {
     expect(ataqueFinal(vp.atk, vp.def)).toBe(atk0);
   });
 
-  it('Detección del Ki: ceguera parcial en vez de absoluta (Dominus p.11)', () => {
+  it('Detección del Ki: ceguera parcial en vez de absoluta si este asalto lo localiza (Dominus p.11, Core p.104)', () => {
     const { atk, def } = par({ estados: { ceguera: 'absoluta' }, rasgos: { habilidadesKi: ['Detección del Ki'] } });
+    const ciego = ataqueFinal(atk, def);
+    atk.radioDeteccionKi = 5;
     expect(ataqueFinal(atk, def)).toBe(atk0 - 30);
+    atk.radioDeteccionKi = 0;
+    expect(ataqueFinal(atk, def)).toBe(ciego);
+    expect(ciego).toBeLessThan(atk0 - 30);
+  });
+
+  it('Detección del Ki: radio según la dificultad lograda (Recuadro VIII, Core p.104)', () => {
+    expect(radioDeteccion(79, 10)).toBe(1.5);
+    expect(radioDeteccion(80, 10)).toBe(5);
+    expect(radioDeteccion(150, 10)).toBe(20);
+    expect(radioDeteccion(330, 10)).toBe(250);
+    expect(radioDeteccion(330, 13)).toBe(1000);
+    expect(radioDeteccion(10, 10)).toBe(0);
   });
 
   it('levitando −20/−20/−40; vuelo 7 +10 y 15 +15 al ataque y +10 al turno', () => {

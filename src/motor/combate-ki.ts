@@ -3,9 +3,9 @@
 // Mushin. Recibe el motor por `Motor`, como los efectos de conjuro.
 
 import type { Contexto, Luchador, Tecnica } from './modelo';
-import { DADO_FIJO, tirarD100Cerrada } from './dados';
-import { resultadoResistencia } from './reglas';
-import { activo, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe } from './calculos';
+import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
+import { resultadoResistencia, umbralPifia } from './reglas';
+import { activo, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe } from './calculos';
 import { atributo, controlEnfrentado, dificultadPuntosPresion, type EstadoMushin } from './maniobras';
 import type { Golpe } from './golpe';
 import { imponer, nivelCondicion } from './condiciones';
@@ -277,3 +277,43 @@ export function puntosDePresion(motor: Motor, ctx: Contexto, atk: Luchador, def:
   }
   motor.verificarCaida(ctx, atk, def);
 }
+
+/**
+ * Recuadro VIII (Core p.104): hasta dónde llega la Detección del Ki según la dificultad lograda.
+ * Rutinario (contacto) y Fácil (menos de un metro) se toman como estar al lado (interpretación).
+ * Inhumano pide Inhumanidad y Zen pide Zen.
+ */
+const RADIO_DETECCION: readonly [dificultad: number, metros: number][] = [
+  [440, Infinity], [320, 1000], [280, 250], [240, 100], [180, 50], [140, 20], [120, 10], [80, 5], [20, 1.5],
+];
+
+export function radioDeteccion(resultado: number, topeMovimiento: number): number {
+  for (const [dif, metros] of RADIO_DETECCION) {
+    if (resultado < dif) continue;
+    if (dif === 440 && topeMovimiento < 20) continue;
+    if (dif === 320 && topeMovimiento < 13) continue;
+    return metros;
+  }
+  return 0;
+}
+
+/**
+ * Detección del Ki (Core p.103-104): una vez por asalto (decisión del usuario), quien la tiene y no ve a
+ * algún rival tira su habilidad, la media entre su CM total y Advertir; localiza a quienes estén dentro
+ * del radio logrado (`cegueraContra`). Sólo tira si le hace falta.
+ */
+export function detectarPresencias(motor: Motor, ctx: Contexto) {
+  for (const l of ctx.luchadores) {
+    l.radioDeteccionKi = 0;
+    if (!activo(l) || !l.cap.est.deteccionKi) continue;
+    const ciego = ctx.luchadores.some((x) => x.equipo !== l.equipo && activo(x) && cegueraContra(l, x).nivel >= 2);
+    if (!ciego) continue;
+    const base = Math.floor(((l.ficha.cm ?? 0) + (l.ficha.advertir ?? 0)) / 2);
+    const habilidad = base - penAccion(l);
+    const t = motor.tirar(ctx, umbralPifia(base, l.cap.ajustePifia));
+    l.radioDeteccionKi = t.pifia ? 0 : radioDeteccion(habilidad + t.valor, l.cap.est.topeMovimiento);
+    const radio = l.radioDeteccionKi;
+    motor.log(ctx, () => `${l.ficha.nombre} busca presencias con la Detección del Ki (${textoTirada(habilidad, t)}): ${radio ? `localiza hasta ${radio === Infinity ? 'cualquier distancia' : `${radio} m`}` : 'no localiza a nadie'}.`);
+  }
+}
+

@@ -47,6 +47,8 @@ export interface HojaJson {
     tecnicas: TecnicaJson[];
     /** Límites elegidos ("Caelum: Límite del Peligro"), debajo del título "Límite". */
     limites: string[];
+    /** Conocimiento Marcial total: debajo de la etiqueta "CM Total". */
+    cmTotal: string;
   };
   Elan: Tabla;
   Misticos: Record<string, string | Tabla>;
@@ -115,6 +117,7 @@ function datosKi(libro: Libro): HojaJson['Ki'] {
     unificacion: texto(libro, KI, 'I10'),
     tecnicas: tecnicas(libro),
     limites: limites(libro),
+    cmTotal: cmTotal(libro),
   };
 }
 
@@ -292,6 +295,12 @@ function desventajas(libro: Libro): string[] {
  * marca con 1 las compradas (las que no llevan marca, como Inhumanidad, muestran "-" en P). Las
  * del Némesis se marcan con 1 en B, con el nombre en C a E.
  */
+function cmTotal(libro: Libro): string {
+  if (!libro.tieneHoja(KI)) return '';
+  const fila = libro.buscarFila(KI, 'C', 'CM Total', 10, 120);
+  return fila ? texto(libro, KI, `C${fila + 1}`) : '';
+}
+
 function habilidadesKi(libro: Libro): string[] {
   if (!libro.tieneHoja(KI)) return [];
   const nombreEn = (fila: number, columnas: string[]) => {

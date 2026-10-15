@@ -72,6 +72,8 @@ export interface Ficha {
   resistirDolor?: number;
   /** Habilidad secundaria Advertir: notar a alguien invisible (Core p.190). */
   advertir?: number;
+  /** Conocimiento Marcial total: con Advertir da la Detección del Ki (Core p.103). */
+  cm?: number;
   /** Habilidad secundaria Frialdad: bono a resistir efectos sobrenaturales sobre el ánimo (Core p.54, Tabla 13). */
   frialdad?: number;
   /** Habilidad secundaria Buscar (descubrir un Holograma, Core p.127). */
@@ -419,6 +421,8 @@ export interface Luchador {
   extasis: boolean;
   /** Lo sujetan unos Lazos de Luz de este mago: no puede romperlos él mismo (Core p.127). */
   lazos: Luchador | null;
+  /** Detección del Ki (Core p.103-104): hasta cuántos metros localiza presencias este asalto (0 si no). */
+  radioDeteccionKi: number;
   /** A qué invisibles percibe este asalto (superó Advertir). */
   percibe: Set<Luchador>;
   /** La ficha con el arma entera, si se la rompieron (Reparación la devuelve). */
