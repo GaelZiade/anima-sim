@@ -15,7 +15,7 @@ import { efectoCritico } from './valoracion';
 import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
-  asaltosQueFaltan, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
+  asaltosParaJuntar, combinar, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
   enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
@@ -1194,7 +1194,7 @@ function convieneRecuperar(l: Luchador): boolean {
 function convieneGuardar(ctx: Contexto, l: Luchador, rival: Luchador, elegida: Tecnica, ganancia: number): boolean {
   for (const t of repertorio(l.ficha)) {
     if (t === elegida || efectosDe(t).clase !== 'ataque' || enUso(l.ki!, t)) continue;
-    const faltan = asaltosQueFaltan(l, t);
+    const faltan = asaltosParaJuntar(l, t, penAccion(l));
     if (faltan < 1 || faltan > 3) continue;
     const otra = netoTecnica(ctx, l, rival, t);
     if (otra * Math.pow(0.8, faltan) > ganancia * (1 + faltan)) return true;
@@ -1803,18 +1803,6 @@ function valorMantener(ctx: Contexto, l: Luchador, t: Tecnica): number {
   return v;
 }
 
-/** Asaltos para juntar el coste de una técnica empezando de cero (el primero entero, después la mitad). */
-function asaltosDesdeCero(l: Luchador, t: Tecnica): number {
-  let n = 1;
-  for (const c of CARACTERISTICAS_KI) {
-    const k = t.coste[c] ?? 0;
-    if (!k) continue;
-    const acu = l.ficha.ki?.acumulacion[c] ?? 0;
-    if (!acu) return Infinity;
-    if (k > acu) n = Math.max(n, 1 + Math.ceil((k - acu) / Math.ceil(acu / 2)));
-  }
-  return n;
-}
 
 /**
  * Decisiones de Ki al empezar el asalto:
@@ -1845,10 +1833,10 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
     let mejorRitmo = 0;
     // Sólo vale declarar las que tardan más de un asalto en juntarse: las demás se usan en el asalto.
     const candidatas = repertorio(l.ficha).filter(
-      (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosDesdeCero(l, t) >= 2,
+      (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosParaJuntar(l, t, penAccion(l), true) >= 2,
     );
     for (const t of candidatas) {
-      const ritmo = netoTecnica(ctx, l, rival, t) / asaltosDesdeCero(l, t);
+      const ritmo = netoTecnica(ctx, l, rival, t) / asaltosParaJuntar(l, t, penAccion(l), true);
       if (ritmo > mejorRitmo) {
         mejorRitmo = ritmo;
         objetivo = t;

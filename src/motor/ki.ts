@@ -1022,23 +1022,26 @@ export function costeKi(t: Tecnica): number {
 }
 
 /**
- * Asaltos que le faltan para poder ejecutarla, con lo que ya tiene concentrado y acumulando la mitad
- * por asalto (porque además pelea). 0 si ya puede; Infinity si nunca junta alguna característica.
+ * Asaltos, contando éste, que tarda en juntar el Ki de `t` acumulando mientras pelea, como
+ * `empezarAsalto` y el fin del asalto: cada asalto suma la acumulación entera (−1 cada 20 de negativo)
+ * y, si no la ejecuta, lo ganado queda en la mitad (Core p.102). Desde lo que ya tiene concentrado o,
+ * con `desdeCero`, sin nada. 0 si ya lo tiene; Infinity si nunca junta alguna característica o el
+ * coste pasa de su reserva.
  */
-export function asaltosQueFaltan(l: Luchador, t: Tecnica): number {
+export function asaltosParaJuntar(l: Luchador, t: Tecnica, negativo = 0, desdeCero = false): number {
   const e = l.ki;
   const ki = l.ficha.ki;
-  if (!e || !ki) return Infinity;
-  if (costeKi(t) > e.reserva) return Infinity;
-  let faltan = 0;
+  if (!e || !ki || costeKi(t) > e.reserva) return Infinity;
+  const baja = Math.max(0, Math.floor(negativo / 20));
+  let n = 0;
   for (const c of CARACTERISTICAS_KI) {
-    const resto = (t.coste[c] ?? 0) - (e.acumulado[c] ?? 0);
+    const resto = (t.coste[c] ?? 0) - (desdeCero ? 0 : e.acumulado[c] ?? 0);
     if (resto <= 0) continue;
-    const ritmo = Math.ceil((ki.acumulacion[c] ?? 0) / 2);
-    if (!ritmo) return Infinity;
-    faltan = Math.max(faltan, Math.ceil(resto / ritmo));
+    const acu = Math.max(0, (ki.acumulacion[c] ?? 0) - baja);
+    if (!acu) return Infinity;
+    n = Math.max(n, resto <= acu ? 1 : 1 + Math.ceil((resto - acu) / Math.ceil(acu / 2)));
   }
-  return faltan;
+  return n;
 }
 
 export type { EfectoTecnica };
