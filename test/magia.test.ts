@@ -35,12 +35,14 @@ describe('la planilla y los conjuros que conoce', () => {
       'Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Descarga de Luz', 'Lazos de Luz', 'Éxtasis', 'Bola de Fuego', 'Descarga de Calor',
       'Barrera de Fuego', 'Mina de Fuego', 'Tormenta de Fuego', 'Ira Ancestral', 'Campeón', 'Curar Heridas', 'Invisibilidad', 'Transporte Rápido',
     ]));
-    expect(nombres).not.toContain('Holograma');
+    expect(nombres).toEqual(expect.arrayContaining(['Holograma', 'Marcha Implacable', 'Destrucción de Sombras']));
+    expect(nombres).not.toContain('Olvido');
     expect([f.rm, f.resistirDolor]).toEqual([90, 100]);
   });
 
   it('la vía tiene que llegar al nivel del conjuro, y la Inteligencia limita el grado (Core p.120-121)', () => {
-    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(['Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Crear Luz', 'Imbuir Calma', 'Percibir']);
+    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(expect.arrayContaining(['Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Destrucción de Sombras', 'Detectar lo Negativo']));
+    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).not.toContain('Descarga de Luz');
     expect(gradosPosibles(conjuro('Descarga de Luz'), 9)).toEqual([0, 1]);
     expect(gradosPosibles(conjuro('Escudo de Luz'), 10)).toEqual([0, 1, 2]);
   });

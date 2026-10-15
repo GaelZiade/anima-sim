@@ -73,6 +73,10 @@ export interface Ficha {
   advertir?: number;
   /** Habilidad secundaria Frialdad: bono a resistir efectos sobrenaturales sobre el ánimo (Core p.54, Tabla 13). */
   frialdad?: number;
+  /** Habilidad secundaria Buscar (descubrir un Holograma, Core p.127). */
+  buscar?: number;
+  /** Seres basados en un elemento o sentimiento ("fuego", "agua", "luz", "oscuridad"): los afectan conjuros propios. */
+  naturaleza?: string[];
   /** Resistencia mágica. */
   rm?: number;
   /** Magia (Core cap. 11): zeon, ACT, Proyección Mágica y vías. */
@@ -137,6 +141,8 @@ export interface MagiaFicha {
   explotacion?: number;
   /** Esferas de Proyección Mágica Determinada: proyectar con 120, 140… pagando zeon (Arcana p.26). */
   proyeccionDeterminada?: number;
+  /** Transmisión de Magia: pasar zeon sin tocarse, hasta su Presencia en metros (Arcana p.29). */
+  transmision?: boolean;
 }
 
 /** Lo que pasa con un arma a distancia durante el combate. */
@@ -416,6 +422,14 @@ export interface Luchador {
   percibe: Set<Luchador>;
   /** La ficha con el arma entera, si se la rompieron (Reparación la devuelve). */
   armaRota: Ficha | null;
+  /** A quiénes localiza con un conjuro de detección aunque sean invisibles. */
+  detecta: Set<Luchador>;
+  /** Hologramas que ya descubrió (no los ataca por error). */
+  descubre: Set<Luchador>;
+  /** Tiene un Holograma suyo al lado. */
+  holograma: boolean;
+  /** Atado con sogas o cadenas: su Fuerza para zafarse en contra (0 si no). */
+  atadura: number;
 
   // --- modalidades y recursos de estilos ---
   modo: Modo;
@@ -504,6 +518,8 @@ export interface OpcionesEscenario {
    * disparo todavía sin actuar puede disparar a su vez antes de defenderse.
    */
   disparosParalelos?: boolean;
+  /** Hay sogas o cadenas a mano: un mago puede Atar con ellas (Fuerza 10 o 12, Core p.180). */
+  cuerdas?: 'soga' | 'cadena';
 }
 
 export interface Contexto {

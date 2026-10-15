@@ -39,6 +39,8 @@ export interface PlanMagia {
   consumirVida?: number;
   /** Este asalto lanza un conjuro innato: no acumula ni lanza otros (Core p.117). */
   innato?: boolean;
+  /** Le pasa zeon a un aliado con el Don, en vez de acumular (Core p.117). */
+  transferir?: { a: Luchador; zeon: number };
 }
 
 /** Un conjuro determinado que prepara o ya tiene listo (Core p.117). */
@@ -370,7 +372,7 @@ function sumarBendiciones(l: Luchador) {
   }
   const t: Required<Omit<BonoMagico, 'tipoArma'>> & Pick<BonoMagico, 'tipoArma'> = {
     ataque: 0, toda: 0, dano: 0, turno: 0, ta: 0, resistencias: 0, ira: false, cuerpoFuego: false, resCalor: 0, danoArma: 0,
-    inmuneFuego: 0, invisible: 0, advertir: 0, tamano: 0, luz: false, frialdad: 0,
+    inmuneFuego: 0, invisible: 0, advertir: 0, tamano: 0, luz: false, frialdad: 0, energiaNecesaria: false,
   };
   for (const b of porConjuro.values()) {
     t.ataque += b.ataque ?? 0;
@@ -389,6 +391,7 @@ function sumarBendiciones(l: Luchador) {
     t.tamano += b.tamano ?? 0;
     t.luz ||= !!b.luz;
     t.frialdad += b.frialdad ?? 0;
+    t.energiaNecesaria ||= !!b.energiaNecesaria;
     if (b.tipoArma) t.tipoArma = b.tipoArma;
   }
   l.bono = t;

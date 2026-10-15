@@ -18,6 +18,11 @@ retomar el trabajo, empezar por README.md.
   1,8 → 1,4; Kiran 0 → 0,6; cuatro soldados 100 → 100. Stéphan, Kael y Kaito contra Teseo, Kiran y
   cuatro soldados (100): 55 → 67.
 - Huella del bench sin cambios.
+- **Después**: Holograma, Atar (opción "sogas o cadenas a mano" en la página), Crear Fuego, Control
+  sobre el Fuego, detecciones contra invisibles, Destrucción de Sombras y Dominio Lumínico (con la
+  naturaleza de los seres en la ficha), Marcha Implacable, pasar zeon entre magos (Transmisión de
+  Magia). Stéphan simula 50 conjuros; los 12 restantes no tienen efecto en un combate. Teseo 93,2;
+  Kaito 1,4; Kiran 0; soldados 100; grupo 66.
 
 ## 15/10/2026: el grimorio completo
 

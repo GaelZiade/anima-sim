@@ -21,7 +21,7 @@ import * as ia from './ia';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, dejarDeMantener, empezarAsaltoMagia, lanzar, mantenidoCon, presenciaDe, rmDe, romperEscudo,
-  terminarAsaltoMagia, terminarMantenidos, type Mantenido, estadoLlamas, danoLlamas, actPorCansancio, pagarDeterminada, proyeccionDeterminada,
+  terminarAsaltoMagia, terminarMantenidos, type Mantenido, estadoLlamas, zeonLibre, danoLlamas, actPorCansancio, pagarDeterminada, proyeccionDeterminada,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
@@ -68,7 +68,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, cegado: 0, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, cegado: 0, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialUsada: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -281,6 +281,14 @@ function jugarAsalto(ctx: Contexto) {
       if (plan.sacrificioPoder) log(ctx, () => `${l.ficha.nombre} sacrifica ${plan.sacrificioPoder} de zeon por +${(plan.sacrificioPoder! / 10) * 5} al ACT (Sacrificio de Poder).`);
       empezarAsaltoMagia(l, plan);
       if (plan.consumirVida) verificarCaida(ctx, l, l);
+      // Pasarle zeon a un aliado con el Don: su ACT por asalto, en contacto o, con Transmisión de Magia,
+      // hasta su Presencia en metros (Core p.117, Arcana p.29).
+      if (plan.transferir?.a.magia) {
+        const z = Math.min(plan.transferir.zeon, zeonLibre(l.magia));
+        l.magia.reserva -= z;
+        plan.transferir.a.magia.reserva += z;
+        log(ctx, () => `${l.ficha.nombre} le pasa ${z} de zeon a ${plan.transferir!.a.ficha.nombre} (reserva ${l.magia!.reserva}).`);
+      }
       const e = l.magia;
       if (plan.innato) log(ctx, () => `${l.ficha.nombre} se dispone a usar su magia innata (no acumula).`);
       else if (e.ganado && e.ganadoEn === 'preparado' && e.preparado)
@@ -849,7 +857,7 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
     detonarMina(ctx, l, x.detonar, !!x.control);
     return;
   }
-  const g = lanzar(l, c, x.grado, { ...(c.efecto === 'bendicion' ? { blancos: x.blancos } : {}), ...(x.innato ? { innato: true } : {}) }, x.control);
+  const g = lanzar(l, c, x.grado, { ...(c.efecto === 'bendicion' || c.efecto === 'naturaleza' ? { blancos: x.blancos } : {}), ...(x.innato ? { innato: true } : {}) }, x.control);
   const nombre = `${c.nombre} (${GRADOS[x.grado]})${x.innato ? ' innato' : x.preparado ? ' preparado' : ''}`;
   l.stats.tecnicas[nombre] = (l.stats.tecnicas[nombre] ?? 0) + 1;
   const zeon = x.innato ? `[innato${x.control ? ', +10 de zeon (Control del Espacio)' : ''}; reserva ${l.magia!.reserva}]`
@@ -896,12 +904,34 @@ function lanzarConjuro(ctx: Contexto, l: Luchador, x: ia.Lanzamiento) {
     case 'sacrificioVital':
     case 'reparar':
     case 'capacidades':
+    case 'holograma':
+    case 'atar':
+    case 'crearFuego':
+    case 'controlFuego':
+    case 'detectar':
+    case 'naturaleza':
       log(ctx, () => `${l.ficha.nombre} lanza ${nombre}${sobre} ${zeon}.`);
-      if (c.efecto === 'mitigar' && obj) mitigarFuego(ctx, obj, g.intensidades ?? 0);
+      if (c.efecto === 'mitigar' && obj) {
+        // Contra un ser de fuego: 5 de daño por intensidad (25 con acumulación) si no supera la RM (Core p.155).
+        if (obj.equipo !== l.equipo && obj.ficha.naturaleza?.includes('fuego')) {
+          if (tirarResistencia(ctx, obj, g.rm ?? 0, c.nombre, 'RM')) perderPv(ctx, l, obj, (obj.ficha.acumulacion ? 25 : 5) * (g.intensidades ?? 0));
+        } else mitigarFuego(ctx, obj, g.intensidades ?? 0);
+      }
       if (c.efecto === 'calmar') calmar(ctx, l, g.radio ?? 0, !!x.control);
       if (c.efecto === 'barrera' && obj) levantarBarrera(ctx, l, obj, c, g);
       if (c.efecto === 'transporte' && obj) transportar(ctx, obj, g.metros ?? 0);
       if (c.efecto === 'reparar' && obj) reparar(ctx, obj);
+      if (c.efecto === 'holograma') {
+        l.holograma = true;
+        const m = mantenidoCon(l, c);
+        if (m) m.alTerminar = () => { l.holograma = false; };
+        log(ctx, () => `  Aparece una imagen idéntica de ${l.ficha.nombre} a su lado.`);
+      }
+      if (c.efecto === 'atar' && obj) atar(ctx, l, obj, g.habilidad ?? 0);
+      if (c.efecto === 'crearFuego' && obj) prender(ctx, l, obj, tirarD100Cerrada(ctx.rng) + 20 * (g.intensidades ?? 0));
+      if (c.efecto === 'controlFuego' && obj) controlarFuego(ctx, l, obj, g);
+      if (c.efecto === 'detectar') detectar(ctx, l, c, g, x.blancos ?? []);
+      if (c.efecto === 'naturaleza') contraNaturaleza(ctx, l, g);
       if (c.efecto === 'mina' && obj) {
         const m = mantenidoCon(l, c)!;
         m.zona = { x: obj.pos.x, y: obj.pos.y, radio: g.area ?? 0, desde: Infinity, excluye: 'nadie' };
@@ -1055,6 +1085,76 @@ function reparar(ctx: Contexto, l: Luchador) {
   l.ficha = { ...l.ficha, turno: f.turno, ataque: f.ataque, defensa: f.defensa, danoBase: f.danoBase, tipoAtaque: f.tipoAtaque, tipoDefensa: f.tipoDefensa, tamanoArma: f.tamanoArma, arma: f.arma };
   l.cap = capacidades(l.ficha);
   log(ctx, () => `  El arma de ${l.ficha.nombre} queda como nueva.`);
+}
+
+/**
+ * Atar (Core p.180): las sogas o cadenas de la escena atacan con la habilidad del grado (Trucos de
+ * manos, ataque automático); si alcanza, Presa con la Fuerza del material (soga 10, cadena 12). Se
+ * zafa contra esa Fuerza; atado no depende del mago (interpretación).
+ */
+function atar(ctx: Contexto, l: Luchador, b: Luchador, habilidad: number) {
+  const fuerza = ctx.opciones.cuerdas === 'cadena' ? 12 : 10;
+  const golpe: Golpe = { maniobra: 'presa', esContra: false, tipo: 'CON', ranura: ia.RANURA_MAGIA, ki: { ...ia.golpeDeConjuro(l.magia!.conjuros.find((c) => c.efecto === 'atar')!, { zeon: 0, int: 0 }), apresamiento: fuerza, danoFijo: 0 } };
+  resolverDefensa(ctx, l, b, habilidad, DADO_FIJO, golpe, `Las ${ctx.opciones.cuerdas === 'cadena' ? 'cadenas' : 'sogas'} se lanzan sobre ${b.ficha.nombre}`);
+  if (b.apresadoPor === l && !b.lazos && !b.atadura) {
+    b.atadura = fuerza;
+    l.apresando = null;
+    log(ctx, () => `  ${b.ficha.nombre} queda atado (Fuerza ${fuerza}).`);
+  }
+}
+
+/**
+ * Control sobre el Fuego (Core p.157): a un ser de fuego que no supere la RM lo domina (deja de pelear);
+ * sobre alguien en llamas sube o baja su fuego 20 por intensidad en la Tabla 76 (interpretación).
+ */
+function controlarFuego(ctx: Contexto, l: Luchador, b: Luchador, g: Grado) {
+  if (b.equipo !== l.equipo && b.ficha.naturaleza?.includes('fuego')) {
+    if (tirarResistencia(ctx, b, g.rm ?? 0, 'Control sobre el Fuego', 'RM')) {
+      log(ctx, () => `  ${b.ficha.nombre} queda bajo el control de ${l.ficha.nombre}: deja de pelear.`);
+      huir(ctx, b);
+    }
+    return;
+  }
+  if (b.equipo === l.equipo) return mitigarFuego(ctx, b, g.intensidades ?? 0);
+  if (!b.llamas) return;
+  b.llamas += 20 * (g.intensidades ?? 0);
+  log(ctx, () => `  Las llamas de ${b.ficha.nombre} crecen: ${estadoLlamas(b.llamas)} (${b.llamas}).`);
+}
+
+/**
+ * Detectar Vida, Detectar lo Negativo, Sentir el Calor (Core p.127, p.156): localiza a quien esté en el
+ * radio y no supere la RM, aunque sea invisible (ceguera parcial en vez de absoluta). Sentir el Calor no
+ * nota a los no vivos (interpretación: los que tienen acumulación de daño sin ser seres vivos no se
+ * modelan; afecta a todos).
+ */
+function detectar(ctx: Contexto, l: Luchador, c: Conjuro, g: Grado, blancos: Luchador[]) {
+  const hallados: Luchador[] = [];
+  for (const b of blancos) {
+    if (!activo(b) || distancia(l, b) > (g.radio ?? 0)) continue;
+    if (!tirarResistencia(ctx, b, g.rm ?? 0, c.nombre, 'RM')) continue;
+    l.detecta.add(b);
+    hallados.push(b);
+    log(ctx, () => `  ${l.ficha.nombre} localiza a ${b.ficha.nombre}.`);
+  }
+  const m = mantenidoCon(l, c);
+  if (m) m.alTerminar = () => { for (const b of hallados) l.detecta.delete(b); };
+}
+
+/**
+ * Destrucción de Sombras, Dominio Lumínico (Core p.126-127): los seres de esa naturaleza del radio hacen
+ * una RM cada asalto mientras se mantenga; si fallan, pierden el doble del fracaso en PV (por diez con
+ * acumulación) o quedan dominados. Además iluminan a los suyos del radio (sin oscuridad natural).
+ */
+function contraNaturaleza(ctx: Contexto, l: Luchador, g: Grado) {
+  for (const b of ctx.luchadores) {
+    if (b.equipo === l.equipo || !activo(b) || distancia(l, b) > (g.radio ?? 0) || !b.ficha.naturaleza?.includes(g.naturaleza ?? '')) continue;
+    const fracaso = tirarResistencia(ctx, b, g.rm ?? 0, `el poder de ${l.ficha.nombre}`, 'RM');
+    if (!fracaso) continue;
+    if (g.contraNaturaleza === 'domina') {
+      log(ctx, () => `  ${b.ficha.nombre} queda dominado por ${l.ficha.nombre}: deja de pelear.`);
+      huir(ctx, b);
+    } else perderPv(ctx, l, b, (b.ficha.acumulacion ? 10 : 1) * 2 * fracaso);
+  }
 }
 
 /** Mitigar Fuego: cada intensidad que quita baja 20 su estado en la Tabla 76 (Core p.155, p.236). */
@@ -1234,10 +1334,21 @@ function apagarse(ctx: Contexto, l: Luchador) {
 function percibirInvisibles(ctx: Contexto) {
   for (const l of ctx.luchadores) {
     l.percibe.clear();
+    for (const x of l.detecta) l.percibe.add(x);
     if (!activo(l)) continue;
+    // Holograma (Core p.127): Advertir contra 240 o Buscar contra 140 para darse cuenta de que es una imagen.
+    for (const x of ctx.luchadores) {
+      if (!x.holograma || x.equipo === l.equipo || l.descubre.has(x)) continue;
+      const adv = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.advertir ?? 0)).valor;
+      const bus = (l.ficha.buscar ?? 0) - penAccion(l) + tirar(ctx, umbralPifia(l.ficha.buscar ?? 0)).valor;
+      if (adv >= 240 || bus >= 140) {
+        l.descubre.add(x);
+        log(ctx, () => `${l.ficha.nombre} se da cuenta de que la imagen de ${x.ficha.nombre} es un holograma.`);
+      }
+    }
     for (const x of ctx.luchadores) {
       const dif = x.bono?.invisible;
-      if (!dif || x.equipo === l.equipo || !activo(x)) continue;
+      if (!dif || x.equipo === l.equipo || !activo(x) || l.percibe.has(x)) continue;
       const advertir = (l.ficha.advertir ?? 0) + (l.bono?.advertir ?? 0) - penAccion(l);
       const t = tirar(ctx, umbralPifia(l.ficha.advertir ?? 0));
       const ve = !t.pifia && advertir + t.valor >= dif;
@@ -1255,6 +1366,8 @@ function percibirInvisibles(ctx: Contexto) {
 function zonasMagicas(ctx: Contexto) {
   for (const l of ctx.luchadores) {
     for (const x of l.magia?.mantenidos ?? []) {
+      // Destrucción de Sombras, Dominio Lumínico: una RM nueva cada asalto mientras se mantenga.
+      if (x.conjuro.efecto === 'naturaleza' && activo(l)) contraNaturaleza(ctx, l, x.conjuro.grados[x.grado]);
       const z = x.zona;
       if (!z || ctx.asalto < z.desde) continue;
       const g = x.conjuro.grados[x.grado];
@@ -1281,7 +1394,9 @@ function efectoAnimico(ctx: Contexto, atk: Luchador, def: Luchador, a: NonNullab
     case 'secar': {
       // A un ser vivo le hace la mitad del fracaso; resiste con la mejor de RM y RF (interpretación).
       const fracaso = tirarResistencia(ctx, def, rm, que, 'RM o RF');
-      if (fracaso >= 2) perderPv(ctx, atk, def, Math.floor(fracaso / 2));
+      // A un elemental de agua le hace el doble del fracaso (Core p.158).
+      const pv = def.ficha.naturaleza?.includes('agua') ? 2 * fracaso : Math.floor(fracaso / 2);
+      if (pv > 0) perderPv(ctx, atk, def, pv);
       return;
     }
     case 'consumirEsencia': {
@@ -1445,6 +1560,17 @@ function resolverDefensa(
   const tipoGolpe = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
   if (!proteccion && def.ki?.activo.intangible && tipoGolpe !== 'ENE' && !atk.cap.danaEnergia && !o.ki?.danaEnergia) {
     log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
+    return { defensor: def, contra: null, impacto: false };
+  }
+  // Holograma: quien no lo descubrió puede pegarle a la imagen (la mitad de las veces, interpretación); un
+  // golpe de energía la deshace (Core p.127).
+  if (!proteccion && def.holograma && !atk.descubre.has(def) && ctx.rng.next() < 0.5) {
+    log(ctx, () => `${etiqueta}: ¡ataca a la imagen! El golpe la atraviesa.`);
+    if (tipoGolpe === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) {
+      const m = def.magia?.mantenidos.find((x) => x.conjuro.efecto === 'holograma');
+      if (m) dejarDeMantener(def, m);
+      log(ctx, () => `  La imagen se deshace.`);
+    }
     return { defensor: def, contra: null, impacto: false };
   }
   if (proteccion?.apartar) quienDefiende.ataquesRestantes--;
@@ -2240,6 +2366,7 @@ function soltar(l: Luchador) {
   if (l.apresadoPor) l.apresadoPor.apresando = null;
   l.apresadoPor = null;
   l.paralisis = 0;
+  l.atadura = 0;
 }
 
 /** Intento de zafarse de una Presa: control con −3 (Pankration supremo −5). Devuelve si se libró. */
@@ -2250,7 +2377,20 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
     log(ctx, () => `${l.ficha.nombre} no puede romper los Lazos de Luz.`);
     return false;
   }
-  if (!activo(captor)) {
+  if (l.atadura) {
+    // Atado: contra la Fuerza de las sogas o cadenas, no la del mago.
+    const yo = Math.max(atributo(l, 'FUE'), atributo(l, 'AGI')) + modControl(l);
+    if (controlEnfrentado(ctx.rng, yo, l.atadura) > 0) {
+      l.atadura = 0;
+      soltar(l);
+      l.accionesActivas++;
+      log(ctx, () => `${l.ficha.nombre} se libera de las ataduras.`);
+      return true;
+    }
+    log(ctx, () => `${l.ficha.nombre} no logra liberarse de las ataduras.`);
+    return false;
+  }
+  if (!activo(captor) && !l.atadura) {
     soltar(l);
     return true;
   }

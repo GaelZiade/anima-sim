@@ -4,7 +4,7 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
 import {
-  actPara, actPorCansancio, alcanceMagico, bendecir, costeConjuro, danoLlamas, deArea, maximoInnato, preparadoListo, quitarBendicion, rmDe,
+  actPara, actPorCansancio, alcanceMagico, bendecir, presenciaDe, costeConjuro, danoLlamas, deArea, maximoInnato, preparadoListo, quitarBendicion, rmDe,
   zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type Mantenido, type PlanMagia,
 } from './magia';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
@@ -41,6 +41,11 @@ function lambda(l: Luchador): number {
 
 function enemigos(ctx: Contexto, l: Luchador): Luchador[] {
   return ctx.luchadores.filter((e) => e.equipo !== l.equipo && activo(e));
+}
+
+/** Cansancio que puede gastar por asalto: 5 con Uso de la Energía Necesaria, propio o de Marcha Implacable. */
+function maxCansancioAsalto(l: Luchador): number {
+  return l.bono?.energiaNecesaria ? Math.max(5, l.cap.maxCansancioAsalto) : l.cap.maxCansancioAsalto;
 }
 
 function trabadoConAlguien(l: Luchador): boolean {
@@ -556,7 +561,7 @@ function agota(l: Luchador, k: number): boolean {
  * Sólo se gastan puntos que no agotan: el agotamiento penaliza toda acción el resto del combate.
  */
 function decidirCansancio(l: Luchador, ganancia: (k: number) => number, referencia: number): number {
-  const disponibles = Math.min(l.cap.maxCansancioAsalto - l.cansancioAsalto, l.cansancio);
+  const disponibles = Math.min(maxCansancioAsalto(l) - l.cansancioAsalto, l.cansancio);
   if (disponibles <= 0 || perfil(l) === 'bestia') return 0;
   let gastar = 0;
   for (let k = 1; k <= disponibles && !agota(l, k); k++) {
@@ -587,7 +592,7 @@ export function cansancioDefensa(ctx: Contexto, def: Luchador, atk: Luchador, ha
   if (gastar > 0) return gastar;
   // Desesperado: agotarse sólo si baja mucho la chance de quedar fuera de combate ahora, y con lo
   // mínimo que lo logra (con Uso de la energía necesaria podría quemar 5 de golpe).
-  const disponibles = Math.min(def.cap.maxCansancioAsalto - def.cansancioAsalto, def.cansancio);
+  const disponibles = Math.min(maxCansancioAsalto(def) - def.cansancioAsalto, def.cansancio);
   const pBaja = pron(0).pBaja;
   for (let k = 1; k <= disponibles; k++) if (pBaja - pron(k).pBaja >= 0.2) return k;
   return 0;
@@ -2005,7 +2010,9 @@ function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: 
   // Moral: sólo vale si hay un Aura de combate o efectos de miedo enfrente (aproximación: 10% de lo que recibe).
   const moral = g.bono!.frialdad && enemigos(ctx, a).some((x) => x.ki?.auraActiva || x.ficha.ki?.tecnicas.some((t) => t.efectos.some((ef) => /miedo|terror/i.test(ef.opciones.join(' ')))))
     ? 0.1 * lambda(l) * antes.recibe : 0;
-  return ASALTOS_EFECTO * (despues.hace - antes.hace + lambda(l) * (antes.recibe - despues.recibe) + turno + moral);
+  // Marcha Implacable: más cansancio por asalto para quien lo usa al atacar (aproximación: 10% de lo que hace).
+  const marcha = g.bono!.energiaNecesaria && a.cap.maxCansancioAsalto < 5 && a.cansancio > 3 ? 0.1 * antes.hace : 0;
+  return ASALTOS_EFECTO * (despues.hace - antes.hace + lambda(l) * (antes.recibe - despues.recibe) + turno + moral + marcha);
 }
 
 /**
@@ -2135,8 +2142,15 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
       return mejor;
     }
     case 'mitigar': {
-      for (const a of aliadosEnRadio(ctx, l, c, alcance)) {
-        if (!a.llamas) continue;
+      for (const a of ctx.luchadores) {
+        if (!activo(a) || distancia(l, a) > alcance) continue;
+        // Un ser de fuego enemigo: 5 de daño por intensidad si no supera la RM.
+        if (a.equipo !== l.equipo && a.ficha.naturaleza?.includes('fuego')) {
+          const p = fallaResistencia(resistencias(a).rm, g.rm ?? 0).p;
+          probar({ conjuro: c, grado: i, objetivo: a }, p * (a.ficha.acumulacion ? 25 : 5) * (g.intensidades ?? 0));
+          continue;
+        }
+        if (a.equipo !== l.equipo || !a.llamas) continue;
         const queda = Math.max(0, a.llamas - 20 * (g.intensidades ?? 0));
         probar({ conjuro: c, grado: i, objetivo: a }, lambda(l) * (danoDeLlamas(a, a.llamas) - danoDeLlamas(a, queda < 100 ? 0 : queda)));
       }
@@ -2242,6 +2256,74 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
       let v = 0;
       for (const x of enemigos(ctx, l)) if (enAlcance(l, x)) v += amenaza(x, l) * (metrosTotales(x) < (g.metros ?? 0) ? 1.5 : 0.25);
       probar({ conjuro: c, grado: i, objetivo: l }, lambda(l) * v);
+      return mejor;
+    }
+    case 'holograma': {
+      // Cada enemigo que no lo descubra le erra la mitad de las veces a la imagen (por λ, unos asaltos).
+      if (l.holograma) return null;
+      let v = 0;
+      for (const x of enemigos(ctx, l)) {
+        if (l.descubre.has(x)) continue;
+        const pAdv = tabla(umbralPifia(x.ficha.advertir ?? 0), 0, true).pImpacto((x.ficha.advertir ?? 0) - 240 + 1);
+        const pBus = tabla(umbralPifia(x.ficha.buscar ?? 0), 0, true).pImpacto((x.ficha.buscar ?? 0) - 140 + 1);
+        v += 0.5 * (1 - Math.max(pAdv, pBus)) * amenaza(x, l);
+      }
+      probar({ conjuro: c, grado: i, objetivo: null }, lambda(l) * 2 * v);
+      return mejor;
+    }
+    case 'atar': {
+      // Con sogas o cadenas en la escena: como Lazos, pero se pueden romper.
+      if (!ctx.opciones.cuerdas) return null;
+      const fuerza = ctx.opciones.cuerdas === 'cadena' ? 12 : 10;
+      for (const obj of enemigos(ctx, l)) {
+        if (!aLaVista(ctx, l, obj, alcance) || obj.apresadoPor || obj.ficha.acumulacion) continue;
+        const p = tabla(0, obj.cap.umbralDefensa, false).pImpacto((g.habilidad ?? 0) - 55 - defensaFinal(obj, l));
+        const control = pGanaControl(fuerza, Math.max(atributo(obj, 'FUE'), atributo(obj, 'AGI')));
+        probar({ conjuro: c, grado: i, objetivo: obj }, p * control * valorNegativo(l, obj, 80, 1, 0));
+      }
+      return mejor;
+    }
+    case 'crearFuego': {
+      for (const obj of enemigos(ctx, l)) {
+        if (!aLaVista(ctx, l, obj, alcance) || obj.llamas) continue;
+        probar({ conjuro: c, grado: i, objetivo: obj }, valorPrender(obj, 20 * (g.intensidades ?? 0)));
+      }
+      return mejor;
+    }
+    case 'controlFuego': {
+      for (const obj of ctx.luchadores) {
+        if (!activo(obj) || !aLaVista(ctx, l, obj, alcance)) continue;
+        if (obj.equipo !== l.equipo && obj.ficha.naturaleza?.includes('fuego')) {
+          const p = fallaResistencia(resistencias(obj).rm, g.rm ?? 0).p;
+          probar({ conjuro: c, grado: i, objetivo: obj }, p * (Math.max(0, obj.pv) + 2 * amenaza(obj, l)));
+        } else if (obj.llamas) {
+          const n = 20 * (g.intensidades ?? 0);
+          const cambio = obj.equipo === l.equipo
+            ? lambda(l) * (danoDeLlamas(obj, obj.llamas) - danoDeLlamas(obj, obj.llamas - n < 100 ? 0 : obj.llamas - n))
+            : danoDeLlamas(obj, obj.llamas + n) - danoDeLlamas(obj, obj.llamas);
+          probar({ conjuro: c, grado: i, objetivo: obj }, cambio);
+        }
+      }
+      return mejor;
+    }
+    case 'detectar': {
+      // Ubicar a un enemigo invisible: de ceguera absoluta a parcial contra él.
+      const blancos = enemigos(ctx, l).filter((x) => x.bono?.invisible && !l.detecta.has(x) && distancia(l, x) <= (g.radio ?? 0));
+      let v = 0;
+      for (const x of blancos) v += fallaResistencia(resistencias(x).rm, g.rm ?? 0).p * ASALTOS_EFECTO * 0.3 * amenaza(x, l);
+      if (blancos.length) probar({ conjuro: c, grado: i, objetivo: null, blancos }, v);
+      return mejor;
+    }
+    case 'naturaleza': {
+      // Sólo hay algo que hacer si enfrente hay seres de esa naturaleza en el radio.
+      let v = 0;
+      for (const x of enemigos(ctx, l)) {
+        if (distancia(l, x) > (g.radio ?? 0) || !x.ficha.naturaleza?.includes(g.naturaleza ?? '')) continue;
+        const f = fallaResistencia(resistencias(x).rm, g.rm ?? 0);
+        v += f.p * (g.contraNaturaleza === 'domina' ? Math.max(0, x.pv) + 2 * amenaza(x, l) : Math.min(Math.max(0, x.pv), (x.ficha.acumulacion ? 20 : 2) * f.fracaso) * 2);
+      }
+      const suyos = ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x) && distancia(l, x) <= (g.radio ?? 0));
+      if (v > 0) probar({ conjuro: c, grado: i, objetivo: null, blancos: suyos }, v);
       return mejor;
     }
     case 'reparar': {
@@ -2479,6 +2561,11 @@ export function planMagia(ctx: Contexto, l: Luchador): PlanMagia {
     const max = vida.conjuro.grados[vida.grado].maximo ?? 0;
     plan.consumirVida = Math.min(max, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
   }
+  // Pasarle su ACT de zeon a un mago aliado que se está quedando sin, si a él le sobra (Core p.117).
+  const alcanceZeon = l.ficha.magia!.transmision ? presenciaDe(l) : ALCANCE;
+  const necesitado = ctx.luchadores.find((x) => x !== l && x.equipo === l.equipo && activo(x) && x.magia &&
+    zeonLibre(x.magia) < 2 * (x.ficha.magia?.act ?? 0) && distancia(l, x) <= alcanceZeon);
+  if (necesitado && zeonLibre(e) > 600) return { acumula: false, transferir: { a: necesitado, zeon: l.ficha.magia!.act } };
   const meta = metaMagica(ctx, l, alcance);
   const inn = mejorInnato(ctx, l, alcance);
   if (inn && inn.valor > (meta?.porAsalto ?? 0)) return { ...plan, acumula: false, innato: true };

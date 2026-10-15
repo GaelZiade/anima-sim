@@ -563,13 +563,30 @@ con la chance de que lo noten; Transporte, según si lo alcanzan enseguida).
 21. Crear Luz va sobre el mago y anula la oscuridad natural a los suyos del radio.
 22. Sacrificio Vital: sólo en conjuros de ataque, de a 10 PV, sin bajar de la mitad de sus PV.
 
-**Lo que Stéphan conoce y no tiene uso en el combate simulado** (`sinSimular`): Destrucción de Sombras
-y Dominio Lumínico (sólo contra seres de oscuridad o de luz, que no se modelan), Detectar lo Negativo,
-Detectar Vida, Sentir el Calor (detección), Holograma (un señuelo: la IA no modela engaños), Espía de
-Luz, Crear Fuego, Control sobre el Fuego (contra seres de fuego), Ver en las Cenizas, Aumentar la
-Temperatura Ambiental, Atar (hacen falta sogas en la escena), Bolsa Infinita, Enviar Mensaje,
-Protección Anticonceptiva, Olvido, Marcha Implacable, Órdenes Precisas, Categorizar, Conocimiento,
-Saber Debilidad y Saber la Verdad.
+También: Holograma, Atar (con sogas o cadenas en la escena: opción del escenario), Crear Fuego,
+Control sobre el Fuego, Detectar Vida, Detectar lo Negativo, Sentir el Calor, Destrucción de Sombras,
+Dominio Lumínico (Luz y Fuego), Marcha Implacable (Guerra), y pasar zeon a un mago aliado (Core p.117;
+con Transmisión de Magia, a distancia, Arcana p.29). La ficha puede traer la **naturaleza** de un ser
+(`naturaleza: ["fuego"]`, "agua", "luz", "oscuridad"): Destrucción de Sombras, Dominio Lumínico, Control
+sobre el Fuego, Mitigar Fuego y Secar los afectan como dice cada conjuro.
+
+23. Holograma: quien no lo descubre (Advertir contra 240 o Buscar contra 140, cada asalto) le pega a la
+    imagen la mitad de las veces; un golpe de energía la deshace.
+24. Atar: las sogas o cadenas atacan con la habilidad del grado, sin tirada; si alcanzan, Presa con su
+    Fuerza (10 o 12); quien queda atado se zafa contra esa Fuerza, aunque el mago caiga.
+25. Crear Fuego sobre alguien: 1d100 + 20 por intensidad en la Tabla 76, sin defensa.
+26. Control sobre el Fuego sobre alguien en llamas: sube (enemigo) o baja (aliado) 20 por intensidad.
+27. Las detecciones localizan a un invisible del radio que no supere la RM (ceguera parcial).
+28. Pasar zeon usa su ACT de ese asalto (no acumula); en contacto, o con Transmisión de Magia hasta su
+    Presencia en metros.
+
+**Lo que Stéphan conoce y no tiene efecto en un combate** (`sinSimular`), por lo que dice cada uno:
+Espía de Luz (ver a distancia), Ver en las Cenizas (ver el pasado), Aumentar la Temperatura Ambiental
+(grados en kilómetros), Bolsa Infinita, Enviar Mensaje, Protección Anticonceptiva, Olvido (memoria),
+Órdenes Precisas (comunicación), Categorizar, Conocimiento, Saber Debilidad (no da ningún modificador) y
+Saber la Verdad. De su metamagia, Elevación (un trance para recuperar zeon), Sentir la Magia (Valoración
+Mágica) y Efectos Persistentes (ninguno de sus conjuros permite repetir la RM) tampoco cambian un
+combate.
 
 **Tabla 57 (choque de descargas)**, dada por el usuario (la copia del manual está cortada): diferencia
 1-50, se anulan; 51-100, la ganadora pasa con la mitad del daño base; 101 o más, pasa con el daño

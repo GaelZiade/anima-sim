@@ -18,7 +18,7 @@ const soldado = abel.find((f) => f.id === 'soldado')!;
 const mago = (magia: Partial<NonNullable<Ficha['magia']>>, extra: Partial<Ficha> = {}): Ficha => ({
   id: 'mago', nombre: 'Mago', pv: 300, turno: 70, ataque: 20, defensa: 30, danoBase: 30, tipoAtaque: 'CON',
   ta: {}, rf: 40, constitucion: 6, tipoMovimiento: 6, inteligencia: 11, resistirDolor: 60, rm: 80,
-  magia: { zeon: 3000, act: 150, proyeccion: 150, vias: {}, ...magia },
+  magia: { zeon: 3000, act: 150, proyeccion: 150, vias: {}, ...magia } as NonNullable<Ficha['magia']>,
   ...extra,
 });
 
@@ -42,7 +42,7 @@ describe('el grimorio (generado de la planilla)', () => {
     const sabe = conocidos(m).map((e) => e.nombre);
     expect(sabe).toEqual(expect.arrayContaining(['Bola de fuego', 'Tormenta de fuego', 'Campeón', 'Saber debilidad', 'Descarga de luz', 'Curar heridas', 'Invisibilidad']));
     expect(sabe).not.toContain('Maestro de la guerra');
-    expect(sinSimular(m).map((e) => e.nombre)).toEqual(expect.arrayContaining(['Holograma', 'Saber debilidad']));
+    expect(sinSimular(m).map((e) => e.nombre)).toEqual(expect.arrayContaining(['Espía de luz', 'Saber debilidad']));
     expect(sinSimular(m).map((e) => e.nombre)).not.toContain('Invisibilidad');
     expect(conjurosDe(m).length + sinSimular(m).length).toBe(sabe.length);
   });
@@ -275,4 +275,45 @@ describe('parte 3: el resto de los conjuros de Stéphan', () => {
     expect(buscar(/se calma: deja de tener Miedo/, (semilla) =>
       simularCombate([mago({ libres: ['Imbuir Calma'] }), { ...soldado, id: 'asustado', nombre: 'Asustado', estados: { miedo: true } }], soldados(2), { semilla, registrar: true, distanciaInicial: 10, maxAsaltos: 3 }).registro!.map((x) => x.texto))).toBe(true);
   });
+
+  it('Holograma: quien no lo descubre le pega a la imagen', () => {
+    expect(buscar(/¡ataca a la imagen!/, (semilla) =>
+      simularCombate([mago({ libres: ['Holograma'] })], soldados(2), { semilla, registrar: true, distanciaInicial: 10, maxAsaltos: 5 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Atar: sólo con sogas o cadenas en la escena', () => {
+    const textos = (cuerdas?: 'soga' | 'cadena') => (semilla: number) =>
+      simularCombate([mago({ libres: ['Atar'] })], [{ ...soldado, pv: 800 }], { semilla, registrar: true, distanciaInicial: 10, maxAsaltos: 5, escenario: { cuerdas } }).registro!.map((x) => x.texto);
+    expect(buscar(/queda atado \(Fuerza 12\)/, textos('cadena'))).toBe(true);
+    expect(buscar(/lanza Atar/, textos(undefined), 10)).toBe(false);
+  });
+
+  it('contra seres de su naturaleza: Destrucción de Sombras daña a los de oscuridad; Control sobre el Fuego domina a los de fuego', () => {
+    const sombra = { ...soldado, id: 'sombra', nombre: 'Sombra', naturaleza: ['oscuridad'], rm: 20 };
+    expect(buscar(/Sombra falla la RM contra el poder de Mago/, (semilla) =>
+      simularCombate([mago({ vias: { Luz: 20 } })], [sombra], { semilla, registrar: true, distanciaInicial: 5, maxAsaltos: 4 }).registro!.map((x) => x.texto))).toBe(true);
+    const ifrit = { ...soldado, id: 'ifrit', nombre: 'Ifrit', naturaleza: ['fuego'], rm: 20 };
+    expect(buscar(/Ifrit queda bajo el control de Mago/, (semilla) =>
+      simularCombate([mago({ libres: ['Control sobre el Fuego'] })], [ifrit], { semilla, registrar: true, distanciaInicial: 5, maxAsaltos: 4 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Detectar Vida localiza a un enemigo invisible', () => {
+    const invisible = mago({ act: 200, libres: ['Invisibilidad'] }, { id: 'inv', nombre: 'Oculto', rm: 20 });
+    expect(buscar(/Mago localiza a Oculto/, (semilla) =>
+      simularCombate([mago({ libres: ['Detectar Vida'] }), { ...soldado, pv: 500 }], [invisible], { semilla, registrar: true, distanciaInicial: 15, maxAsaltos: 8 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('pasarle zeon a un mago aliado (con Transmisión de Magia, a distancia)', () => {
+    const rico = mago({ transmision: true, vias: { Luz: 40 } }, { id: 'rico', nombre: 'Rico' });
+    const pobre = mago({ zeon: 60, act: 50, vias: { Luz: 40 } }, { id: 'pobre', nombre: 'Pobre' });
+    expect(buscar(/Rico le pasa 150 de zeon a Pobre/, (semilla) =>
+      simularCombate([rico, pobre], soldados(2), { semilla, registrar: true, distanciaInicial: 20, maxAsaltos: 3 }).registro!.map((x) => x.texto), 10)).toBe(true);
+  });
+
+  it('Marcha Implacable da Uso de la Energía Necesaria', () => {
+    const l = crearLuchador(soldado, 'A', 0, 0);
+    bendecir(l, l, conjuro('Marcha Implacable'), { energiaNecesaria: true });
+    expect(l.bono?.energiaNecesaria).toBe(true);
+  });
 });
+

@@ -59,6 +59,7 @@ interface OpcionesGuardadas {
   semilla: number;
   oscuridad: string;
   faseLunar: string;
+  cuerdas?: string;
   casillas: Record<string, boolean>;
 }
 
@@ -182,6 +183,7 @@ function escenarioActual() {
   const selectorLuna = $<HTMLSelectElement>('faseLunar');
   const fase = (selectorLuna.disabled ? '' : selectorLuna.value) as OpcionesEscenario['faseLunar'] | '';
   const oscuridad = $<HTMLSelectElement>('oscuridad').value as OpcionesEscenario['oscuridad'] | '';
+  const cuerdas = $<HTMLSelectElement>('cuerdas').value as OpcionesEscenario['cuerdas'] | '';
   const a = equipoDe(estado.equipoA, vistos);
   const b = equipoDe(estado.equipoB, vistos);
   const opciones: OpcionesEscenario = {
@@ -194,6 +196,7 @@ function escenarioActual() {
     disparosParalelos: marcado('disparosParalelos'),
     ...(fase ? { faseLunar: fase } : {}),
     ...(oscuridad ? { oscuridad } : {}),
+    ...(cuerdas ? { cuerdas } : {}),
     // Una copia: el mapa del estado se edita en el lugar y el motor guarda lo que preparó con él.
     mapa: { ...estado.mapa!, bloqueadas: [...estado.mapa!.bloqueadas], infranqueables: [...(estado.mapa!.infranqueables ?? [])] },
     posiciones: { A: a.celdas, B: b.celdas },
@@ -401,6 +404,7 @@ function aplicarEscenario(esc: EscenarioJson): string[] {
   for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o[id];
   ($('faseLunar') as HTMLSelectElement).value = o.faseLunar ?? '';
   ($('oscuridad') as HTMLSelectElement).value = o.oscuridad ?? '';
+  ($('cuerdas') as HTMLSelectElement).value = o.cuerdas ?? '';
   estado.opciones = leerOpciones();
   return errores;
 }
@@ -896,6 +900,7 @@ function leerOpciones(): OpcionesGuardadas {
     semilla: Math.max(1, Math.round(numeroDe('semilla')) || 1),
     oscuridad: $<HTMLSelectElement>('oscuridad').value,
     faseLunar: $<HTMLSelectElement>('faseLunar').value,
+    cuerdas: $<HTMLSelectElement>('cuerdas').value,
     casillas: Object.fromEntries(CASILLAS.map((id) => [id, marcado(id)])),
   };
 }
@@ -906,6 +911,7 @@ function mostrarOpciones(o: OpcionesGuardadas) {
   ($('semilla') as HTMLInputElement).value = String(o.semilla);
   $<HTMLSelectElement>('oscuridad').value = o.oscuridad;
   $<HTMLSelectElement>('faseLunar').value = o.faseLunar;
+  $<HTMLSelectElement>('cuerdas').value = o.cuerdas ?? '';
   for (const id of CASILLAS) ($(id) as HTMLInputElement).checked = !!o.casillas[id];
 }
 

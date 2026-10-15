@@ -17,7 +17,8 @@ export type TipoConjuro = 'ataque' | 'defensa' | 'efecto' | 'animico' | 'automat
 export type EfectoConjuro =
   | 'flash' | 'secar' | 'consumirEsencia' | 'criticoDirecto' | 'incinerar' | 'tormenta' | 'aumentarCritico'
   | 'bendicion' | 'curar' | 'sacrificioPoder' | 'consumirVida' | 'mitigar' | 'calmar' | 'extasis' | 'lazos' | 'barrera'
-  | 'mina' | 'fundir' | 'sacrificioVital' | 'transporte' | 'reparar' | 'capacidades';
+  | 'mina' | 'fundir' | 'sacrificioVital' | 'transporte' | 'reparar' | 'capacidades' | 'holograma' | 'atar' | 'crearFuego'
+  | 'controlFuego' | 'detectar' | 'naturaleza';
 
 /** Beneficio que deja un conjuro sobre quien lo recibe (vías de Guerra, Fuego). */
 export interface BonoMagico {
@@ -51,6 +52,8 @@ export interface BonoMagico {
   luz?: boolean;
   /** Bono a la habilidad Frialdad (Moral). */
   frialdad?: number;
+  /** Uso de la Energía Necesaria (Ki): hasta 5 de cansancio por asalto (Marcha Implacable). */
+  energiaNecesaria?: boolean;
 }
 export type NombreGrado = 'base' | 'intermedio' | 'avanzado' | 'arcano';
 export const GRADOS: readonly NombreGrado[] = ['base', 'intermedio', 'avanzado', 'arcano'];
@@ -92,6 +95,10 @@ export interface Grado {
   fuerza?: number;
   /** Metros (Transporte Rápido) o extensión de un muro (Barrera de Fuego). */
   metros?: number;
+  /** Seres de esta naturaleza a los que afecta (Destrucción de Sombras, Dominio Lumínico, Control sobre el Fuego). */
+  naturaleza?: string;
+  /** Qué les hace: daño por el doble del fracaso o los domina (dejan de pelear). */
+  contraNaturaleza?: 'dobleFracaso' | 'domina';
   /** Beneficio sobre los afectados. */
   bono?: BonoMagico;
 }
@@ -222,6 +229,34 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
     grados: [40, 80, 120, 180].map((frialdad) => ({ bono: { frialdad } })),
   },
   { nombre: 'Reparación', efecto: 'reparar', blanco: 'aliado', fuente: 'Core p.181' },
+  {
+    // Una imagen del mago: quien no la descubre (Advertir contra 240 o Buscar contra 140) puede atacarla.
+    nombre: 'Holograma', efecto: 'holograma', fuente: 'Core p.127',
+  },
+  {
+    // Sogas o cadenas de la escena atan con Trucos de manos 120 / 140 / 180 / 240 (ataque automático).
+    nombre: 'Atar', efecto: 'atar', fuente: 'Core p.180', grados: [120, 140, 180, 240].map((habilidad) => ({ habilidad })),
+  },
+  { nombre: 'Crear Fuego', efecto: 'crearFuego', fuente: 'Core p.155', grados: [1, 6, 8, 10].map((intensidades) => ({ intensidades })) },
+  {
+    nombre: 'Control sobre el Fuego', efecto: 'controlFuego', fuente: 'Core p.157',
+    grados: [5, 8, 12, 15].map((intensidades) => ({ intensidades, naturaleza: 'fuego', contraNaturaleza: 'domina' as const })),
+  },
+  { nombre: 'Detectar Vida', efecto: 'detectar', centro: 'lanzador', fuente: 'Core p.127' },
+  { nombre: 'Detectar lo Negativo', efecto: 'detectar', centro: 'lanzador', fuente: 'Core p.127' },
+  { nombre: 'Sentir el Calor', efecto: 'detectar', fuente: 'Core p.156', grados: [25, 50, 100, 250].map((radio) => ({ radio })) },
+  {
+    nombre: 'Destrucción de Sombras', efecto: 'naturaleza', centro: 'lanzador', fuente: 'Core p.126',
+    todos: { naturaleza: 'oscuridad', contraNaturaleza: 'dobleFracaso', bono: { luz: true } },
+  },
+  {
+    nombre: 'Dominio Lumínico', efecto: 'naturaleza', centro: 'lanzador', fuente: 'Core p.127',
+    todos: { naturaleza: 'luz', contraNaturaleza: 'domina', bono: { luz: true } },
+  },
+  {
+    nombre: 'Marcha Implacable', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Arcana p.35',
+    todos: { bono: { energiaNecesaria: true } },
+  },
   { nombre: 'Magia por Capacidades', efecto: 'capacidades', fuente: 'Core p.159', grados: [50, 100, 150, 200].map((maximo) => ({ maximo })) },
   { nombre: 'Crear Luz', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Core p.126',
     grados: [5, 25, 100, 500].map((radio) => ({ radio, bono: { luz: true } })) },
@@ -233,7 +268,11 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   },
   { nombre: 'Éxtasis', efecto: 'extasis', centro: 'lanzador', fuente: 'Core p.128' },
   { nombre: 'Dest. Sentimientos Negativos', efecto: 'calmar', centro: 'lanzador', fuente: 'Core p.128' },
-  { nombre: 'Mitigar Fuego', efecto: 'mitigar', blanco: 'aliado', fuente: 'Core p.155', grados: [1, 5, 10, 15].map((intensidades) => ({ intensidades })) },
+  {
+    // Contra un ser de fuego: 5 de daño por intensidad (25 con acumulación) si no supera la RM.
+    nombre: 'Mitigar Fuego', efecto: 'mitigar', blanco: 'aliado', fuente: 'Core p.155',
+    grados: [[1, 100], [5, 120], [10, 140], [15, 180]].map(([intensidades, rm]) => ({ intensidades, rm })),
+  },
   {
     nombre: 'Inmunidad contra el Fuego', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.156',
     grados: [5, 12, 20, 30].map((inmuneFuego) => ({ bono: { inmuneFuego } })),
