@@ -5,7 +5,7 @@ import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tec
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
 import {
   actPara, actPorCansancio, alcanceMagico, bendecir, costeConjuro, danoLlamas, deArea, maximoInnato, preparadoListo, quitarBendicion, rmDe,
-  zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
+  zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type Mantenido, type PlanMagia,
 } from './magia';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
@@ -1849,6 +1849,8 @@ export type Lanzamiento = {
   preparado?: boolean;
   /** Lanzado con la magia innata: no gasta zeon. */
   innato?: boolean;
+  /** Hace estallar esta mina (no lanza nada). */
+  detonar?: Mantenido;
   /** Beneficiados (conjuros de efecto) o designados (Incinerar). */
   blancos?: Luchador[];
   /** Usa Control del Espacio para dejar afuera a los suyos (+10 de zeon). */
@@ -1904,8 +1906,35 @@ function valorCriticoFijo(atk: Luchador, def: Luchador, nivel: number): number {
   return pFuera * (Math.max(0, def.pv) + 2 * amenaza(def, atk)) + pNeg * valorNegativo(atk, def, def.cap.mitadDolorCritico ? negativo * 0.6 : negativo, 0, 0);
 }
 
+/**
+ * Sacrificio Vital (Core p.158): PV para sumarle a la Proyección (+5 cada 5), declarado antes de tirar.
+ * Los que más suban el valor del golpe por encima de lo que valen esos PV (por λ), sin bajar de la
+ * mitad de sus PV.
+ */
+export function sacrificioVitalPara(ctx: Contexto, l: Luchador, obj: Luchador, c: Conjuro, g: Grado, hab: number): number {
+  const m = l.magia?.mantenidos.find((x) => x.conjuro.efecto === 'sacrificioVital');
+  if (!m || perfil(l) === 'bestia') return 0;
+  nuevaDecision(ctx);
+  const max = Math.min(m.conjuro.grados[m.grado].maximo ?? 0, Math.floor((l.pv - l.ficha.pv / 2) / 5) * 5);
+  const ki = golpeDeConjuro(c, g);
+  const def = defensaContraConjuro(obj, l, ki);
+  const valor = (h: number) => valorGolpe(l, obj, pronostico(l, obj, h, def, { ki, tipo: c.ta, ranura: RANURA_MAGIA }), 0);
+  const sin = valor(hab);
+  let mejor = 0;
+  let mejorNeto = 0;
+  for (let k = 10; k <= max; k += 10) {
+    const neto = valor(hab + k) - sin - lambda(l) * k;
+    if (neto > mejorNeto) {
+      mejor = k;
+      mejorNeto = neto;
+    }
+  }
+  return mejor;
+}
+
 /** PV que perdería en llamas desde ese nivel de la Tabla 76 en los próximos asaltos, sin apagarse. */
 function danoDeLlamas(l: Luchador, desde: number): number {
+  if (desde < 100) return 0;
   const antes = l.llamas;
   let total = 0;
   for (let i = 0, n = desde; i < ASALTOS_EFECTO - 1; i++, n += 10) {
@@ -1958,7 +1987,10 @@ function valorBendicion(ctx: Contexto, l: Luchador, a: Luchador, c: Conjuro, g: 
   const despues = intercambio(ctx, a);
   quitarBendicion(a, l, c);
   const turno = ((g.bono!.turno ?? 0) / 100) * (antes.hace + lambda(l) * antes.recibe);
-  return ASALTOS_EFECTO * (despues.hace - antes.hace + lambda(l) * (antes.recibe - despues.recibe) + turno);
+  // Moral: sólo vale si hay un Aura de combate o efectos de miedo enfrente (aproximación: 10% de lo que recibe).
+  const moral = g.bono!.frialdad && enemigos(ctx, a).some((x) => x.ki?.auraActiva || x.ficha.ki?.tecnicas.some((t) => t.efectos.some((ef) => /miedo|terror/i.test(ef.opciones.join(' ')))))
+    ? 0.1 * lambda(l) * antes.recibe : 0;
+  return ASALTOS_EFECTO * (despues.hace - antes.hace + lambda(l) * (antes.recibe - despues.recibe) + turno + moral);
 }
 
 /**
@@ -2087,6 +2119,128 @@ function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: nu
       }
       return mejor;
     }
+    case 'mitigar': {
+      for (const a of aliadosEnRadio(ctx, l, c, alcance)) {
+        if (!a.llamas) continue;
+        const queda = Math.max(0, a.llamas - 20 * (g.intensidades ?? 0));
+        probar({ conjuro: c, grado: i, objetivo: a }, lambda(l) * (danoDeLlamas(a, a.llamas) - danoDeLlamas(a, queda < 100 ? 0 : queda)));
+      }
+      return mejor;
+    }
+    case 'calmar': {
+      // Quitarle el Miedo (−60) a los suyos del radio.
+      let v = 0;
+      for (const a of ctx.luchadores) {
+        if (a.equipo !== l.equipo || !activo(a) || distancia(l, a) > (g.radio ?? 0) || !(a.ficha.estados?.miedo || a.aura?.estado === 'miedo')) continue;
+        const rival = enemigos(ctx, a).sort((x, y) => distancia(a, x) - distancia(a, y))[0];
+        if (rival) v += valorNegativo(rival, a, 60, 1, 0);
+      }
+      probar({ conjuro: c, grado: i, objetivo: null, control: !!l.ficha.magia?.controlDelEspacio && v > 0 }, v, l.ficha.magia?.controlDelEspacio ? precioZeon(l) * ZEON_CONTROL_DEL_ESPACIO : 0);
+      return mejor;
+    }
+    case 'extasis': {
+      // −20 a toda acción en lugar de sus negativos: malo para quien tiene pocos, bueno para quien tiene muchos.
+      const control = !!l.ficha.magia?.controlDelEspacio;
+      const blancos: Luchador[] = [];
+      let v = 0;
+      for (const b of ctx.luchadores) {
+        if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || b.extasis) continue;
+        const delta = 20 + b.penFisico + b.penTecnica - penAccion(b);
+        let valor: number;
+        if (b.equipo === l.equipo) {
+          const rival = enemigos(ctx, b).sort((x, y) => distancia(b, x) - distancia(b, y))[0];
+          valor = delta < 0 && rival ? 2 * valorNegativo(rival, b, -delta, 1, 0) : delta > 0 && rival ? -2 * lambda(l) * valorNegativo(rival, b, delta, 1, 0) : 0;
+        } else {
+          const p = pAlcanzaAnimico(l, b, c, g) * fallaResistencia(resistencias(b).rm, g.rm ?? 0).p;
+          valor = 2 * p * (delta > 0 ? valorNegativo(l, b, delta, 1, 0) : -valorNegativo(b, l, -delta, 1, 0));
+        }
+        if (control && valor <= 0) continue;
+        blancos.push(b);
+        v += valor;
+      }
+      const obj = blancos.find((b) => b.equipo !== l.equipo) ?? blancos[0];
+      if (obj) probar({ conjuro: c, grado: i, objetivo: obj, blancos, control }, v, control ? precioZeon(l) * ZEON_CONTROL_DEL_ESPACIO : 0);
+      return mejor;
+    }
+    case 'lazos': {
+      // Presa sin penalizador con la Fuerza de los lazos; sujeto, con parálisis y sin poder romperlos.
+      const ki = { ...golpeDeConjuro(c, g), apresamiento: g.fuerza ?? 0 };
+      for (const obj of enemigos(ctx, l)) {
+        if (!aLaVista(ctx, l, obj, alcance) || obj.apresadoPor || obj.ficha.acumulacion) continue;
+        const p = pronostico(l, obj, ataqueMagico(l, obj), defensaContraConjuro(obj, l, ki), { maniobra: 'presa', ki, tipo: 'ENE', ranura: RANURA_MAGIA });
+        const control = pGanaControl(g.fuerza ?? 0, Math.max(atributo(obj, 'FUE'), atributo(obj, 'AGI')));
+        probar({ conjuro: c, grado: i, objetivo: obj }, p.pManiobra * control * 2 * valorNegativo(l, obj, 80, 1, 0));
+      }
+      return mejor;
+    }
+    case 'barrera': {
+      // Un muro entre él y quien viene hacia él: cada uno que lo cruce recibe un ataque automático.
+      if (e.mantenidos.some((x) => x.muro)) return null;
+      const ki = golpeDeConjuro(c, g);
+      const vienen = enemigos(ctx, l).filter((x) => !enAlcance(l, x) && faltaParaLlegar(x, l) <= 2 * metrosTotales(x) && !x.ficha.armasDistancia?.length);
+      if (!vienen.length) return null;
+      const obj = vienen.sort((a, b) => distancia(l, a) - distancia(l, b))[0];
+      let v = 0;
+      for (const x of vienen) v += danoEsperado(l, x, (g.habilidad ?? 240) - 55, defensaContraConjuro(x, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+      probar({ conjuro: c, grado: i, objetivo: obj }, v);
+      return mejor;
+    }
+    case 'mina': {
+      // Donde más enemigos haya en el radio; se descuenta que se muevan antes de que estalle.
+      if (e.mantenidos.some((x) => x.conjuro === c)) return null;
+      const ki = golpeDeConjuro(c, g);
+      for (const obj of enemigos(ctx, l)) {
+        if (!aLaVista(ctx, l, obj, alcance)) continue;
+        let v = 0;
+        for (const b of ctx.luchadores) {
+          if (!activo(b) || distancia(b, obj) > (g.area ?? 0)) continue;
+          const dano = danoEsperado(l, b, 280 - 55, defensaContraConjuro(b, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+          v += (b.equipo === l.equipo ? (l.ficha.magia?.controlDelEspacio ? 0 : -lambda(l)) : 1) * dano;
+        }
+        probar({ conjuro: c, grado: i, objetivo: obj }, 0.6 * v);
+      }
+      return mejor;
+    }
+    case 'fundir': {
+      // Los enemigos armados del radio sueltan el arma si fallan: valen lo que dejan de pegar.
+      const blancos: Luchador[] = [];
+      let v = 0;
+      for (const b of enemigos(ctx, l)) {
+        if (distancia(l, b) > (g.radio ?? 0) || b.desarmado || b.cap.desarmado || !b.ficha.arma || b.ficha.arma.desarmado) continue;
+        const pObjeto = Math.max(0, Math.min(1, ((g.rf ?? 0) - 20 - (b.ficha.arma.calidad ?? 0)) / 100));
+        const valor = pAlcanzaAnimico(l, b, c, g) * pObjeto * 1.5 * amenaza(b, l);
+        if (valor <= 0) continue;
+        blancos.push(b);
+        v += valor;
+      }
+      if (blancos.length) probar({ conjuro: c, grado: i, objetivo: blancos[0], blancos }, v);
+      return mejor;
+    }
+    case 'sacrificioVital':
+      // Se lanza una vez y queda: rinde en los ataques que vienen (aproximación: 5% de sus PV por asalto).
+      probar({ conjuro: c, grado: i, objetivo: null }, ASALTOS_EFECTO * 0.05 * l.ficha.pv);
+      return mejor;
+    case 'transporte': {
+      // Salir de un cuerpo a cuerpo: se ahorra lo que le pegarían este asalto y el siguiente.
+      if (!trabadoConAlguien(l)) return null;
+      let v = 0;
+      for (const x of enemigos(ctx, l)) if (enAlcance(l, x)) v += amenaza(x, l);
+      probar({ conjuro: c, grado: i, objetivo: l }, lambda(l) * 1.5 * v);
+      return mejor;
+    }
+    case 'reparar': {
+      for (const a of aliadosEnRadio(ctx, l, c, alcance)) {
+        if (!a.armaRota) continue;
+        // Recupera más o menos el doble de lo que hace desarmado (aproximación).
+        probar({ conjuro: c, grado: i, objetivo: a }, ASALTOS_EFECTO * intercambio(ctx, a).hace);
+      }
+      return mejor;
+    }
+    case 'capacidades':
+      // Sólo cambia algo en un choque de descargas (el bono de Poder): si hay con quién chocar.
+      if (!ctx.opciones.disparosParalelos || !enemigos(ctx, l).some((x) => x.magia || x.ficha.ki?.tecnicas.length)) return null;
+      probar({ conjuro: c, grado: i, objetivo: null }, ASALTOS_EFECTO * 2);
+      return mejor;
     case 'consumirVida': {
       // Lo vale cuando la reserva no alcanza para el resto del combate: el zeon que daría en dos
       // asaltos, a su precio, menos los PV (por λ).
@@ -2139,6 +2293,24 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
     return inn ? { lanzar: [inn.l] } : null;
   }
   const res: Lanzamiento[] = [];
+  // Una mina puesta: estalla si lo que haría ya vale la pena (no se espera más que eso).
+  const mina = e.mantenidos.find((x) => x.conjuro.efecto === 'mina' && x.zona);
+  if (mina) {
+    const z = mina.zona!;
+    const control = !!l.ficha.magia?.controlDelEspacio && zeonLibre(e) >= ZEON_CONTROL_DEL_ESPACIO;
+    const gM = mina.conjuro.grados[mina.grado];
+    const ki = golpeDeConjuro(mina.conjuro, gM);
+    let v = 0;
+    let enemigosDentro = 0;
+    for (const b of ctx.luchadores) {
+      const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
+      if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
+      const dano = danoEsperado(l, b, (d < 1 ? 320 : d < z.radio / 2 ? 280 : 240) - 55, defensaContraConjuro(b, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+      if (b.equipo !== l.equipo) enemigosDentro++;
+      v += (b.equipo === l.equipo ? -lambda(l) : 1) * dano;
+    }
+    if (enemigosDentro && v > 0) res.push({ conjuro: mina.conjuro, grado: mina.grado, objetivo: null, detonar: mina, control });
+  }
   // El preparado: lo lanza si rinde algo; si no, lo sigue sosteniendo.
   const pr = preparadoListo(e);
   if (pr && lanzable(e, pr.conjuro, res)) {
@@ -2170,6 +2342,16 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   // Sin nada que valga la pena lanzar: espera acumulando, salvo que lo tengan trabado.
   if (!trabadoConAlguien(l) && enemigos(ctx, l).some((x) => distancia(l, x) <= alcance)) return { esperar: true };
   return null;
+}
+
+/**
+ * Magia por Capacidades en un choque (Core p.159): cuánto Poder compra (25 de zeon cada uno, hasta lo
+ * del grado por asalto) para subir el bono de Poder del choque, si le sobra zeon (más de 300 libres).
+ */
+export function poderPorCapacidades(l: Luchador): number {
+  const m = l.magia?.mantenidos.find((x) => x.conjuro.efecto === 'capacidades');
+  if (!m || zeonLibre(l.magia!) < 300) return 0;
+  return Math.floor((m.conjuro.grados[m.grado].maximo ?? 0) / 25);
 }
 
 /**
@@ -2393,8 +2575,11 @@ export function escudoMagicoAlDefender(ctx: Contexto, def: Luchador, atk: Luchad
 }
 
 /** Con un escudo mágico levantado, se defiende con él si su Proyección rinde más que su defensa física. */
-export function defiendeConEscudoMagico(def: Luchador, atk: Luchador, g: { ki?: ModKi; aDistancia?: boolean; ranura: Ranura }): boolean {
-  if (!def.magia?.escudo) return false;
+export function defiendeConEscudoMagico(def: Luchador, atk: Luchador, g: { ki?: ModKi; aDistancia?: boolean; ranura: Ranura; tipo?: TipoAtaque }): boolean {
+  const esc = def.magia?.escudo;
+  if (!esc) return false;
+  // La Barrera de Fuego sólo detiene calor y frío; en avanzado, también energía; en arcano, todo (Core p.157).
+  if (esc.conjuro.efecto === 'barrera' && esc.grado < 3 && g.tipo !== 'CAL' && g.tipo !== 'FRI' && !(esc.grado === 2 && g.tipo === 'ENE')) return false;
   const proyectil = g.aDistancia ? g.ranura.proyectil?.clase ?? 'disparo' : undefined;
   return defensaEscudoMagico(def, atk) >= defensaFinal(def, atk, { kiAtk: g.ki, proyectil });
 }

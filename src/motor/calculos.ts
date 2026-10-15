@@ -71,6 +71,8 @@ export function penAccion(l: Luchador): number {
   // Miedo: −60 a toda acción que no sea huir (Core p.232); pelear no lo es.
   // El Aura de combate de un rival puede dar miedo o −10 a toda acción (Dominus p.22, Tabla 9).
   const miedo = (l.ficha.estados?.miedo || l.aura?.estado === 'miedo' ? PEN_MIEDO : 0) + (l.aura?.estado === 'afectado' ? 10 : 0);
+  // Éxtasis: −20 a toda acción en lugar de los demás negativos, salvo los físicos (Core p.128).
+  if (l.extasis) return 20 + l.penFisico + l.penTecnica - luna;
   // El penalizador de una técnica (desventaja) no lo quita nada sobrenatural (Dominus p.74).
   if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + l.penTecnica + negativos + miedo - luna;
   // Dolor como estado (Core p.233): no baja con los asaltos como el de los críticos.
@@ -177,7 +179,8 @@ const SIN_CEGUERA: Ceguera = { nivel: 0, factor: 1, localiza: false };
  */
 function cegueraPorOscuridad(l: Luchador): Ceguera {
   const o = l.entorno.oscuridad;
-  if (!o) return SIN_CEGUERA;
+  // Crear Luz alrededor suyo: la oscuridad natural no lo alcanza (Core p.126).
+  if (!o || (l.bono?.luz && o !== 'magica')) return SIN_CEGUERA;
   const vision = l.cap.est.visionNocturna;
   if (o === 'penumbra') return vision ? SIN_CEGUERA : { nivel: 1, factor: 1, localiza: false };
   if (o === 'total' && vision === 2) return SIN_CEGUERA;
@@ -195,6 +198,8 @@ export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): 
     propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,
     cegueraPorOscuridad(l),
     invisible ? { nivel: 2, factor: 1, localiza: false } : SIN_CEGUERA,
+    // Invisibilidad (Core p.190): si no superó Advertir no lo ve; si lo superó, nota las alteraciones (parcial).
+    rival.bono?.invisible ? { nivel: l.percibe.has(rival) ? 1 : 2, factor: 1, localiza: false } : SIN_CEGUERA,
   ];
   const valor = (c: Ceguera) => (c.nivel ? CEGUERA[c.nivel].ataque * c.factor : 0);
   const peor = casos.reduce((a, b) => (valor(b) < valor(a) ? b : a));
@@ -228,9 +233,10 @@ function situacionAtaque(atk: Luchador, def: Luchador, ki: ModKi | undefined): n
 
 /** Tamaño (Core p.14): el de la ficha, o Fuerza + Constitución; null si no hay con qué calcularlo. */
 function tamanoDe(l: Luchador): number | null {
-  if (l.ficha.tamano) return l.ficha.tamano;
   const a = l.ficha.atributos;
-  return a?.FUE !== undefined && a?.CON !== undefined ? a.FUE + a.CON : null;
+  const t = l.ficha.tamano || (a?.FUE !== undefined && a?.CON !== undefined ? a.FUE + a.CON : null);
+  // Modificar el Tamaño: nunca por debajo de 1 (Core p.186).
+  return t === null ? null : Math.max(1, t + (l.bono?.tamano ?? 0));
 }
 
 /** El rival es 1 pequeño (la mitad del Tamaño o menos) o 2 diminuto (una décima parte), Tabla 43. */
@@ -561,6 +567,11 @@ export function inmuneAlGolpe(def: Luchador, atk: Luchador, tipo: TipoAtaque, ki
   return ki?.conjuro || !(atk.cap.danaEnergia || ki?.danaEnergia);
 }
 
+/** Inmunidad contra el Fuego: −5 al daño base de un ataque de calor por intensidad (Core p.156). */
+export function reduccionFuego(def: Luchador, tipo: TipoAtaque): number {
+  return tipo === 'CAL' ? 5 * (def.bono?.inmuneFuego ?? 0) : 0;
+}
+
 /** La barrera de daño del defensor frena el ataque: daño base menor y no daña energía. */
 export function barreraFrena(def: Luchador, atk: Luchador, base = atk.ficha.danoBase, ki: ModKi | undefined = atk.ki?.activo): boolean {
   return def.cap.barrera > 0 && !atk.cap.danaEnergia && !ki?.danaEnergia && base < def.cap.barrera;
@@ -634,6 +645,7 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
   if (m === 'desarmar') base = 0;
   else if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
   if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
+  if (def.bono?.inmuneFuego) base = Math.max(0, base - reduccionFuego(def, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque));
   const absDano = esManiobraDeControl(m) ? absorcionContra(def, atk, 'normal', o.tipo, o.ranura, o.ki, kiDef) : abs;
   const nulo = base === 0 || barreraFrena(def, atk, base, o.ki) ||
     (!!def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, o.tipo ?? perfilDe(atk, o.ranura ?? proximaRanura(atk)).tipoAtaque, o.ki ?? atk.ki?.activo));

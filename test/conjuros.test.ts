@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Ficha } from '../src/motor/modelo';
 import { crearLuchador, simularCombate } from '../src/motor/combate';
-import { absorcionContra, ataqueFinal, cegueraContra, defensaFinal, inmuneAlGolpe, turnoFinal } from '../src/motor/calculos';
+import { absorcionContra, ataqueFinal, cegueraContra, defensaFinal, inmuneAlGolpe, penAccion, reduccionFuego, turnoFinal } from '../src/motor/calculos';
+import { bonoFrialdad } from '../src/motor/reglas';
 import { CATALOGO, conjurosDe, conocidos, gradosPosibles, sinSimular } from '../src/motor/conjuros';
 import { GRIMORIO } from '../src/motor/grimorio';
 import { bendecir, costeConjuro, danoLlamas, empezarAsaltoMagia, estadoLlamas, lanzar, puedeLanzar, quitarBendicion, rmDe } from '../src/motor/magia';
@@ -41,7 +42,8 @@ describe('el grimorio (generado de la planilla)', () => {
     const sabe = conocidos(m).map((e) => e.nombre);
     expect(sabe).toEqual(expect.arrayContaining(['Bola de fuego', 'Tormenta de fuego', 'Campeón', 'Saber debilidad', 'Descarga de luz', 'Curar heridas', 'Invisibilidad']));
     expect(sabe).not.toContain('Maestro de la guerra');
-    expect(sinSimular(m).map((e) => e.nombre)).toEqual(expect.arrayContaining(['Invisibilidad', 'Barrera de fuego', 'Saber debilidad']));
+    expect(sinSimular(m).map((e) => e.nombre)).toEqual(expect.arrayContaining(['Holograma', 'Saber debilidad']));
+    expect(sinSimular(m).map((e) => e.nombre)).not.toContain('Invisibilidad');
     expect(conjurosDe(m).length + sinSimular(m).length).toBe(sabe.length);
   });
 });
@@ -195,5 +197,82 @@ describe('anímicos y automáticos', () => {
       textos.push(...r.registro!.map((x) => x.texto));
     }
     expect(textos.some((x) => /falla la RM contra (Crítico Directo|Consumir Esencia)/.test(x))).toBe(true);
+  });
+});
+
+describe('parte 3: el resto de los conjuros de Stéphan', () => {
+  const soldados = (n: number) => Array.from({ length: n }, (_, i) => ({ ...soldado, id: `s${i}`, nombre: `S${i}` }));
+  const buscar = (re: RegExp, f: (semilla: number) => string[], hasta = 40) => {
+    for (let semilla = 1; semilla <= hasta; semilla++) if (f(semilla).some((x) => re.test(x))) return true;
+    return false;
+  };
+
+  it('Frialdad (Tabla 13) y Moral: el bono por tramos; Moral suma Frialdad a los aliados', () => {
+    expect([bonoFrialdad(30), bonoFrialdad(40), bonoFrialdad(130), bonoFrialdad(320)]).toEqual([0, 5, 15, 40]);
+    const l = crearLuchador(soldado, 'A', 0, 0);
+    bendecir(l, crearLuchador(mago({}), 'A', 1, 0), conjuro('Moral'), { frialdad: 40 });
+    expect(l.bono?.frialdad).toBe(40);
+  });
+
+  it('Éxtasis: −20 a toda acción en lugar de los demás negativos, salvo los físicos', () => {
+    const l = crearLuchador(soldado, 'A', 0, 0);
+    l.penDolor = 90;
+    l.penFisico = 10;
+    expect(penAccion(l)).toBe(100);
+    l.extasis = true;
+    expect(penAccion(l)).toBe(30);
+  });
+
+  it('Modificar el Tamaño: achicarse hace que los grandes le peguen con −10 o −20 (Tabla 43)', () => {
+    const chico = crearLuchador({ ...soldado, atributos: { FUE: 5, CON: 5 } }, 'A', 0, 0);
+    const grande = crearLuchador({ ...soldado, atributos: { FUE: 8, CON: 8 } }, 'B', 1, 0);
+    const antes = ataqueFinal(grande, chico);
+    bendecir(chico, chico, conjuro('Modificar el Tamaño'), { tamano: -2 });
+    expect(ataqueFinal(grande, chico)).toBe(antes - 10);
+  });
+
+  it('Invisibilidad: sin superar Advertir, ceguera absoluta; si lo supera, parcial', () => {
+    const inv = crearLuchador(soldado, 'A', 0, 0);
+    const obs = crearLuchador(soldado, 'B', 1, 0);
+    bendecir(inv, inv, conjuro('Invisibilidad'), { invisible: 280 });
+    expect(cegueraContra(obs, inv).nivel).toBe(2);
+    obs.percibe.add(inv);
+    expect(cegueraContra(obs, inv).nivel).toBe(1);
+  });
+
+  it('Inmunidad contra el Fuego: −5 al daño base de calor por intensidad', () => {
+    const l = crearLuchador(soldado, 'A', 0, 0);
+    bendecir(l, l, conjuro('Inmunidad contra el Fuego'), { inmuneFuego: 5 });
+    expect([reduccionFuego(l, 'CAL'), reduccionFuego(l, 'FIL')]).toEqual([25, 0]);
+  });
+
+  it('Lazos de Luz: Presa con la Fuerza de los lazos; el apresado no puede romperlos', () => {
+    expect(buscar(/Los Lazos de Luz sujetan/, (semilla) =>
+      simularCombate([mago({ libres: ['Lazos de Luz'] })], [{ ...soldado, pv: 800 }], { semilla, registrar: true, distanciaInicial: 15, maxAsaltos: 6 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Fundir: el arma que no resiste se suelta', () => {
+    expect(buscar(/empieza a fundirse/, (semilla) =>
+      simularCombate([mago({ libres: ['Fundir'] }, { inteligencia: 10 })], soldados(3), { semilla, registrar: true, distanciaInicial: 3, maxAsaltos: 4 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Transporte Rápido: trabado, se aleja', () => {
+    expect(buscar(/aparece a \d+ m/, (semilla) =>
+      simularCombate([mago({ libres: ['Transporte Rápido'] }, { pv: 60 })], soldados(3), { semilla, registrar: true, distanciaInicial: 1, maxAsaltos: 4 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Barrera de Fuego: quien la cruza recibe un ataque automático de calor', () => {
+    expect(buscar(/atraviesa la Barrera de Fuego/, (semilla) =>
+      simularCombate([mago({ libres: ['Barrera de Fuego'] })], soldados(2), { semilla, registrar: true, distanciaInicial: 20, maxAsaltos: 5 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Mina de Fuego: se pone y después estalla', () => {
+    expect(buscar(/hace estallar la Mina de Fuego/, (semilla) =>
+      simularCombate([mago({ libres: ['Mina de Fuego'], controlDelEspacio: true })], soldados(4), { semilla, registrar: true, distanciaInicial: 12, maxAsaltos: 6 }).registro!.map((x) => x.texto))).toBe(true);
+  });
+
+  it('Imbuir Calma: le saca el Miedo a los suyos', () => {
+    expect(buscar(/se calma: deja de tener Miedo/, (semilla) =>
+      simularCombate([mago({ libres: ['Imbuir Calma'] }), { ...soldado, id: 'asustado', nombre: 'Asustado', estados: { miedo: true } }], soldados(2), { semilla, registrar: true, distanciaInicial: 10, maxAsaltos: 3 }).registro!.map((x) => x.texto))).toBe(true);
   });
 });

@@ -292,6 +292,8 @@ export function jsonAFicha(json: HojaJson, o: OpcionesFicha = {}): Ficha {
     ...(json.Combate.armas.some((a) => /\b(escudo|rodela)\b/.test(normalizar(a.nombre))) ? { escudo: true } : {}),
     ...(json.Habilidades['T. Manos'] !== undefined ? { trucosDeManos: numero(json.Habilidades['T. Manos'], 0) } : {}),
     ...(json.Habilidades['Res. Dolor'] !== undefined ? { resistirDolor: numero(json.Habilidades['Res. Dolor'], 0) } : {}),
+    ...(json.Habilidades.Advertir !== undefined ? { advertir: numero(json.Habilidades.Advertir, 0) } : {}),
+    ...(json.Habilidades.Frialdad !== undefined ? { frialdad: numero(json.Habilidades.Frialdad, 0) } : {}),
     ...(json.Resistencias.RM !== undefined ? { rm: numero(json.Resistencias.RM, 0) } : {}),
     ...(leerMagia(json) ? { magia: leerMagia(json) } : {}),
     acrobacias: json.Habilidades.Acrobacias !== undefined ? numero(json.Habilidades.Acrobacias, 0) : undefined,

@@ -16,7 +16,8 @@ export type TipoConjuro = 'ataque' | 'defensa' | 'efecto' | 'animico' | 'automat
  */
 export type EfectoConjuro =
   | 'flash' | 'secar' | 'consumirEsencia' | 'criticoDirecto' | 'incinerar' | 'tormenta' | 'aumentarCritico'
-  | 'bendicion' | 'curar' | 'sacrificioPoder' | 'consumirVida';
+  | 'bendicion' | 'curar' | 'sacrificioPoder' | 'consumirVida' | 'mitigar' | 'calmar' | 'extasis' | 'lazos' | 'barrera'
+  | 'mina' | 'fundir' | 'sacrificioVital' | 'transporte' | 'reparar' | 'capacidades';
 
 /** Beneficio que deja un conjuro sobre quien lo recibe (vías de Guerra, Fuego). */
 export interface BonoMagico {
@@ -38,6 +39,18 @@ export interface BonoMagico {
   cuerpoFuego?: boolean;
   /** Bono a las Resistencias contra el calor. */
   resCalor?: number;
+  /** Intensidades de calor a las que es inmune: −5 al daño base de los ataques de calor y +5 a las Resistencias por cada una (Core p.156). */
+  inmuneFuego?: number;
+  /** Invisible: quien no supere Advertir contra esta dificultad no lo ve (Core p.190; Infinity, nunca). */
+  invisible?: number;
+  /** Bono a Advertir (Percibir). */
+  advertir?: number;
+  /** Cambio de Tamaño (Modificar el Tamaño). */
+  tamano?: number;
+  /** Luz a su alrededor: no sufre la oscuridad natural (Crear Luz). */
+  luz?: boolean;
+  /** Bono a la habilidad Frialdad (Moral). */
+  frialdad?: number;
 }
 export type NombreGrado = 'base' | 'intermedio' | 'avanzado' | 'arcano';
 export const GRADOS: readonly NombreGrado[] = ['base', 'intermedio', 'avanzado', 'arcano'];
@@ -73,6 +86,12 @@ export interface Grado {
   curar?: number;
   /** Lo máximo por asalto: zeon (Sacrificio de Poder, Magia por Capacidades) o PV (Consumir Vida, Sacrificio Vital). */
   maximo?: number;
+  /** Intensidades de fuego que quita (Mitigar Fuego): 20 menos en la Tabla 76 cada una (Core p.236). */
+  intensidades?: number;
+  /** Fuerza de los lazos para los controles de Presa (Lazos de Luz). */
+  fuerza?: number;
+  /** Metros (Transporte Rápido) o extensión de un muro (Barrera de Fuego). */
+  metros?: number;
   /** Beneficio sobre los afectados. */
   bono?: BonoMagico;
 }
@@ -196,6 +215,48 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   },
   // Libre acceso (Core p.187)
   { nombre: 'Curar Heridas', efecto: 'curar', blanco: 'aliado', fuente: 'Core p.187' },
+  // Parte 3: el resto de lo que Stéphan conoce y sirve en combate.
+  {
+    // Sin mantenimiento: dura hasta que termine el combate.
+    nombre: 'Moral', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Arcana p.34',
+    grados: [40, 80, 120, 180].map((frialdad) => ({ bono: { frialdad } })),
+  },
+  { nombre: 'Reparación', efecto: 'reparar', blanco: 'aliado', fuente: 'Core p.181' },
+  { nombre: 'Magia por Capacidades', efecto: 'capacidades', fuente: 'Core p.159', grados: [50, 100, 150, 200].map((maximo) => ({ maximo })) },
+  { nombre: 'Crear Luz', efecto: 'bendicion', blanco: 'aliados', centro: 'lanzador', fuente: 'Core p.126',
+    grados: [5, 25, 100, 500].map((radio) => ({ radio, bono: { luz: true } })) },
+  { nombre: 'Imbuir Calma', efecto: 'calmar', centro: 'lanzador', fuente: 'Core p.126' },
+  { nombre: 'Percibir', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.126', grados: [50, 150, 200, 250].map((advertir) => ({ bono: { advertir } })) },
+  {
+    // Ataca con la Proyección usando las reglas de Presa, sin penalizador; los lazos ponen su Fuerza.
+    nombre: 'Lazos de Luz', efecto: 'lazos', ta: 'ENE', fuente: 'Core p.127', grados: [8, 12, 15, 18].map((fuerza) => ({ fuerza })),
+  },
+  { nombre: 'Éxtasis', efecto: 'extasis', centro: 'lanzador', fuente: 'Core p.128' },
+  { nombre: 'Dest. Sentimientos Negativos', efecto: 'calmar', centro: 'lanzador', fuente: 'Core p.128' },
+  { nombre: 'Mitigar Fuego', efecto: 'mitigar', blanco: 'aliado', fuente: 'Core p.155', grados: [1, 5, 10, 15].map((intensidades) => ({ intensidades })) },
+  {
+    nombre: 'Inmunidad contra el Fuego', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.156',
+    grados: [5, 12, 20, 30].map((inmuneFuego) => ({ bono: { inmuneFuego } })),
+  },
+  {
+    // Muro de fuego (extensión 2 / 5 / 10 / 15 m; ataque automático de 240, el arcano 280) y escudo contra
+    // calor y frío (avanzado, también energía; arcano, todo). Resistencia del arcano: 1.500 en el manual.
+    nombre: 'Barrera de Fuego', efecto: 'barrera', ta: 'CAL', tipos: ['automatico', 'defensa'], fuente: 'Core p.157',
+    grados: [{ metros: 2, habilidad: 240 }, { metros: 5, habilidad: 240 }, { metros: 10, habilidad: 240, resistencia: 800 }, { metros: 15, habilidad: 280, resistencia: 1500 }],
+  },
+  {
+    // Ataque automático de 240 a más de la mitad del radio, 280 a menos y 320 a bocajarro.
+    nombre: 'Mina de Fuego', efecto: 'mina', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157',
+  },
+  { nombre: 'Fundir', tipos: ['animico'], efecto: 'fundir', centro: 'lanzador', fuente: 'Core p.158' },
+  { nombre: 'Sacrificio Vital', efecto: 'sacrificioVital', fuente: 'Core p.158', grados: [50, 100, 150, 200].map((maximo) => ({ maximo })) },
+  { nombre: 'Modificar el Tamaño', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.184', grados: [2, 4, 6, 8].map((n) => ({ bono: { tamano: -n } })) },
+  { nombre: 'Transporte Rápido', efecto: 'transporte', fuente: 'Core p.187', grados: [25, 100, 200, 350].map((metros) => ({ metros })) },
+  {
+    nombre: 'Invisibilidad', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.190',
+    // Advertir contra Imposible (280), Inhumano (320), Zen (440); arcano, no se lo ve.
+    grados: [280, 320, 440, Infinity].map((invisible) => ({ bono: { invisible } })),
+  },
 ];
 
 const clave = (nombre: string) => normalizarRasgo(nombre);

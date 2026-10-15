@@ -19,6 +19,10 @@ export interface Mantenido {
   zona?: { x: number; y: number; radio: number; desde: number; excluye: 'aliados' | 'nadie' };
   /** Innato: se mantiene sin gastar zeon (Core p.117). */
   innato?: boolean;
+  /** Lo que deshace al dejar de mantenerlo (lazos, éxtasis, una mina sin estallar). */
+  alTerminar?: () => void;
+  /** Muro de fuego: el segmento que no se puede cruzar sin recibir su ataque (Barrera de Fuego). */
+  muro?: { x1: number; y1: number; x2: number; y2: number };
 }
 
 /** Lo que decide al empezar el asalto (Core p.117, Arcana p.27, Core p.159). */
@@ -304,7 +308,8 @@ export function lanzar(l: Luchador, c: Conjuro, grado: number, extra: Omit<Mante
     e.reserva -= coste;
     e.lanzo = true;
   }
-  if (g.resistencia) e.escudo = { conjuro: c, grado, resistencia: g.resistencia };
+  // Un escudo nuevo reemplaza al que tenga, salvo la Barrera de Fuego, que sólo sirve de escudo si no hay otro.
+  if (g.resistencia && (c.efecto !== 'barrera' || !e.escudo)) e.escudo = { conjuro: c, grado, resistencia: g.resistencia };
   if (g.taEnergia !== undefined) e.armadura = { energia: g.taEnergia, resto: g.taResto ?? 0 };
   if (g.bono) for (const b of extra.blancos ?? []) bendecir(b, l, c, g.bono);
   if (g.mantenimiento || c.diario) e.mantenidos.push({ conjuro: c, grado, ...extra });
@@ -316,6 +321,7 @@ function quitarEfecto(e: EstadoMagia, x: Mantenido, l?: Luchador) {
   if (e.escudo?.conjuro === x.conjuro) e.escudo = null;
   if (x.conjuro.grados[x.grado].taEnergia !== undefined) e.armadura = null;
   if (l) for (const b of x.blancos ?? []) quitarBendicion(b, l, x.conjuro);
+  x.alTerminar?.();
 }
 
 /** Termina todos sus conjuros mantenidos (al morir: ya no hay esencia que los sostenga). */
@@ -358,11 +364,13 @@ function sumarBendiciones(l: Luchador) {
   const porConjuro = new Map<Conjuro, BonoMagico>();
   for (const b of l.bendiciones) {
     const previo = porConjuro.get(b.conjuro);
-    const peso = (x: BonoMagico) => (x.dano ?? 0) + (x.danoArma ?? 0) + (x.ta ?? 0) + (x.turno ?? 0) + (x.toda ?? 0) + (x.resistencias ?? 0);
+    const peso = (x: BonoMagico) => (x.dano ?? 0) + (x.danoArma ?? 0) + (x.ta ?? 0) + (x.turno ?? 0) + (x.toda ?? 0) + (x.resistencias ?? 0) +
+      (x.inmuneFuego ?? 0) + Math.min(1000, x.invisible ?? 0) + (x.advertir ?? 0) - (x.tamano ?? 0) + (x.frialdad ?? 0);
     if (!previo || peso(b.bono) > peso(previo)) porConjuro.set(b.conjuro, b.bono);
   }
   const t: Required<Omit<BonoMagico, 'tipoArma'>> & Pick<BonoMagico, 'tipoArma'> = {
     ataque: 0, toda: 0, dano: 0, turno: 0, ta: 0, resistencias: 0, ira: false, cuerpoFuego: false, resCalor: 0, danoArma: 0,
+    inmuneFuego: 0, invisible: 0, advertir: 0, tamano: 0, luz: false, frialdad: 0,
   };
   for (const b of porConjuro.values()) {
     t.ataque += b.ataque ?? 0;
@@ -375,6 +383,12 @@ function sumarBendiciones(l: Luchador) {
     t.cuerpoFuego ||= !!b.cuerpoFuego;
     t.resCalor = Math.max(t.resCalor, b.resCalor ?? 0);
     t.danoArma += b.danoArma ?? 0;
+    t.inmuneFuego = Math.max(t.inmuneFuego, b.inmuneFuego ?? 0);
+    t.invisible = Math.max(t.invisible, b.invisible ?? 0);
+    t.advertir += b.advertir ?? 0;
+    t.tamano += b.tamano ?? 0;
+    t.luz ||= !!b.luz;
+    t.frialdad += b.frialdad ?? 0;
     if (b.tipoArma) t.tipoArma = b.tipoArma;
   }
   l.bono = t;

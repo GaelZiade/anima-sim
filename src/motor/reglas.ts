@@ -139,3 +139,9 @@ export function umbralPifia(habilidad: number, ajuste = 0, compleja = false): nu
 export function penPifiaTurno(natural: number): number {
   return natural <= 1 ? -125 : natural === 2 ? -100 : -75;
 }
+
+/** Tabla 13 (Core p.54): bono de la Frialdad a las Resistencias contra efectos sobre el ánimo. */
+export function bonoFrialdad(frialdad: number): number {
+  const tramos: [number, number][] = [[320, 40], [280, 35], [240, 30], [180, 25], [140, 20], [120, 15], [80, 10], [40, 5]];
+  return tramos.find(([n]) => frialdad >= n)?.[1] ?? 0;
+}

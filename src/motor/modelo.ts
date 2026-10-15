@@ -69,6 +69,10 @@ export interface Ficha {
   trucosDeManos?: number;
   /** Habilidad secundaria Resistir el dolor: no perder la magia acumulada al recibir daño (Core p.118). */
   resistirDolor?: number;
+  /** Habilidad secundaria Advertir: notar a alguien invisible (Core p.190). */
+  advertir?: number;
+  /** Habilidad secundaria Frialdad: bono a resistir efectos sobrenaturales sobre el ánimo (Core p.54, Tabla 13). */
+  frialdad?: number;
   /** Resistencia mágica. */
   rm?: number;
   /** Magia (Core cap. 11): zeon, ACT, Proyección Mágica y vías. */
@@ -404,6 +408,14 @@ export interface Luchador {
   llamas: number;
   /** Este asalto intentó apagarse: las llamas no crecen. */
   apagando: boolean;
+  /** Bajo Éxtasis: −20 a toda acción e ignora los demás negativos salvo los físicos (Core p.128). */
+  extasis: boolean;
+  /** Lo sujetan unos Lazos de Luz de este mago: no puede romperlos él mismo (Core p.127). */
+  lazos: Luchador | null;
+  /** A qué invisibles percibe este asalto (superó Advertir). */
+  percibe: Set<Luchador>;
+  /** La ficha con el arma entera, si se la rompieron (Reparación la devuelve). */
+  armaRota: Ficha | null;
 
   // --- modalidades y recursos de estilos ---
   modo: Modo;

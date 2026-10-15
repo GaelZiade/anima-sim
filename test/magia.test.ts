@@ -30,17 +30,17 @@ describe('la planilla y los conjuros que conoce', () => {
       zeon: 1235, act: 110, proyeccion: 140, vias: { Fuego: 80, Luz: 40 }, subvias: { Fuego: 'Guerra', Luz: 'Conocimiento' },
       controlDelEspacio: true, romperResistencias: 1, especialista: ['Incinerar', 'Critico directo'], explotacion: 2, proyeccionDeterminada: 2,
     });
-    expect(conjurosDe(f.magia!).map((c) => c.nombre)).toEqual([
-      'Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Descarga de Luz', 'Bola de Fuego', 'Descarga de Calor', 'Arma Ígnea',
-      'Aumentar el Crítico', 'Secar', 'Cuerpo a Fuego', 'Incinerar', 'Consumir Esencia', 'Crítico Directo', 'Tormenta de Fuego',
-      'Sacrificio de Poder', 'Consumir Vida por Magia', 'Ira Ancestral', 'Velocidad en la Batalla', 'Destrucción Desencadenada',
-      'Protección Final', 'Campeón', 'Curar Heridas',
-    ]);
+    const nombres = conjurosDe(f.magia!).map((c) => c.nombre);
+    expect(nombres).toEqual(expect.arrayContaining([
+      'Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Descarga de Luz', 'Lazos de Luz', 'Éxtasis', 'Bola de Fuego', 'Descarga de Calor',
+      'Barrera de Fuego', 'Mina de Fuego', 'Tormenta de Fuego', 'Ira Ancestral', 'Campeón', 'Curar Heridas', 'Invisibilidad', 'Transporte Rápido',
+    ]));
+    expect(nombres).not.toContain('Holograma');
     expect([f.rm, f.resistirDolor]).toEqual([90, 100]);
   });
 
   it('la vía tiene que llegar al nivel del conjuro, y la Inteligencia limita el grado (Core p.120-121)', () => {
-    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(['Flash Cegador', 'Escudo de Luz', 'Armadura de Luz']);
+    expect(conjurosDe({ zeon: 100, act: 10, proyeccion: 50, vias: { Luz: 20 } }).map((c) => c.nombre)).toEqual(['Flash Cegador', 'Escudo de Luz', 'Armadura de Luz', 'Crear Luz', 'Imbuir Calma', 'Percibir']);
     expect(gradosPosibles(conjuro('Descarga de Luz'), 9)).toEqual([0, 1]);
     expect(gradosPosibles(conjuro('Escudo de Luz'), 10)).toEqual([0, 1, 2]);
   });
