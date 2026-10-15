@@ -885,6 +885,52 @@ function mejorManiobra(
     vNormal = vSec > vPrincipal ? vSec : vPrincipal;
   }
 
+  const { opciones, area } = opcionesDeManiobra(ctx, atk, def, ki, esContra, soloNormal, aDistancia);
+
+  let mejor: PlanAtaque = { maniobra: 'normal', tipo, especial: false };
+  let mejorValor = -Infinity;
+  for (const m of opciones) {
+    let v = 0;
+    if (m === 'area') {
+      v = valorAtaqueArea(atk, def, area, bono, tipo, golpesSiguientes);
+    } else if (m === 'puntosPresion' && e.mushin >= 3) {
+      // Mushin arcano: se prueba cada estado con su penalizador al ataque.
+      for (const estado of [null, ...(Object.keys(ESTADOS_MUSHIN) as EstadoMushin[])]) {
+        const ve = valor(m, tipo, estado);
+        if (ve > mejorValor) {
+          mejorValor = ve;
+          mejor = { maniobra: m, tipo, especial: false, estadoMushin: estado };
+        }
+      }
+      continue;
+    } else if (m === 'destruccionKi') {
+      const d = mejorDestruccionKi(atk, def, bono, esContra, tipo, habDef, golpesSiguientes);
+      if (d.valor > mejorValor) {
+        mejorValor = d.valor;
+        mejor = { maniobra: m, tipo, especial: false, kiDestruccion: d.extra };
+      }
+      continue;
+    } else v = (m === 'normal' && vNormal !== undefined ? vNormal : valor(m, tipo)) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, m, tipo, proyectil) : 0);
+    if (v > mejorValor) {
+      mejorValor = v;
+      mejor = { maniobra: m, tipo, especial: false };
+    }
+  }
+  // Maniobra Especial (+20, una vez): se usa cuando sube claramente la chance de baja o de crítico.
+  if (mejor.maniobra !== 'area' && !ki?.ataqueFijo && puedeManiobraEspecial(atk, def)) {
+    const h = (especial: boolean) => ataqueFinal(atk, def, { bono, maniobra: mejor.maniobra, esContra, tipo, especial, ki });
+    const sin = pronostico(atk, def, h(false), habDef, { maniobra: mejor.maniobra, tipo, ki });
+    const con = pronostico(atk, def, h(true), habDef, { maniobra: mejor.maniobra, tipo, ki });
+    if (con.pBaja + con.pCritico - sin.pBaja - sin.pCritico >= 0.1) mejor.especial = true;
+  }
+  return { plan: mejor, valor: mejorValor };
+}
+
+/** Maniobras que puede intentar contra `def` con este ataque, y los blancos de uno en área. */
+function opcionesDeManiobra(
+  ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi | undefined, esContra: boolean, soloNormal: boolean, aDistancia: boolean,
+): { opciones: Maniobra[]; area: Luchador[] } {
+  const e = atk.cap.est;
   const opciones: Maniobra[] = ['normal'];
   // A distancia sólo se puede apuntar (Core p.91); el resto de maniobras pide contacto.
   if (aDistancia) {
@@ -905,75 +951,59 @@ function mejorManiobra(
   // maniobra sobra: la técnica ya alcanza a todos los del radio.
   const area = esContra || soloNormal || aDistancia || ki?.area ? [] : blancosArea(ctx, atk, def);
   if (area.length >= 2) opciones.push('area');
+  return { opciones, area };
+}
 
-  let mejor: PlanAtaque = { maniobra: 'normal', tipo, especial: false };
-  let mejorValor = -Infinity;
-  for (const m of opciones) {
-    let v = 0;
-    if (m === 'area') {
-      // Cada blanco con la misma cuenta que un golpe normal: daño, baja, crítico, tempo y su contra.
-      // Si uno que para lo desvía (le queda contra), lo intercepta: los siguientes no reciben nada,
-      // así que cada blanco cuenta con la probabilidad de que el ataque llegue hasta él (Core p.92).
-      const habs = area.map((b) => ({ hab: ataqueFinal(atk, b, { bono, maniobra: 'area', tipo }), def: defensaFinal(b, atk) }));
-      const llega = pLlegaArea(atk.cap.umbralAtaque, area.map((b, i) => ({
-        s: habs[i].hab - habs[i].def, umbralDefensa: b.cap.umbralDefensa,
-        para: (b.ficha.tipoDefensa ?? 'parada') === 'parada' && !b.ficha.acumulacion,
-      })));
-      area.forEach((b, i) => {
-        const p = pronostico(atk, b, habs[i].hab, habs[i].def, { tipo });
-        let vb = valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
-        if (pierdeElAsalto(b)) vb += p.pImpacto * amenaza(b, atk);
-        vb -= riesgoContra(atk, b, p);
-        v += llega[i] * vb;
-      });
-    } else if (m === 'puntosPresion' && e.mushin >= 3) {
-      // Mushin arcano: se prueba cada estado con su penalizador al ataque.
-      for (const estado of [null, ...(Object.keys(ESTADOS_MUSHIN) as EstadoMushin[])]) {
-        const ve = valor(m, tipo, estado);
-        if (ve > mejorValor) {
-          mejorValor = ve;
-          mejor = { maniobra: m, tipo, especial: false, estadoMushin: estado };
-        }
-      }
-      continue;
-    } else if (m === 'destruccionKi') {
-      // Destrucción por Ki: se prueba cada cantidad de Ki extra (+5 a la dificultad cada una).
-      const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo });
-      const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
-      const rf = rfDe(def);
-      const tope = Math.min(Math.floor(presenciaBase(atk.ficha) / 5), atk.ki!.reserva - 1);
-      let base = 0;
-      if (pierdeElAsalto(def)) base += p.pImpacto * amen;
-      base -= riesgoContra(atk, def, p);
-      for (let extra = 0; extra <= tope; extra++) {
-        // Pierde el fracaso de la RF en PV (Core p.104): su media, la chance de dejarlo a 0 PV y la de
-        // criticar (el daño llega a la mitad de sus PV), como cualquier daño en el motor.
-        const dif = dificultadDestruccion(atk, extra);
-        const { p: pFalla, fracaso } = fallaResistencia(rf, dif);
-        const pBaja = fallaResistencia(rf + Math.max(1, def.pv), dif).p;
-        const pCrit = fallaResistencia(rf + Math.max(1, Math.ceil(def.pv / 2)), dif).p;
-        const ve = base + p.pImpacto * (pFalla * fracaso + pBaja * 2 * amen +
-          valorCritico(atk, def, pCrit - pBaja, def.pv / 2, null, 'normal', golpesSiguientes, pFalla * fracaso)) - precioKi(atk) * (1 + extra);
-        if (ve > mejorValor) {
-          mejorValor = ve;
-          mejor = { maniobra: m, tipo, especial: false, kiDestruccion: extra };
-        }
-      }
-      continue;
-    } else v = (m === 'normal' && vNormal !== undefined ? vNormal : valor(m, tipo)) + (ki?.area ? valorAreaKi(ctx, atk, def, ki, bono, m, tipo) : 0);
-    if (v > mejorValor) {
-      mejorValor = v;
-      mejor = { maniobra: m, tipo, especial: false };
-    }
+/** Lo que vale un Ataque en área sobre `area` (el elegido primero). */
+function valorAtaqueArea(atk: Luchador, def: Luchador, area: Luchador[], bono: number, tipo: TipoAtaque | undefined, golpesSiguientes: number): number {
+  let v = 0;
+  // Cada blanco con la misma cuenta que un golpe normal: daño, baja, crítico, tempo y su contra.
+  // Si uno que para lo desvía (le queda contra), lo intercepta: los siguientes no reciben nada,
+  // así que cada blanco cuenta con la probabilidad de que el ataque llegue hasta él (Core p.92).
+  const habs = area.map((b) => ({ hab: ataqueFinal(atk, b, { bono, maniobra: 'area', tipo }), def: defensaFinal(b, atk) }));
+  const llega = pLlegaArea(atk.cap.umbralAtaque, area.map((b, i) => ({
+    s: habs[i].hab - habs[i].def, umbralDefensa: b.cap.umbralDefensa,
+    para: (b.ficha.tipoDefensa ?? 'parada') === 'parada' && !b.ficha.acumulacion,
+  })));
+  area.forEach((b, i) => {
+    const p = pronostico(atk, b, habs[i].hab, habs[i].def, { tipo });
+    let vb = valorGolpe(atk, b, p, b === def ? golpesSiguientes : 0);
+    if (pierdeElAsalto(b)) vb += p.pImpacto * amenaza(b, atk);
+    vb -= riesgoContra(atk, b, p);
+    v += llega[i] * vb;
+  });
+  return v;
+}
+
+/**
+ * Destrucción por Ki (Core p.104): prueba cada cantidad de Ki extra (+5 a la dificultad cada una) y
+ * devuelve la que más rinde.
+ */
+function mejorDestruccionKi(
+  atk: Luchador, def: Luchador, bono: number, esContra: boolean, tipo: TipoAtaque | undefined, habDef: number, golpesSiguientes: number,
+): { valor: number; extra: number } {
+  const m: Maniobra = 'destruccionKi';
+  const amen = amenaza(def, atk);
+  let mejor = { valor: -Infinity, extra: 0 };
+  const hab = ataqueFinal(atk, def, { bono, maniobra: m, esContra, tipo });
+  const p = pronostico(atk, def, hab, habDef, { maniobra: m, esContra, tipo });
+  const rf = rfDe(def);
+  const tope = Math.min(Math.floor(presenciaBase(atk.ficha) / 5), atk.ki!.reserva - 1);
+  let base = 0;
+  if (pierdeElAsalto(def)) base += p.pImpacto * amen;
+  base -= riesgoContra(atk, def, p);
+  for (let extra = 0; extra <= tope; extra++) {
+    // Pierde el fracaso de la RF en PV (Core p.104): su media, la chance de dejarlo a 0 PV y la de
+    // criticar (el daño llega a la mitad de sus PV), como cualquier daño en el motor.
+    const dif = dificultadDestruccion(atk, extra);
+    const { p: pFalla, fracaso } = fallaResistencia(rf, dif);
+    const pBaja = fallaResistencia(rf + Math.max(1, def.pv), dif).p;
+    const pCrit = fallaResistencia(rf + Math.max(1, Math.ceil(def.pv / 2)), dif).p;
+    const ve = base + p.pImpacto * (pFalla * fracaso + pBaja * 2 * amen +
+      valorCritico(atk, def, pCrit - pBaja, def.pv / 2, null, 'normal', golpesSiguientes, pFalla * fracaso)) - precioKi(atk) * (1 + extra);
+    if (ve > mejor.valor) mejor = { valor: ve, extra };
   }
-  // Maniobra Especial (+20, una vez): se usa cuando sube claramente la chance de baja o de crítico.
-  if (mejor.maniobra !== 'area' && !ki?.ataqueFijo && puedeManiobraEspecial(atk, def)) {
-    const h = (especial: boolean) => ataqueFinal(atk, def, { bono, maniobra: mejor.maniobra, esContra, tipo, especial, ki });
-    const sin = pronostico(atk, def, h(false), habDef, { maniobra: mejor.maniobra, tipo, ki });
-    const con = pronostico(atk, def, h(true), habDef, { maniobra: mejor.maniobra, tipo, ki });
-    if (con.pBaja + con.pCritico - sin.pBaja - sin.pCritico >= 0.1) mejor.especial = true;
-  }
-  return { plan: mejor, valor: mejorValor };
+  return mejor;
 }
 
 /**
@@ -1213,18 +1243,22 @@ export function blancosAreaKi(ctx: Contexto, atk: Luchador, def: Luchador, ki: M
   return [def, ...otros];
 }
 
-/** Lo que suma un área de Ki por los demás blancos del radio (los aliados restan). */
+/**
+ * Lo que suma un área de Ki por los demás blancos del radio. Los aliados restan lo que pierden, con
+ * el mismo peso (λ) que el daño propio; de lejos se defienden como de un proyectil.
+ */
 function valorAreaKi(
   ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, bono: number, maniobra: Maniobra, tipo?: TipoAtaque,
+  proyectil?: 'disparo' | 'lanzamiento',
 ): number {
   let v = 0;
   for (const b of blancosAreaKi(ctx, atk, def, ki)) {
     if (b === def) continue;
     // La maniobra (y su penalizador) es la misma para todos los del área.
     const hab = ki.ataqueFijo || ataqueFinal(atk, b, { bono, tipo, ki, maniobra });
-    const p = pronostico(atk, b, hab, defensaFinal(b, atk, { kiAtk: ki, centroArea: def.pos }), { tipo, ki });
+    const p = pronostico(atk, b, hab, defensaFinal(b, atk, { kiAtk: ki, centroArea: def.pos, proyectil }), { tipo, ki, maniobra });
     if (b.equipo === atk.equipo) {
-      v -= p.dano + p.pBaja * amenaza(atk, b);
+      v -= lambda(atk) * (p.dano + p.pBaja * amenaza(atk, b));
       continue;
     }
     let vb = valorGolpe(atk, b, p, 0);
@@ -1690,11 +1724,13 @@ export function elegirTecnicaDefensa(
     // Defensa Predeterminada: equivale a una habilidad unos 50 por debajo (lo que suma el d100 medio).
     const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod, kiAtk: g.ki, proyectil: g.aDistancia });
     const p = pronostico(atk, def, habAtk, hab, { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, kiDef: mod, esContra: g.esContra });
-    const contra = !mod?.sinContra && !g.ki?.indirecto && puedeContraatacar(def) ? p.pContra * golpeDeContra(def, atk, p.bonoContra) : 0;
+    // Reflectar: si lo detiene, el golpe vuelve contra el atacante con su habilidad (unos 50 de dado)
+    // más el bono de contraataque, con su daño y sin efectos; ocupa el lugar de la contra (Dominus p.71).
+    const contra = !mod?.reflectar && !mod?.sinContra && !g.ki?.indirecto && puedeContraatacar(def) ? p.pContra * golpeDeContra(def, atk, p.bonoContra) : 0;
     let extra = 0;
-    // Reflectar: si lo detiene, el golpe vuelve contra el atacante con su habilidad (Dominus p.71).
     if (mod?.reflectar) {
-      const vuelta = pronostico(def, atk, habAtk + 50, defensaFinal(atk, def), { ki: { ...SIN_KI, danoFijo: danoBase(atk, def, g.esContra, undefined, g.ki) } });
+      const ki = { ...SIN_KI, danoFijo: danoBase(atk, def, g.esContra, undefined, g.ki) };
+      const vuelta = pronostico(def, atk, habAtk + 50 + p.bonoContra, defensaFinal(atk, def), { tipo: g.tipo, ki, esContra: true });
       extra += (1 - p.pImpacto) * valorGolpe(def, atk, vuelta, 0);
     }
     // Absorción de Ki: con una defensa que deja contraatacar se queda con Ki de la técnica.
