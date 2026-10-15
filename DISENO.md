@@ -95,8 +95,8 @@ sus PV casi sin valor y deja de cuidarse, y quien tiene mucha vida y pega poco q
 como blanco. Se volvió a la escala de siempre.
 
 El síntoma que lo motivaba ya no está: Kiran contra 12 élites gana 80% (era 41% cuando se anotó; la
-IA mejoró desde entonces). Queda en `npm run medir` para vigilarlo. Si se retoma, el primer paso es
-una amenaza que cuente la magia y el Ki, no sólo el golpe físico.
+IA mejoró desde entonces). Queda en `npm run medir` para vigilarlo. La amenaza ya cuenta la magia y
+el Ki (fuentes de amenaza, ver "Arquitectura"); la escala unificada no se volvió a probar.
 
 ### Reglas de la IA que salieron de probar
 
@@ -416,7 +416,12 @@ diez lugares.
   qué Fuerza presa un arma (`fuerzaPresaArma`, datos en `rasgos.ts`) y qué tablas de daño deja elegir
   un estilo (`tablasLibres`). Motor, pronóstico e IA las usan igual.
 - **Hipótesis aisladas:** `conCambio` aparta la memoria de la decisión mientras dura y la recupera al
-  deshacer; ningún valor calculado con el estado cambiado sobrevive.
+  deshacer (intercambia mapas, no los copia: `CacheDecision`); ningún valor calculado con el estado
+  cambiado sobrevive.
+- **Fuentes de amenaza** (`registrarFuenteAmenaza` en `ia.ts`): la amenaza de un luchador es lo mejor
+  entre su golpe con el arma y cada fuente registrada: su mejor técnica de Ki (`ia.ts`) y su mejor
+  conjuro con daño repartido entre los asaltos que tarda en juntar el zeon (`ia-magia.ts`). Un dominio
+  nuevo (psíquicos) registra la suya y toda la IA lo ve como amenaza.
 - **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
 
 Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de

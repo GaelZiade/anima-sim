@@ -21,6 +21,10 @@ retomar el trabajo, empezar por README.md.
   descartó porque empeora la IA (DISENO.md); "dejarlo fuera" en un solo lugar; la Debilidad ya no se
   valora como sacarlo del combate. `npm run medir` suma Kiran contra 12 élites.
 - **Decidido:** la Tabla 25 queda como está.
+- **IA:** la amenaza de un luchador cuenta su mejor técnica de Ki y su mejor conjuro con daño, no
+  sólo el golpe con el arma (fuentes de amenaza registrables). Grupo 63 → 64%; el resto igual.
+- **Velocidad:** las hipótesis intercambian la memoria en vez de copiarla y el golpe de cada conjuro
+  se arma una vez: Stéphan ~265 → ~290 combates/s.
 - **Medición** (500): sin cambios fuera del ruido.
 
 ## 15/10/2026: auditoría, segunda tanda (decisiones y estructura)

@@ -114,12 +114,19 @@ export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
  * Los anímicos no tienen daño y son invisibles para quien no ve la magia (Core p.122).
  */
 export function golpeDeConjuro(c: Conjuro, g: Grado): ModKi {
-  const animico = c.tipos.includes('animico');
-  return {
-    ...SIN_KI, sobrenatural: true, danaEnergia: true, elemento: animico ? 'ENE' : c.ta ?? 'ENE', danoFijo: g.dano ?? 0, conjuro: true,
-    invisible: animico && !c.tipos.includes('ataque'),
-  };
+  // Es el mismo para cada grado de cada conjuro: se arma una vez (congelado, nadie lo cambia).
+  let ki = golpesDeConjuro.get(g);
+  if (!ki) {
+    const animico = c.tipos.includes('animico');
+    ki = Object.freeze({
+      ...SIN_KI, sobrenatural: true, danaEnergia: true, elemento: animico ? 'ENE' : c.ta ?? 'ENE', danoFijo: g.dano ?? 0, conjuro: true,
+      invisible: animico && !c.tipos.includes('ataque'),
+    });
+    golpesDeConjuro.set(g, ki);
+  }
+  return ki;
 }
+const golpesDeConjuro = new WeakMap<Grado, ModKi>();
 
 /** Los conjuros no usan la calidad del arma: se resuelven como sin armas (y con su propio daño). */
 export const RANURA_MAGIA: Ranura = { pen: 0, sinArmas: true };

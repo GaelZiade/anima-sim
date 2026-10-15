@@ -43,25 +43,20 @@ export function conCambio<T>(cambiar: () => () => void, f: () => T): T {
   }
 }
 
-type MemoriaGuardada = { memo: [Luchador, Map<Luchador, Base>][]; rodean: [Luchador, Luchador[]][]; caches: [unknown, unknown][][] };
+type MemoriaGuardada = { memo: typeof memo; rodean: typeof rodean; caches: Map<unknown, unknown>[] };
 
+/** Deja la memoria de la decisión vacía y devuelve la que había (se intercambian mapas, no se copian). */
 function apartarMemoria(): MemoriaGuardada {
-  const g: MemoriaGuardada = { memo: [...memo], rodean: [...rodean], caches: cachesDeDecision.map((c) => [...c]) };
-  memo.clear();
-  rodean.clear();
-  for (const c of cachesDeDecision) c.clear();
+  const g: MemoriaGuardada = { memo, rodean, caches: cachesDeDecision.map((c) => c.apartar()) };
+  memo = new Map();
+  rodean = new Map();
   return g;
 }
 
 function recuperarMemoria(g: MemoriaGuardada) {
-  memo.clear();
-  for (const [k, v] of g.memo) memo.set(k, v);
-  rodean.clear();
-  for (const [k, v] of g.rodean) rodean.set(k, v);
-  cachesDeDecision.forEach((c, i) => {
-    c.clear();
-    for (const [k, v] of g.caches[i]) c.set(k, v);
-  });
+  memo = g.memo;
+  rodean = g.rodean;
+  cachesDeDecision.forEach((c, i) => c.reponer(g.caches[i]));
 }
 
 /** Peso del daño recibido frente al causado. */
@@ -116,18 +111,45 @@ interface Base {
   /** Lo mismo para una contra de `e` (sin el bono que le deje el golpe), calculado al pedirlo. */
   contra?: { hab: number; prep: Preparacion };
 }
-const memo = new Map<Luchador, Map<Luchador, Base>>();
+let memo = new Map<Luchador, Map<Luchador, Base>>();
 /** Enemigos que pueden atacar a cada luchador este asalto (para la amenaza), por decisión. */
-const rodean = new Map<Luchador, Luchador[]>();
+let rodean = new Map<Luchador, Luchador[]>();
 let ctxActual: Contexto | null = null;
 
-/** Cachés de otros módulos que valen lo que dura una decisión (el estado real no cambia en ella). */
-const cachesDeDecision: Map<unknown, unknown>[] = [];
+/**
+ * Caché que vale lo que dura una decisión (el estado real no cambia en ella): se vacía con cada decisión
+ * nueva y se aparta entera mientras dura una hipótesis (`conCambio`), sin copiar lo que tiene.
+ */
+export class CacheDecision<K, V> {
+  private actual = new Map<K, V>();
+  get(k: K): V | undefined {
+    return this.actual.get(k);
+  }
+  set(k: K, v: V): this {
+    this.actual.set(k, v);
+    return this;
+  }
+  clear() {
+    this.actual.clear();
+  }
+  /** Deja una vacía y devuelve la que tenía. */
+  apartar(): Map<K, V> {
+    const m = this.actual;
+    this.actual = new Map();
+    return m;
+  }
+  reponer(m: Map<K, V>) {
+    this.actual = m;
+  }
+}
+
+/** Cachés de otros módulos que valen lo que dura una decisión. */
+const cachesDeDecision: CacheDecision<unknown, unknown>[] = [];
 
 /** Una caché que se vacía con cada decisión nueva, como la de `base`. */
-export function cacheDeDecision<K, V>(): Map<K, V> {
-  const m = new Map<K, V>();
-  cachesDeDecision.push(m as Map<unknown, unknown>);
+export function cacheDeDecision<K, V>(): CacheDecision<K, V> {
+  const m = new CacheDecision<K, V>();
+  cachesDeDecision.push(m as CacheDecision<unknown, unknown>);
   return m;
 }
 
@@ -204,7 +226,41 @@ export function valorDejarFuera(atk: Luchador, def: Luchador, danoPrevio = 0): n
   return Math.max(0, def.pv - danoPrevio) + 2 * amenaza(def, atk);
 }
 
+/**
+ * Otras fuentes de daño por asalto además del golpe: cada dominio sobrenatural registra la suya (la
+ * magia en ia-magia.ts; las técnicas de Ki, acá abajo) y la amenaza toma la mayor. Así un mago no parece
+ * inofensivo por pegar poco con el arma, y un dominio nuevo (psíquicos) sólo agrega su fuente.
+ */
+export type FuenteAmenaza = (e: Luchador, l: Luchador) => number;
+const FUENTES_AMENAZA: FuenteAmenaza[] = [];
+export function registrarFuenteAmenaza(f: FuenteAmenaza) {
+  FUENTES_AMENAZA.push(f);
+}
+
+/** Su mejor técnica de Ki de ataque que puede ejecutar ya: el daño de un golpe con ella. */
+function amenazaKi(e: Luchador, l: Luchador): number {
+  if (!e.ki || !e.ficha.ki?.tecnicas.length) return 0;
+  let mejor = 0;
+  for (const t of tecnicasPara(e, 'ataque')) {
+    const ki = vistaPrevia(e, t);
+    if (!sirveContra(ki, l)) continue;
+    mejor = Math.max(mejor, ki.ataqueFijo
+      ? danoEsperado(e, l, ki.ataqueFijo, defensaFinal(l, e, { kiAtk: ki }), { ki })
+      : danoEsperado(e, l, ataqueFinal(e, l, { ki }), defensaFinal(l, e, { kiAtk: ki }), { ki }));
+  }
+  return mejor;
+}
+FUENTES_AMENAZA.push(amenazaKi);
+
 function calcularAmenaza(e: Luchador, l: Luchador, b: Base): number {
+  let sobrenatural = 0;
+  for (const f of FUENTES_AMENAZA) sobrenatural = Math.max(sobrenatural, f(e, l));
+  // Una técnica o un conjuro reemplazan un ataque del asalto, no se suman a todos.
+  return Math.max(golpeFisico(e, l, b), sobrenatural + b.golpe * Math.max(0, (e.ataquesDeclarados || 1) - 1));
+}
+
+/** Lo que pegan sus ataques con el arma en el asalto, si a `l` le llegan varios, con lo que eso le resta. */
+function golpeFisico(e: Luchador, l: Luchador, b: Base): number {
   let otros = 0;
   for (const x of quienesLlegan(l)) if (x !== e) otros++;
   if (otros < 2) return b.golpe * Math.max(1, e.ataquesDeclarados || 1);

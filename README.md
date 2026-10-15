@@ -156,9 +156,8 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
    extiende sin romper"). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
    confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
    (`sinSimular` dice qué falta).
-2. **IA:** una amenaza que cuente la magia y el Ki (hoy sólo el golpe físico; ver DISENO.md, "La
-   moneda del puntaje", donde se probó y se descartó unificar la escala); moverse con acción activa
-   sólo cuando conviene.
+2. **IA:** moverse con acción activa sólo cuando conviene. (La amenaza ya cuenta magia y Ki; la escala
+   unificada del puntaje se probó y se descartó: DISENO.md, "La moneda del puntaje".)
 3. Detalles abiertos: Erudición del Ki (localizar sin ver)
    supone la tirada; lo que no se simula del Ki y de los proyectiles (DISENO.md). Las reglas que
    faltaban de AUDITORIA.md sección 3 están todas.

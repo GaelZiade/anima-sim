@@ -2,7 +2,7 @@
 // o usar la magia innata; cuándo levantar un escudo. Todo en PV esperados, como el resto de la IA.
 
 import type { Contexto, Luchador } from './modelo';
-import { efecto, habilidadMina, type Lanzamiento, type Meta } from './efectos';
+import { efecto, habilidadMina, radioArea, type Lanzamiento, type Meta } from './efectos';
 import {
   ASALTOS_EFECTO, defensaContraConjuro, precioZeon,
 } from './efectos/valorar';
@@ -21,9 +21,44 @@ import type { Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { ModKi } from './ki';
 import { atributo, bonoCaracteristica } from './maniobras';
-import { alcanzable, enemigos, lambda, nuevaDecision, perfil, trabadoConAlguien, valorDejarFuera, valorGolpe, valorNegativo, conCambio,
+import { alcanzable, cacheDeDecision, enemigos, lambda, nuevaDecision, perfil, registrarFuenteAmenaza, trabadoConAlguien, valorDejarFuera, valorGolpe, valorNegativo, conCambio,
 } from './ia';
 
+
+/** El conjuro con daño que un mago tiene para amenazar: el de más daño base por asalto de espera. */
+const conjuroDeAmenaza = cacheDeDecision<Luchador, { c: Conjuro; g: Grado; asaltos: number } | null>();
+
+function elegirConjuroDeAmenaza(e: Luchador): { c: Conjuro; g: Grado; asaltos: number } | null {
+  const m = e.magia!;
+  let mejor: { c: Conjuro; g: Grado; asaltos: number } | null = null;
+  for (const c of m.conjuros) {
+    if (c.accion !== 'activa' || !c.tipos.includes('ataque')) continue;
+    for (const i of gradosPosibles(c, e.ficha.inteligencia ?? 6, e.ficha.magia)) {
+      const g = c.grados[i];
+      if (!g.dano || g.zeon > m.reserva) continue;
+      const asaltos = 1 + Math.ceil(Math.max(0, g.zeon - m.acumulado) / Math.max(1, actPara(e, c)));
+      if (!mejor || g.dano / asaltos > (mejor.g.dano ?? 0) / mejor.asaltos) mejor = { c, g, asaltos };
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Amenaza de un mago (ver `registrarFuenteAmenaza`): su conjuro con daño de más rinde por asalto de
+ * espera, con su daño esperado contra `l`, repartido entre los asaltos que tarda en acumularlo
+ * (Core p.117).
+ */
+function amenazaMagica(e: Luchador, l: Luchador): number {
+  if (!e.magia) return 0;
+  let elegido = conjuroDeAmenaza.get(e);
+  if (elegido === undefined) conjuroDeAmenaza.set(e, (elegido = elegirConjuroDeAmenaza(e)));
+  if (!elegido) return 0;
+  const { c, g, asaltos } = elegido;
+  const ki = golpeDeConjuro(c, g);
+  const area = radioArea(c, g);
+  return danoEsperado(e, l, ataqueMagico(e, l), defensaContraConjuro(l, e, ki, area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area }) / asaltos;
+}
+registrarFuenteAmenaza(amenazaMagica);
 
 /**
  * Sacrificio Vital (Core p.158): PV para sumarle a la Proyección (+5 cada 5), declarado antes de tirar.
