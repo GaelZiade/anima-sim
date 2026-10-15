@@ -7,6 +7,7 @@ import {
   activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
   perfilDe, proximaRanura,
+  golpeAPuntoVulnerable,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
@@ -854,9 +855,9 @@ function mejorManiobra(
     // cualquier otro golpe, en un lugar al azar.
     const danoSiImpacta = p.pImpacto > 0 ? p.dano / p.pImpacto : 0;
     if (!sinDano) {
-      const vulnerable = esApuntado(m) && !def.cap.est.sangreEterna && !def.ficha.acumulacion;
+      const vulnerable = golpeAPuntoVulnerable(atk, def, m, ki);
       const minimo = vulnerable ? def.pv / 10 : def.pv / 2;
-      v += valorCritico(atk, def, p.pCritico, Math.max(minimo, danoSiImpacta), vulnerable ? localizacionApuntada(m) : null, m, golpesSiguientes, danoEste, ki?.critico);
+      v += valorCritico(atk, def, p.pCritico, Math.max(minimo, danoSiImpacta), vulnerable && esApuntado(m) ? localizacionApuntada(m) : null, m, golpesSiguientes, danoEste, ki?.critico);
       // Enuth arcano: si daña sin criticar, igual obliga a un control de inconsciencia (Dominus p.43).
       if (e.enuth >= 3) {
         const pr = prepDe(m, tipo, reducido);

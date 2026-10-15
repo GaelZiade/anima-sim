@@ -711,6 +711,16 @@ export interface OpcionesPronostico {
   area?: number;
 }
 
+/**
+ * ¿El golpe va a un punto vulnerable (critica con 1/10 de los PV, Core p.97)? Un ataque apuntado,
+ * salvo contra Sangre eterna o la acumulación; contra la acumulación, todo el cuerpo lo es para Ojos
+ * de la Muerte y el crítico automático (Dominus p.78, p.71) y para Enuth arcano (Dominus p.43).
+ */
+export function golpeAPuntoVulnerable(atk: Luchador, def: Luchador, m: Maniobra, ki?: ModKi): boolean {
+  if (!def.ficha.acumulacion) return esApuntado(m) && !def.cap.est.sangreEterna;
+  return atk.cap.est.criticoAutomatico || !!ki?.criticoAuto || atk.cap.est.enuth >= 3;
+}
+
 /** Lo que comparten `pronostico` y `danoEsperado`: tabla, ventaja, absorciones y daño base. */
 function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: number, o: OpcionesPronostico) {
   const m = o.maniobra ?? 'normal';
@@ -732,7 +742,7 @@ function preparar(atk: Luchador, def: Luchador, habAtaque: number, habDefensa: n
   // los PV (Core p.97), y con Ojos todo el cuerpo de un ser con acumulación lo es; si no, la mitad.
   const ojos = atk.cap.est.criticoAutomatico || !!o.ki?.criticoAuto;
   const acumula = !!def.ficha.acumulacion;
-  const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
+  const vulnerable = golpeAPuntoVulnerable(atk, def, m, o.ki);
   // Critica con el daño pleno: el de Inutilizar e Inconsciencia antes de reducirlo a la mitad.
   const pleno = base / (o.factorDano || 1);
   const pctCritico = ojos && !acumula ? 10 : porcentajePara(vulnerable ? def.pv / 10 : def.pv / 2, pleno);

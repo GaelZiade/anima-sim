@@ -12,9 +12,10 @@ import {
   absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
   defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
+  golpeAPuntoVulnerable,
 } from './calculos';
 import {
-  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, esApuntado, esManiobraDeControl, esNoLetal,
+  atributo, caracteristicasControl, controlCaracteristica, controlEnfrentado, esManiobraDeControl, esNoLetal,
   gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
 } from './maniobras';
 import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
@@ -1505,7 +1506,7 @@ function aplicarDano(ctx: Contexto, atk: Luchador, def: Luchador, danoPlenoIn: n
   // Crítico automático (Ki) funciona igual (Dominus p.71).
   const ojos = atk.cap.est.criticoAutomatico || !!ki?.criticoAuto;
   const acumula = !!def.ficha.acumulacion;
-  const vulnerable = (esApuntado(m) && !def.cap.est.sangreEterna && !acumula) || (ojos && acumula);
+  const vulnerable = golpeAPuntoVulnerable(atk, def, m, ki);
   const critica =
     (ojos && !acumula) || esCritico(danoPleno, pvAntes) || (vulnerable && pvAntes > 0 && danoPleno * 10 >= pvAntes);
   limitePorDano(ctx, def, dano, critica);

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapaArmadura, Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
-import { puedeManiobraEspecial, absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
+import { golpeAPuntoVulnerable, puedeManiobraEspecial, absorcionContra, areaDoblaDano, ataqueFinal, ataqueMagico, cegueraContra, danoAEscudo, danoBase, danoEsperado, defensaFinal, desequilibrio, modControl, taZona, turnoFinal } from '../src/motor/calculos';
 import { caracteristicasControl, penManiobra } from '../src/motor/maniobras';
 import { capacidades, localizacionArmadura } from '../src/motor/rasgos';
 import { bonoFrialdad, resultadoResistencia, type TipoAtaque } from '../src/motor/reglas';
@@ -331,6 +331,17 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(puedeManiobraEspecial(atk, b2)).toBe(true);
     const experto = crearLuchador(ficha('E', {}, { defensa: 210 }), 'B', 3, 0);
     expect(puedeManiobraEspecial(atk, experto)).toBe(false);
+  });
+
+  it('Enuth arcano: contra la acumulación todo golpe va a un punto vulnerable (Dominus p.43)', () => {
+    const enuth = crearLuchador(ficha('E', { artesMarciales: ['Enuth (Arcano)'] }, { arma: { nombre: 'Desarmado', desarmado: true } }), 'A', 0, 0);
+    const comun = crearLuchador(ficha('C'), 'A', 0, 0);
+    const golem = crearLuchador(ficha('G', {}, { acumulacion: true }), 'B', 1, 0);
+    const humano = crearLuchador(ficha('H'), 'B', 1, 0);
+    expect(golpeAPuntoVulnerable(enuth, golem, 'normal')).toBe(true);
+    expect(golpeAPuntoVulnerable(comun, golem, 'cabeza')).toBe(false);
+    expect(golpeAPuntoVulnerable(comun, humano, 'cabeza')).toBe(true);
+    expect(golpeAPuntoVulnerable(enuth, humano, 'normal')).toBe(false);
   });
 });
 
