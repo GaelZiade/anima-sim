@@ -679,6 +679,8 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     // Dañar energía o Ataque elemental en quien ya lo hace por sí mismo (su habilidad o su arma): +10
     // al daño base de la técnica (Dominus p.63).
     if (ki.danaEnergia && atk.cap.danaEnergia) arma += 10;
+    // Daño límite: + los PV que ya perdió; no con acumulación (Dominus p.54).
+    if (ki.danoLimite && !atk.ficha.acumulacion) arma += Math.max(0, atk.ficha.pv - atk.pv);
     if (ki.elemento && ELEMENTALES.has(perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque)) arma += 10;
   }
   let d = arma + bonoVariable(atk, 'dano');

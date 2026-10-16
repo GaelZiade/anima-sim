@@ -105,6 +105,19 @@ describe('beneficios de Guerra y de Fuego', () => {
     expect([ataqueFinal(l, rival), turnoFinal(l), l.bono]).toEqual([at, tu, null]);
   });
 
+  it('Interrupción de Magia (Ki, Dominus p.69): si falla la RF pierde los conjuros mantenidos', async () => {
+    const { interrupcion } = await import('../src/motor/combate-ki');
+    const m = crearLuchador(mago({ libres: ['Arma Ígnea'] }), 'A', 0, 0);
+    const k = crearLuchador(soldado, 'A', 1, 0);
+    m.magia!.acumulado = 1000;
+    lanzar(m, conjuro('Arma Ígnea'), 0, { blancos: [k] });
+    const motor = { tirarRf: () => ({ falla: true, fracaso: 50 }), log: () => {} } as never;
+    interrupcion(motor, {} as never, m, 100, { interrumpeKi: true, interrumpeMagia: false });
+    expect(m.magia!.mantenidos.length).toBe(1);
+    interrupcion(motor, {} as never, m, 100, { interrumpeKi: false, interrumpeMagia: true });
+    expect([m.magia!.mantenidos.length, k.bono]).toEqual([0, null]);
+  });
+
   it('un ejemplar por blanco: Arma Ígnea a dos aliados; muerto el blanco, no se paga más', () => {
     const m = crearLuchador(mago({ libres: ['Arma Ígnea', 'Campeón'] }), 'A', 0, 0);
     const [k1, k2] = [crearLuchador(soldado, 'A', 1, 0), crearLuchador(soldado, 'A', 2, 0)];

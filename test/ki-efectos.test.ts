@@ -535,3 +535,93 @@ describe('efectos variados (Dominus p.63-66)', () => {
     expect(chocan).toBeGreaterThan(0);
   });
 });
+
+describe('ventajas de Aumento de daño, Interrupción, Reflectar e Intangibilidad (Dominus p.54, p.69-71)', () => {
+  it('lectura', () => {
+    expect(efectosDe(tecnica('A', 'Aumento de dano (+50, Sacrificio vital doble, Dano limite)')).accion).toMatchObject({ dano: 50, sacrificioVital: 2, danoLimite: true });
+    expect(efectosDe(tecnica('I', 'Interrupcion (+40, Ki, Magia)')).accion).toMatchObject({ interrumpe: true, interrupcion: 40, interrumpeKi: true, interrumpeMagia: true });
+    expect(efectosDe(tecnica('I', 'Interrupcion (+40, Magia)')).accion).toMatchObject({ interrumpeKi: false, interrumpeMagia: true });
+    expect(efectosDe(tecnica('I', 'Interrupcion (+40)')).accion.interrumpeKi).toBe(true);
+    expect(efectosDe(tecnica('R', 'Reflectar el ataque (Eleccion del blanco, Reflectar habilidades esotericas)')).accion).toMatchObject({ reflectar: true, reflectarEligeBlanco: true, reflectarEsoterico: true });
+    expect(efectosDe(tecnica('F', 'Intangibilidad (Presencia extendida, Fusion)')).asalto).toMatchObject({ intangible: true, intangibleOtros: 5, fusion: true });
+  });
+
+  it('Daño límite suma los PV perdidos', async () => {
+    const { danoBase } = await import('../src/motor/calculos');
+    const { SIN_KI } = await import('../src/motor/ki');
+    const atk = crearLuchador(rival(), 'A', 0, 0);
+    const def = crearLuchador(rival(), 'B', 1, 0);
+    const base = danoBase(atk, def, false, undefined, { ...SIN_KI, danoLimite: true });
+    atk.pv -= 80;
+    expect(danoBase(atk, def, false, undefined, { ...SIN_KI, danoLimite: true })).toBe(base + 80);
+  });
+
+  it('Sacrificio vital: la IA sacrifica PV si el golpe lo vale, y suma al daño', () => {
+    const t = tecnica('Sangre', 'Aumento de dano (+10, Sacrificio vital doble)', { DES: 1 });
+    const atk = crearLuchador(maestro([t], { ataque: 300, pv: 400 }), 'A', 0, 0);
+    const def = crearLuchador(rival({ defensa: 20, pv: 600 }), 'B', 1, 0);
+    for (const l of [atk, def]) {
+      l.ataquesDeclarados = 1;
+      l.planAtaques = [{ pen: 0, sinArmas: false }];
+      l.ataquesRestantes = 1;
+    }
+    def.ataquesRestantes = 0;
+    atk.ki!.acumulado = { DES: 5 };
+    const ctx: Contexto = {
+      opciones: {}, rng: crearRng(1), luchadores: [atk, def], asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+    atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: t });
+    const linea = ctx.registro!.map((e) => e.texto).find((x) => x.includes('sacrifica'));
+    expect(linea).toBeDefined();
+    const [, pv, bono] = /sacrifica (\d+) PV \(\+(\d+)/.exec(linea!)!;
+    expect(Number(bono)).toBe(2 * Number(pv));
+    expect(atk.pv).toBe(400 - Number(pv));
+  });
+});
+
+describe('Reflectar con Elección del blanco, Afectar a otros y Fusión (Dominus p.69-71)', () => {
+  const ctxCon = (luchadores: ReturnType<typeof crearLuchador>[]): Contexto => ({
+    opciones: {}, rng: crearRng(1), luchadores, asalto: 1, registro: [],
+    ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+  });
+
+  it('el reflejo va contra el enemigo contra el que más rinde', async () => {
+    const { blancoDelReflejo } = await import('../src/motor/ia');
+    const yo = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')]), 'A', 0, 0);
+    const duro = crearLuchador(rival({ id: 'd', nombre: 'Duro', defensa: 400 }), 'B', 1, 0);
+    const blando = crearLuchador(rival({ id: 'b', nombre: 'Blando', defensa: 0 }), 'B', 2, 0);
+    expect(blancoDelReflejo(ctxCon([yo, duro, blando]), yo, duro, 250, {})).toBe(blando);
+  });
+
+  it('Afectar a otros: aliados amenazados, hasta la Presencia que alcanza', async () => {
+    const { aliadosIntangibles } = await import('../src/motor/ia');
+    const yo = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')], { presencia: 60 }), 'A', 0, 0);
+    const a1 = crearLuchador(rival({ id: 'a1', nombre: 'A1', presencia: 30 }), 'A', 1, 0);
+    const a2 = crearLuchador(rival({ id: 'a2', nombre: 'A2', presencia: 30 }), 'A', 1, 1);
+    const a3 = crearLuchador(rival({ id: 'a3', nombre: 'A3', presencia: 30 }), 'A', 1, 2);
+    const e = crearLuchador(rival({ id: 'e', nombre: 'E' }), 'B', 2, 1);
+    const elegidos = aliadosIntangibles(ctxCon([yo, a1, a2, a3, e]), yo, 60);
+    expect(elegidos.length).toBe(2);
+  });
+
+  it('Fusión: el que saca menos recibe la diferencia con crítico, y la intangibilidad termina', async () => {
+    const { fusion } = await import('../src/motor/combate-ki');
+    const t = tecnica('Fantasma', 'Intangibilidad (Fusion)', { DES: 1 }, { mantenimiento: 1 });
+    const atk = crearLuchador(maestro([t], { presencia: 200 }), 'A', 0, 0);
+    const def = crearLuchador(rival({ presencia: 10 }), 'B', 1, 0);
+    atk.ki!.acumulado = { DES: 5 };
+    ejecutar(atk, t);
+    const golpes: [string, number][] = [];
+    const motor = {
+      log: () => {}, perderPv: (_c: unknown, _a: unknown, l: { ficha: { nombre: string } }, pv: number) => golpes.push([l.ficha.nombre, pv]),
+      critico: (_c: unknown, _a: unknown, l: { ficha: { nombre: string } }) => golpes.push([l.ficha.nombre, -1]),
+    } as never;
+    fusion(motor, ctxCon([atk, def]), atk, def);
+    expect(golpes[0][0]).toBe('Rival');
+    expect(golpes[0][1]).toBeGreaterThan(100);
+    expect(golpes[1]).toEqual(['Rival', -1]);
+    expect(atk.ki!.activo.intangible).toBe(false);
+    expect(atk.ki!.mantenidas.size).toBe(0);
+  });
+});

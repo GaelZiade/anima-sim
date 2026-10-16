@@ -20,6 +20,12 @@ export interface ModKi {
   ataqueFijo: number;
   defensaFija: number;
   dano: number;
+  /**
+   * Aumento de daño, ventajas (Dominus p.54): Sacrificio de PV (al daño, una o dos veces lo sacrificado)
+   * y Daño límite (+ los PV que ya perdió).
+   */
+  sacrificioVital: number;
+  danoLimite: boolean;
   /** Multiplicador al Daño: se aplica antes de sumar cualquier otro bono (Dominus p.55). */
   multDano: number;
   /** Sustitución de Daño: daño base del ataque (0 si no hay). */
@@ -114,6 +120,9 @@ export interface ModKi {
   estados: readonly EstadoSobrenatural[];
   /** Interrupción del Ki: RF contra el daño más este valor (Dominus p.69). */
   interrumpe: boolean;
+  /** Tipos de interrupción: Ki (lo acumulado y las técnicas activas) y Magia (los conjuros mantenidos). */
+  interrumpeKi: boolean;
+  interrumpeMagia: boolean;
   interrupcion: number;
   /** Escudo de energía: resistencia del escudo (Dominus p.66). */
   escudo: number;
@@ -124,8 +133,14 @@ export interface ModKi {
   regeneraPantalla: number;
   /** Intangibilidad: los ataques que no son de energía lo atraviesan (Dominus p.69). */
   intangible: boolean;
+  /** Intangibilidad, ventajas (Dominus p.69-70): Afectar a otros (cuánta Presencia, en veces la suya) y Fusión. */
+  intangibleOtros: number;
+  fusion: boolean;
   /** Reflectar el ataque: una defensa con éxito lo devuelve (Dominus p.71). */
   reflectar: boolean;
+  /** Reflectar, ventajas (Dominus p.71): Elección del blanco y Reflectar habilidades esotéricas. */
+  reflectarEligeBlanco: boolean;
+  reflectarEsoterico: boolean;
   /** Absorción de Ki: Ki de la técnica rival que absorbe al defenderse con contra (Dominus p.64). */
   absorcionKi: number;
   /** Ataque indirecto: no se puede contraatacar (Dominus p.52). */
@@ -164,14 +179,14 @@ export interface EstadoSobrenatural {
 
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
-  dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, proyeccion: false, estela: false, area: 0,
+  dano: 0, multDano: 1, sacrificioVital: 0, danoLimite: false, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, proyeccion: false, estela: false, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0,
   accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, transporte: 0, turno: 0, ta: 0, taInmodificable: false, taFisica: false, lentitud: 0, rotura: 0, entereza: 0, movimiento: 0, acrobacias: 0,
   frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
   visionNocturna: false, veEnergia: false,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
-  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
-  interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
+  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
+  interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, intangibleOtros: 0, fusion: false, reflectar: false, reflectarEligeBlanco: false, reflectarEsoterico: false, absorcionKi: 0, indirecto: false,
   danoReducido: 0, soloContra: '',
 });
 
@@ -239,7 +254,7 @@ const CATALOGO: Record<string, DefEfecto> = {
   'habilidad de esquiva completa': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('esquiva') },
   'habilidad de esquiva limitada': { tipo: 'accion', clase: 'defensa', aplicar: (m, v) => { m.esquiva = Math.max(m.esquiva, v); m.sinContra = true; } },
   'defensa predeterminada': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('defensaFija') },
-  'aumento de dano': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('dano') },
+  'aumento de dano': { tipo: 'accion', clase: 'ataque', aplicar: aumentoDeDano },
   'aumento de dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('dano') },
   'multiplicador al dano': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('multDano') },
   'multiplicador al dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('multDano') },
@@ -285,11 +300,11 @@ const CATALOGO: Record<string, DefEfecto> = {
   'choque fisico': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.choqueFisico = true; } },
   'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.apresamiento = Math.max(m.apresamiento, v); if (hay(o, /existencial/)) m.presaExistencial = true; } },
   'estados sobrenaturales': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.estados = [...m.estados, ...leerEstados(o)]; } },
-  'interrupcion': { tipo: 'accion', clase: 'ataque', aplicar: (m, v) => { m.interrumpe = true; m.interrupcion = Math.max(m.interrupcion, v); } },
+  'interrupcion': { tipo: 'accion', clase: 'ataque', aplicar: interrupcion },
   'escudo de energia': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v, o) => { m.escudo = Math.max(m.escudo, v); m.regeneraEscudo = Math.max(m.regeneraEscudo, valorEn(o, /regeneracion/)); } },
   'acumulacion': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v, o) => { m.pantalla = Math.max(m.pantalla, v); m.ta = Math.max(m.ta, 4); m.regeneraPantalla = Math.max(m.regeneraPantalla, valorEn(o, /regeneracion/)); } },
-  'intangibilidad': { tipo: 'asalto', clase: 'variable', aplicar: (m) => { m.intangible = true; } },
-  'reflectar el ataque': { tipo: 'accion', clase: 'defensa', aplicar: (m) => { m.reflectar = true; } },
+  'intangibilidad': { tipo: 'asalto', clase: 'variable', aplicar: intangibilidad },
+  'reflectar el ataque': { tipo: 'accion', clase: 'defensa', aplicar: (m, _v, o) => { m.reflectar = true; if (hay(o, /eleccion/)) m.reflectarEligeBlanco = true; if (hay(o, /esoteric/)) m.reflectarEsoterico = true; } },
   'absorcion de ki': { tipo: 'accion', clase: 'defensa', aplicar: (m, v) => { m.absorcionKi = Math.max(m.absorcionKi, v || Infinity); } },
   'ataque indirecto': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.indirecto = true; } },
   // Desventajas que cambian el efecto (Dominus p.72-73).
@@ -374,6 +389,36 @@ export function conIncremento(base: number, bono: number): number {
   if (!bono) return base;
   const total = base + bono;
   return total <= 200 ? total : Math.max(base, 200) + Math.floor((total - Math.max(base, 200)) / 2);
+}
+
+/**
+ * Aumento de daño con sus ventajas (Dominus p.54): Sacrificio vital (1 por PV), vital doble o de
+ * salud (2 por PV), y Daño límite. El de Características no se simula: la planilla trae los valores
+ * finales y no se recalculan al perder atributos.
+ */
+function aumentoDeDano(m: ModKi, _v: number, o: string[]) {
+  const sinVentajas = o.filter((x) => !/sacrificio|limite/.test(normalizarRasgo(x)));
+  m.dano = Math.max(m.dano, valorDe(sinVentajas));
+  if (hay(o, /sacrificio (vital doble|de salud)/)) m.sacrificioVital = 2;
+  else if (hay(o, /sacrificio vital/)) m.sacrificioVital = Math.max(m.sacrificioVital, 1);
+  if (hay(o, /dano limite/)) m.danoLimite = true;
+}
+
+/** Interrupción y sus tipos (Dominus p.69): Ki, Magia (las Habilidades psíquicas no se simulan). Sin tipo, Ki. */
+function interrupcion(m: ModKi, v: number, o: string[]) {
+  m.interrumpe = true;
+  m.interrupcion = Math.max(m.interrupcion, v);
+  const magia = hay(o, /magia/), psiquica = hay(o, /psiquic/);
+  if (hay(o, /\bki\b/) || (!magia && !psiquica)) m.interrumpeKi = true;
+  if (magia) m.interrumpeMagia = true;
+}
+
+/** Intangibilidad y sus ventajas (Dominus p.69-70). */
+function intangibilidad(m: ModKi, _v: number, o: string[]) {
+  m.intangible = true;
+  if (hay(o, /presencia extendida/)) m.intangibleOtros = 5;
+  else if (hay(o, /afectar a otros|presencia simple/)) m.intangibleOtros = Math.max(m.intangibleOtros, 1);
+  if (hay(o, /fusion/)) m.fusion = true;
 }
 
 /** El número de la opción que dice `re` ("Regeneración 100" → 100), o 0. */
@@ -590,11 +635,14 @@ function combinada(ts: Tecnica[]): Tecnica {
  * Forzar Técnicas (Dominus p.21): sube cada efecto la mitad de su valor hacia abajo (+100 → +150,
  * 5 ataques adicionales → 7) y un punto el multiplicador al daño. Las dificultades de RF, +40.
  */
+/** Números de `ModKi` que no son la potencia de un efecto: no suben al forzar. */
+const NO_ESCALAN: ReadonlySet<keyof ModKi> = new Set(['danoReducido', 'interrupcion', 'sacrificioVital', 'intangibleOtros']);
+
 function escalar(m: ModKi): ModKi {
   const r: ModKi = { ...m };
   for (const k of Object.keys(r) as (keyof ModKi)[]) {
     const v = r[k];
-    if (typeof v !== 'number' || v <= 0 || k === 'danoReducido' || k === 'interrupcion' || v === Infinity) continue;
+    if (typeof v !== 'number' || v <= 0 || NO_ESCALAN.has(k) || v === Infinity) continue;
     (r[k] as number) = k === 'multDano' ? (v > 1 ? v + 1 : v) : v + Math.floor(v / 2);
   }
   // Las dificultades de Resistencia suben 40 (la de Interrupción también, aunque no tenga valor fijo).

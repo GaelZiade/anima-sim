@@ -1823,6 +1823,82 @@ export function choqueFisicoCon(_ctx: Contexto, l: Luchador, atk: Luchador, resu
   return mejor;
 }
 
+/**
+ * Reflectar con Elección del blanco (Dominus p.71): el enemigo a la vista contra el que más rinde el
+ * ataque devuelto (con su habilidad final, sin dados).
+ */
+export function blancoDelReflejo(ctx: Contexto, l: Luchador, atk: Luchador, total: number, g: { tipo?: TipoAtaque; ki?: ModKi }): Luchador {
+  nuevaDecision(ctx);
+  let mejor = atk;
+  let mejorValor = -Infinity;
+  for (const e of enemigos(ctx, l)) {
+    if (e !== atk && visionEntre(ctx.luchadores, l, e) === 'bloqueada') continue;
+    const v = valorGolpe(l, e, pronostico(l, e, total - 50, defensaFinal(e, l), { tipo: g.tipo, ki: g.ki, esContra: true }), 0);
+    if (v > mejorValor) {
+      mejor = e;
+      mejorValor = v;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Sacrificio vital del Aumento de daño (Dominus p.54): cuántos PV sacrificar por `factor` de daño base
+ * cada uno. Prueba de a un 5% de lo que le queda, hasta la mitad, y se queda con lo que más rinde: el
+ * golpe con el daño de más, menos los PV que pierde (por λ). Una criatura con acumulación no lo usa.
+ */
+export function sacrificioDeDano(ctx: Contexto, atk: Luchador, def: Luchador, ki: ModKi, g: { maniobra: Maniobra; tipo?: TipoAtaque; esContra: boolean }): number {
+  if (!ki.sacrificioVital || atk.ficha.acumulacion || atk.pv <= 10) return 0;
+  nuevaDecision(ctx);
+  const hab = ataqueFinal(atk, def, { ki, maniobra: g.maniobra, esContra: g.esContra });
+  const habDef = defensaFinal(def, atk, { kiAtk: ki });
+  const valor = (s: number) => valorGolpe(atk, def, pronostico(atk, def, hab, habDef, { ...g, ki: { ...ki, dano: ki.dano + ki.sacrificioVital * s } }), 0) - lambda(atk) * s;
+  const paso = Math.max(1, Math.floor(atk.pv / 20));
+  let mejor = 0;
+  let mejorValor = valor(0);
+  for (let s = paso; s <= atk.pv / 2; s += paso) {
+    const v = valor(s);
+    if (v > mejorValor) {
+      mejor = s;
+      mejorValor = v;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Intangibilidad con Afectar a otros (Dominus p.69): a qué aliados vuelve intangibles, hasta `presencia`
+ * en total, de los que más golpes recibirían de quienes no dañan energía a los que menos.
+ */
+export function aliadosIntangibles(ctx: Contexto, l: Luchador, presencia: number): Luchador[] {
+  const amenazados = ctx.luchadores
+    .filter((a) => a !== l && a.equipo === l.equipo && activo(a))
+    .map((a) => ({ a, v: amenazaFisica(ctx, a) }))
+    .filter((x) => x.v > 0)
+    .sort((x, y) => y.v - x.v);
+  const elegidos: Luchador[] = [];
+  let queda = presencia;
+  for (const { a } of amenazados) {
+    const p = presenciaBase(a.ficha);
+    if (p > queda) continue;
+    elegidos.push(a);
+    queda -= p;
+  }
+  return elegidos;
+}
+
+/** Lo que le pegarían este asalto quienes no dañan energía (lo que la Intangibilidad le ahorra). */
+function amenazaFisica(ctx: Contexto, l: Luchador): number {
+  let v = 0;
+  for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) v += lambda(l) * amenaza(e, l);
+  return v;
+}
+
+/** Fusión (Dominus p.70): se materializa dentro del rival si su Presencia + 20 le da ventaja. */
+export function quiereFusion(atk: Luchador, def: Luchador): boolean {
+  return presenciaBase(atk.ficha) + 20 - presenciaBase(def.ficha) >= 20;
+}
+
 /** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */
 export function contraADistancia(ctx: Contexto, l: Luchador, atk: Luchador): number | null {
   const armas = l.ficha.armasDistancia;
@@ -2042,8 +2118,11 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
     if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision && !generico) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
     // Intangibilidad (Dominus p.69): le ahorra lo que le pegarían este asalto quienes no dañan energía.
     let intangible = 0;
-    if (ef.asalto.intangible)
-      for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) intangible += lambda(l) * amenaza(e, l);
+    if (ef.asalto.intangible) {
+      intangible = amenazaFisica(ctx, l);
+      // Afectar a otros: también lo que se ahorran los aliados que vuelve intangibles.
+      if (ef.asalto.intangibleOtros) for (const a of aliadosIntangibles(ctx, l, ef.asalto.intangibleOtros * presenciaBase(l.ficha))) intangible += amenazaFisica(ctx, a);
+    }
     const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible + valorAccionAdicional(ctx, l, sube.accionesAdicionales) +
       valorPrevision(ctx, l, sube.prevision) + (generico ? valorEfectosDeAsalto(ctx, l, sube) : 0) - costoTecnica(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {

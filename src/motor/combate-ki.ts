@@ -11,9 +11,11 @@ import type { Golpe } from './golpe';
 import { imponer, nivelCondicion } from './condiciones';
 import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
 import { type Motor } from './efectos';
+import { terminarMantenidos } from './magia';
+import * as ia from './ia';
 import { celdaLibreCerca, indice, transitable } from './mapa';
 import {
-  dificultadDestruccion, dificultadAura, presenciaBase, radioAura, sensibleAlAura, ejecutar, textoKi, SIN_KI,
+  dificultadDestruccion, dificultadAura, efectosDe, presenciaBase, radioAura, sensibleAlAura, ejecutar, textoKi, SIN_KI,
   type EstadoSobrenatural, type ModKi,
 } from './ki';
 
@@ -91,7 +93,7 @@ export function efectosAlImpactar(motor: Motor, ctx: Contexto, atk: Luchador, de
     def.marcas.set(atk, ki.marca);
     motor.log(ctx, () => `  ${def.ficha.nombre} queda marcado por ${atk.ficha.nombre} (+${ki.marca} a sus ataques contra él).`);
   }
-  if (ki.interrumpe && dano > 0) interrupcion(motor, ctx, def, dano + ki.interrupcion);
+  if (ki.interrumpe && dano > 0) interrupcion(motor, ctx, def, dano + ki.interrupcion, ki);
   for (const est of ki.estados) {
     if (!activo(def)) return;
     const alcanza = est.condicion === 'contacto' ? porcentajeContacto > 0 : est.condicion !== 'automatico' && dano > 0;
@@ -117,14 +119,22 @@ export function repetirFascinacion(motor: Motor, ctx: Contexto, l: Luchador) {
 }
 
 /**
- * Interrupción del Ki (Dominus p.69): RF contra el daño más el valor de la técnica (entre cinco
- * contra acumulación); si falla, pierde lo acumulado, las mantenidas y las que tenía en espera.
+ * Interrupción (Dominus p.69): RF contra el daño más el valor de la técnica (entre cinco contra
+ * acumulación); si falla, según los tipos de la técnica: Ki, pierde lo acumulado, las mantenidas y
+ * las que tenía en espera; Magia, los conjuros que mantiene.
  */
-export function interrupcion(motor: Motor, ctx: Contexto, def: Luchador, dificultad: number) {
+export function interrupcion(motor: Motor, ctx: Contexto, def: Luchador, dificultad: number, tipos: Pick<ModKi, 'interrumpeKi' | 'interrumpeMagia'>) {
   const e = def.ki;
-  if (!e) return;
+  const kiEnJuego = tipos.interrumpeKi && !!e;
+  const magiaEnJuego = tipos.interrumpeMagia && !!def.magia?.mantenidos.length;
+  if (!kiEnJuego && !magiaEnJuego) return;
   const dif = def.ficha.acumulacion ? Math.floor(dificultad / 5) : dificultad;
   if (!motor.tirarRf(ctx, def, dif, 'la Interrupción').falla) return;
+  if (magiaEnJuego) {
+    terminarMantenidos(def);
+    motor.log(ctx, () => `  ${def.ficha.nombre} pierde los conjuros que mantenía.`);
+  }
+  if (!kiEnJuego || !e) return;
   e.acumulado = {};
   e.ganado = {};
   e.mantenidas.clear();
@@ -223,11 +233,41 @@ export function moverHacia(motor: Motor, ctx: Contexto, l: Luchador, obj: Luchad
  * Reflectar el ataque (Dominus p.71): lo devuelve contra quien lo lanzó con su misma habilidad final
  * (más el bono de contra), con el daño del ataque pero sin sus efectos esotéricos.
  */
-export function reflectar(motor: Motor, ctx: Contexto, quien: Luchador, atk: Luchador, total: number, o: Golpe) {
+export function reflectar(motor: Motor, ctx: Contexto, quien: Luchador, atk: Luchador, total: number, o: Golpe, kiDef?: ModKi) {
   const dano = danoBase(atk, quien, o.esContra, o.ranura, o.ki);
   const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  const golpe: Golpe = { maniobra: 'normal', esContra: true, tipo, ranura: o.ranura, ki: { ...SIN_KI, danoFijo: dano }, reflejado: true };
-  motor.resolverDefensa(ctx, quien, atk, total, DADO_FIJO, golpe, `${quien.ficha.nombre} refleja el ataque contra ${atk.ficha.nombre}`);
+  // Reflectar habilidades esotéricas: conserva los efectos sobrenaturales del ataque (Dominus p.71).
+  const ki = kiDef?.reflectarEsoterico && o.ki ? { ...o.ki, danoFijo: dano, multDano: 1, dano: 0, danoLimite: false } : { ...SIN_KI, danoFijo: dano };
+  const golpe: Golpe = { maniobra: 'normal', esContra: true, tipo, ranura: o.ranura, ki, reflejado: true };
+  // Elección del blanco: lo manda contra quien más le convenga, no sólo contra el atacante.
+  const blanco = kiDef?.reflectarEligeBlanco ? ia.blancoDelReflejo(ctx, quien, atk, total, golpe) : atk;
+  motor.resolverDefensa(ctx, quien, blanco, total, DADO_FIJO, golpe, `${quien.ficha.nombre} refleja el ataque contra ${blanco.ficha.nombre}`);
+}
+
+/**
+ * Fusión (Dominus p.70): intangible, al alcanzarlo se materializa dentro de él. Cada uno tira 1d100
+ * (cerrada) + su Presencia base, él con +20; el que saca menos recibe la diferencia como daño, con
+ * crítico automático. Después deja de ser intangible (la técnica termina).
+ */
+export function fusion(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador) {
+  const pA = presenciaBase(atk.ficha), pD = presenciaBase(def.ficha);
+  const dA = tirarD100Cerrada(ctx.rng), dD = tirarD100Cerrada(ctx.rng);
+  const totA = dA + pA + 20, totD = dD + pD;
+  const herido = totA > totD ? def : atk, otro = herido === def ? atk : def;
+  const dano = Math.abs(totA - totD);
+  motor.log(ctx, () => `  ${atk.ficha.nombre} se materializa dentro de ${def.ficha.nombre} (Fusión): ${totA} [${dA}+${pA}+20] contra ${totD} [${dD}+${pD}]${dano ? `; ${herido.ficha.nombre} recibe ${dano}` : ''}.`);
+  terminarIntangibilidad(atk);
+  if (!dano) return;
+  motor.perderPv(ctx, otro, herido, dano);
+  if (activo(herido)) motor.critico(ctx, otro, herido, dano, false, 'normal');
+}
+
+/** Deja de mantener sus técnicas de Intangibilidad (Fusión, o el fin de la técnica). */
+function terminarIntangibilidad(l: Luchador) {
+  const e = l.ki;
+  if (!e) return;
+  for (const t of [...e.mantenidas.keys()]) if (efectosDe(t).asalto.intangible) e.mantenidas.delete(t);
+  e.activo = { ...e.activo, intangible: false, intangibleOtros: 0, fusion: false };
 }
 
 /**

@@ -24,7 +24,7 @@ import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, fusion, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
 } from './combate-ki';
 import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido,
+  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, presenciaBase,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, intangiblePor: null, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -340,6 +340,12 @@ function jugarAsalto(ctx: Contexto) {
         ejecutar(l, tecnica);
         l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
         log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre} [Ki ${textoKi(l)}].`);
+        // Intangibilidad con Afectar a otros: también a los aliados que elija (Dominus p.69).
+        const otros = l.ki!.activo.intangibleOtros;
+        if (otros) for (const a of ia.aliadosIntangibles(ctx, l, otros * presenciaBase(l.ficha))) {
+          a.intangiblePor = l;
+          log(ctx, () => `  ${a.ficha.nombre} también se vuelve intangible.`);
+        }
       }
     }
   }
@@ -732,6 +738,13 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   } else ki = modDeAccion(atk, 'ataque', true);
   // Ataque especializado: contra otra clase de defensa la técnica no tiene ningún efecto (Dominus p.72).
   if (ki?.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) ki = atk.ki?.activo;
+  // Sacrificio vital (Aumento de daño): PV a cambio de daño base (Dominus p.54).
+  const sacrificio = ki?.sacrificioVital ? ia.sacrificioDeDano(ctx, atk, def, ki, { maniobra: m, tipo: plan.tipo, esContra: a.esContra }) : 0;
+  if (ki && sacrificio) {
+    atk.pv -= sacrificio;
+    ki = { ...ki, dano: ki.dano + ki.sacrificioVital * sacrificio };
+    log(ctx, () => `${atk.ficha.nombre} sacrifica ${sacrificio} PV (+${ki!.sacrificioVital * sacrificio} al daño base) [${atk.pv}/${atk.ficha.pv}].`);
+  }
   // Destrucción por Ki: se paga al usarla (1 de Ki más los extra), alcance o no (Core p.104).
   if (m === 'destruccionKi') atk.ki!.reserva -= 1 + (plan.kiDestruccion ?? 0);
   const cAtk = ia.cansancioAtaque(ctx, atk, def, bono, plan);
@@ -1027,7 +1040,7 @@ type EvitaElGolpe = (ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, tipo
 
 /** Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69). */
 const intangible: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
-  if (!def.ki?.activo.intangible || tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) return false;
+  if (!esIntangible(def) || tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) return false;
   log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
   return true;
 };
@@ -1050,6 +1063,12 @@ const holograma: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
 /** En este orden: lo que evita el golpe sin defensa. Uno nuevo (un poder psíquico, una ilusión) se agrega acá. */
 const EVITAN_EL_GOLPE: readonly EvitaElGolpe[] = [intangible, holograma];
 
+/** Intangible por su técnica o por la de un aliado que todavía la mantiene (Dominus p.69). */
+function esIntangible(l: Luchador): boolean {
+  const por = l.intangiblePor;
+  return !!l.ki?.activo.intangible || (!!por && activo(por) && !!por.ki?.activo.intangible);
+}
+
 /**
  * La defensa gana (resultado 0 o menos): absorber Ki de la técnica, Reflectar, el desarme de Emp
  * arcano y la contra que le corresponde.
@@ -1065,7 +1084,7 @@ function defensaGana(
   // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
   // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
   if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
-    reflectar(MOTOR, ctx, quienDefiende, atk, ataqueTotal + (resultado < 0 ? bonoContraataque(resultado) : 0), o);
+    reflectar(MOTOR, ctx, quienDefiende, atk, ataqueTotal + (resultado < 0 ? bonoContraataque(resultado) : 0), o, kiDef);
     return { defensor: quienDefiende, contra: null, impacto: false };
   }
   // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
@@ -1377,6 +1396,12 @@ function golpeRecibido(
     } else if (resiste) log(ctx, () => `  ${def.ficha.nombre} resistió el golpe: sigue pudiendo actuar.`);
   };
   liberarAmenazados(ctx, def);
+  // Fusión: intangible, se materializa dentro de él en vez de golpearlo (Dominus p.70).
+  if (atk.ki?.activo.fusion && atk.ki.activo.intangible && !o.esContra && ia.quiereFusion(atk, def)) {
+    fusion(MOTOR, ctx, atk, def);
+    avisar();
+    return { defensor: def, contra: null, impacto: true };
+  }
   return golpeQueEntra(ctx, atk, def, o, resultado, baseTrasEscudo, tipoGolpe, resiste, avisar);
 }
 
