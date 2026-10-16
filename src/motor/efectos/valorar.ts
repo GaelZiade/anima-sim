@@ -5,16 +5,18 @@ import type { Contexto, Luchador } from '../modelo';
 import type { Conjuro, Grado } from '../conjuros';
 import { golpeDeConjuro, nivelLlamas, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
 import { rfCritico, rfDe,
-  absorcionContra, activo, ataqueMagico, defensaEscudoMagico, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar,
-  metrosTotales, danoEsperado, penAccion, pronostico, tablaPara, visionEntre,
+  absorcionContra, activo, ataqueMagico, defensaEscudoMagico, defensaFinal, distancia, enAlcance,
+  danoEsperado, penAccion, pronostico, tablaPara, visionEntre,
 } from '../calculos';
 import { fallaResistencia, tabla } from '../probabilidades';
 
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, cacheDeDecision, conCambio, enemigos, lambda, pierdeElAsalto, riesgoContra, valorDejarFuera, valorGolpe, valorNegativo } from '../ia';
+import { amenaza, base, cacheDeDecision, conCambio, enemigos, intercambio, lambda, pierdeElAsalto, riesgoContra, valorDejarFuera, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
+
+export { intercambio };
 import { blancosConjuro, radioArea } from './comun';
 
 /**
@@ -107,21 +109,6 @@ export function valorPrender(def: Luchador, bono: number): number {
 /** Puede atacar o golpear a `def` con este conjuro: en alcance y a la vista. */
 export function aLaVista(ctx: Contexto, l: Luchador, def: Luchador, alcance: number): boolean {
   return distancia(l, def) <= alcance && (enAlcance(l, def) || visionEntre(ctx.luchadores, l, def) !== 'bloqueada');
-}
-
-/**
- * Daño de `a` por asalto contra su mejor blanco y el que recibe de quienes lo pueden atacar. Quien
- * pelea con conjuros (le queda zeon) no usa sus ataques físicos: no hace daño con ellos.
- */
-export function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe: number } {
-  const conMagia = !!a.magia && a.magia.reserva - a.magia.acumulado >= 50;
-  let hace = 0;
-  let recibe = 0;
-  for (const e of enemigos(ctx, a)) {
-    if (!conMagia) hace = Math.max(hace, danoEsperado(a, e, ataqueFinal(a, e), defensaFinal(e, a)) * Math.max(1, a.ataquesDeclarados || 1));
-    if (faltaParaLlegar(e, a) <= metrosTotales(e)) recibe += danoEsperado(e, a, ataqueFinal(e, a), defensaFinal(a, e)) * Math.max(1, e.ataquesDeclarados || 1);
-  }
-  return { hace, recibe };
 }
 
 const sinBeneficio = cacheDeDecision<Luchador, { hace: number; recibe: number }>();

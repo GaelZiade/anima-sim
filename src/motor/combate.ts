@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia,
+  nivelMenos, vistaPrevia, conIncremento,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -559,7 +559,7 @@ function retirarse(ctx: Contexto, l: Luchador) {
   l.ataquesRestantes = 0;
   if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
   if (l.ficha.acrobacias !== undefined) {
-    const base = l.ficha.acrobacias - penAccion(l);
+    const base = conIncremento(l.ficha.acrobacias, l.ki?.activo.acrobacias ?? 0) - penAccion(l);
     const t = tirar(ctx, umbralPifia(l.ficha.acrobacias, l.cap.ajustePifia));
     const acrobacias = base + valorTirada(t);
     const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e.cap.umbralAtaque))) > 40);
@@ -1095,7 +1095,7 @@ function golpeQueEntra(
   const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
 
   if (esManiobraDeControl(m)) {
-    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0);
+    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0, o.ki);
     else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
     if (m === 'desarmar') {
       avisar();
@@ -1427,8 +1427,8 @@ function perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number) {
 // --------------------------------------------------------------------------- rotura (opcional, Core p.93)
 
 /** Derribo, Presa o Desarmar: control enfrentado de características (Core p.91-92). */
-function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento = 0) {
-  const c = caracteristicasControl(m, atk, def, apresamiento);
+function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento = 0, kiAtk?: ModKi) {
+  const c = caracteristicasControl(m, atk, def, apresamiento, kiAtk ?? atk.ki?.activo);
   const e = atk.cap.est;
   const bonoAtk = m === 'desarmar'
     ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)

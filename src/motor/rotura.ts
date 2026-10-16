@@ -17,7 +17,13 @@ export function bonoRoturaFuerza(fue: number): number {
 export function roturaDe(l: Luchador, ranura: Ranura): number {
   const sinArmas = ranura.sinArmas || l.cap.desarmado;
   const base = sinArmas ? (l.ficha.sinArmas?.rotura ?? 0) : (l.ficha.arma?.rotura ?? 0);
-  return base + bonoRoturaFuerza(atributo(l, 'FUE')) + (sinArmas ? l.cap.est.roturaSinArmas : 0) + l.cap.est.roturaExtra;
+  // Aumentar rotura (Ki, Dominus p.60).
+  return base + bonoRoturaFuerza(atributo(l, 'FUE')) + (sinArmas ? l.cap.est.roturaSinArmas : 0) + l.cap.est.roturaExtra + (l.ki?.activo.rotura ?? 0);
+}
+
+/** Aumentar entereza (Ki): a la del arma y a la de la armadura (Dominus p.60). */
+function enterezaKi(l: Luchador): number {
+  return l.ki?.activo.entereza ?? 0;
 }
 
 /** Control de rotura: d10 + rotura contra la entereza; devuelve por cuánto la supera (0 si no). */
@@ -39,7 +45,7 @@ export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: 
     // Con una armadura dura de camisola o completa puede bloquear con ella, con su entereza (Core p.93).
     const armadura = Math.max(0, ...(def.ficha.capasArmadura ?? [])
       .filter((c) => c.clase === 'dura' && ['camisola', 'completa'].includes(c.localizacion ?? localizacionArmadura(c.nombre)))
-      .map((c) => c.entereza));
+      .map((c) => c.entereza + enterezaKi(def)));
     const entereza = Math.max(atributo(def, 'CON') + def.cap.est.enterezaSinArmas, atributo(def, 'DES') + def.cap.est.enterezaSinArmas, armadura);
     const falla = controlRotura(ctx, roturaDe(atk, ranura), entereza);
     if (falla > 0) {
@@ -53,8 +59,8 @@ export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: 
     return;
   }
   const rDef = { pen: 0, sinArmas: false };
-  if (controlRotura(ctx, roturaDe(atk, ranura), def.ficha.arma?.entereza ?? 10) > 0) romperArma(motor, ctx, def);
-  if (activo(atk) && controlRotura(ctx, roturaDe(def, rDef), atk.ficha.arma?.entereza ?? 10) > 0) romperArma(motor, ctx, atk);
+  if (controlRotura(ctx, roturaDe(atk, ranura), (def.ficha.arma?.entereza ?? 10) + enterezaKi(def)) > 0) romperArma(motor, ctx, def);
+  if (activo(atk) && controlRotura(ctx, roturaDe(def, rDef), (atk.ficha.arma?.entereza ?? 10) + enterezaKi(atk)) > 0) romperArma(motor, ctx, atk);
 }
 
 /**
@@ -96,7 +102,7 @@ export function roturaDeArmadura(motor: Motor, ctx: Contexto, atk: Luchador, def
   let rotas = 0;
   let rotasCuerpo = 0;
   const nuevas = capas.map((c) => {
-    if (!enZona.has(c) || controlRotura(ctx, rotura, c.entereza) === 0) return c;
+    if (!enZona.has(c) || controlRotura(ctx, rotura, c.entereza + enterezaKi(def)) === 0) return c;
     rotas++;
     if ((c.localizacion ?? 'completa') !== 'cabeza') rotasCuerpo++;
     return { ...c, ta: Object.fromEntries(Object.entries(c.ta).map(([t, v]) => [t, Math.max(0, (v ?? 0) - 1)])) };

@@ -423,3 +423,56 @@ describe('Proyección y Estela de destrucción (Dominus p.58)', () => {
     expect(Math.hypot(atk.pos.x - def.pos.x, atk.pos.y - def.pos.y)).toBeLessThanOrEqual(2);
   });
 });
+
+describe('entereza, armadura e incrementos (Dominus p.60-62)', () => {
+  it('lectura', () => {
+    const ef = efectosDe(tecnica('Coraza', 'Armadura (5, Inmodificable, Armadura fisica, Lentitud), Aumentar entereza (+10), Aumentar rotura (+20)'));
+    expect(ef.asalto).toMatchObject({ ta: 5, taInmodificable: true, taFisica: true, lentitud: 5, entereza: 10, rotura: 20 });
+    const inc = efectosDe(tecnica('Cuerpo', 'Incremento de movimiento (+4), Incremento de habilidad (Acrobacias +100), Incremento de resistencia magica (+40), Habilidades perceptivas (Vision nocturna, Ver lo sobrenatural), Incremento de turno (+20)'));
+    expect(inc.asalto).toMatchObject({ movimiento: 4, acrobacias: 100, rm: 40, visionNocturna: true, veEnergia: true, turno: 20 });
+    expect(efectosDe(tecnica('Agarre', 'Capacidad incrementada (Destreza +6)')).accion.capacidad).toEqual([{ atributo: 'DES', bono: 6 }]);
+    for (const t of ['Coraza', 'Cuerpo']) expect(efectosDe(tecnica(t, t === 'Coraza' ? 'Armadura (5, Inmodificable)' : 'Vision Radial')).desconocidos).toEqual([]);
+  });
+
+  it('Incremento de movimiento: de a medio por encima de 13, sin tope de Inhumanidad; Lentitud resta TM y turno', async () => {
+    const { metrosTotales, turnoFinal } = await import('../src/motor/calculos');
+    const { metrosPorAsalto } = await import('../src/motor/reglas');
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')], { tipoMovimiento: 9 }), 'A', 0, 0);
+    const antes = turnoFinal(l);
+    l.ki!.activo = { ...l.ki!.activo, movimiento: 6 };
+    expect(metrosTotales(l)).toBe(metrosPorAsalto(14));
+    l.ki!.activo = { ...l.ki!.activo, movimiento: 0, lentitud: 8 };
+    expect(metrosTotales(l)).toBe(metrosPorAsalto(4));
+    expect(turnoFinal(l)).toBe(antes - 40);
+  });
+
+  it('Armadura: física no vale contra energía; Inmodificable no baja con la reducción y queda a la mitad contra Sin armadura', async () => {
+    const { absorcionContra } = await import('../src/motor/calculos');
+    const { absorcion } = await import('../src/motor/reglas');
+    const { SIN_KI } = await import('../src/motor/ki');
+    const def = crearLuchador(rival({ ta: {} }), 'B', 1, 0);
+    const atk = crearLuchador(rival(), 'A', 0, 0);
+    const r = { pen: 0, sinArmas: false };
+    const capa = { ...SIN_KI, ta: 6 };
+    expect(absorcionContra(def, atk, 'normal', 'ENE', r, SIN_KI, { ...capa, taFisica: true })).toBe(absorcion(0));
+    expect(absorcionContra(def, atk, 'normal', 'CON', r, { ...SIN_KI, reduccionTA: 4 }, capa)).toBe(absorcion(2));
+    expect(absorcionContra(def, atk, 'normal', 'CON', r, { ...SIN_KI, reduccionTA: 4 }, { ...capa, taInmodificable: true })).toBe(absorcion(6));
+    expect(absorcionContra(def, atk, 'normal', 'CON', r, { ...SIN_KI, sinArmadura: true }, { ...capa, taInmodificable: true })).toBe(absorcion(3));
+  });
+
+  it('Capacidad incrementada: suma a la característica sólo en los controles', async () => {
+    const { caracteristicasControl } = await import('../src/motor/maniobras');
+    const { SIN_KI } = await import('../src/motor/ki');
+    const atk = crearLuchador(maestro([]), 'A', 0, 0);
+    const def = crearLuchador(rival(), 'B', 1, 0);
+    const sin = caracteristicasControl('desarmar', atk, def).atk;
+    expect(caracteristicasControl('desarmar', atk, def, 0, { ...SIN_KI, capacidad: [{ atributo: 'DES', bono: 6 }] }).atk).toBe(Math.max(sin, 10 + 6));
+  });
+
+  it('Incremento de habilidad: por encima de 200 el bono va a la mitad', async () => {
+    const { conIncremento } = await import('../src/motor/ki');
+    expect(conIncremento(180, 100)).toBe(240);
+    expect(conIncremento(250, 100)).toBe(300);
+    expect(conIncremento(50, 100)).toBe(150);
+  });
+});

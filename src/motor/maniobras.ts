@@ -2,6 +2,7 @@
 // estados que dejan (Tabla 43).
 
 import type { Atributo, Luchador } from './modelo';
+import type { ModKi } from './ki';
 import { nivelCondicion } from './condiciones';
 import type { Localizacion } from './reglas';
 import type { Rng } from './rng';
@@ -146,15 +147,25 @@ export function pGanaControl(a: number, b: number): number {
  * Derribo, Presa, Desarmar, zafarse). Velez arcano puede usar su Poder en lugar de Fuerza, Destreza o
  * Agilidad (Dominus p.40).
  */
-export function mejorCaracteristica(l: Luchador, as: readonly Atributo[]): number {
+export function mejorCaracteristica(l: Luchador, as: readonly Atributo[], ki: ModKi | undefined = l.ki?.activo): number {
   let v = -Infinity;
-  for (const a of as) v = Math.max(v, atributo(l, a));
+  for (const a of as) v = Math.max(v, atributo(l, a) + capacidad(ki, a));
   return l.cap.est.intangible ? Math.max(v, atributo(l, 'POD')) : v;
 }
 
-/** Mejor característica del atacante y del defensor para cada maniobra (Core p.91-92). */
-export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador, apresamiento = 0) {
-  const mejor = mejorCaracteristica;
+/** Capacidad incrementada (Ki): bono a una Característica sólo en los controles enfrentados (Dominus p.61). */
+export function capacidad(ki: ModKi | undefined, a: Atributo): number {
+  let b = 0;
+  if (ki?.capacidad.length) for (const c of ki.capacidad) if (c.atributo === a) b = Math.max(b, c.bono);
+  return b;
+}
+
+/**
+ * Mejor característica del atacante y del defensor para cada maniobra (Core p.91-92). `kiAtk`: los
+ * efectos de Ki del golpe (la Capacidad incrementada de la técnica).
+ */
+export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador, apresamiento = 0, kiAtk: ModKi | undefined = atk.ki?.activo) {
+  const mejor = (l: Luchador, as: readonly Atributo[]) => mejorCaracteristica(l, as, l === atk ? kiAtk : l.ki?.activo);
   if (m === 'desarmar') return { atk: mejor(atk, ['FUE', 'DES']), def: mejor(def, ['FUE', 'DES']) };
   // Apresamiento (Ki): usa el valor de la técnica en lugar de su Fuerza o Destreza (Dominus p.64).
   if (m === 'presa' && apresamiento) return { atk: apresamiento, def: mejor(def, ['FUE', 'AGI']) };
@@ -163,7 +174,7 @@ export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk:
   // Presa Inusual: con armas sin regla de Presa se usa la Destreza con −3 (Dominus p.28).
   const presaInusual = m === 'presa' && !atk.cap.desarmado;
   return {
-    atk: presaInusual ? atributo(atk, 'DES') - 3 : mejor(atk, ['FUE', 'DES']),
+    atk: presaInusual ? atributo(atk, 'DES') + capacidad(kiAtk, 'DES') - 3 : mejor(atk, ['FUE', 'DES']),
     def: mejor(def, ['FUE', 'AGI']),
   };
 }

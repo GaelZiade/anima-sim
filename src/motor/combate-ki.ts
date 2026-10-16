@@ -6,7 +6,7 @@ import type { Contexto, Luchador, Tecnica } from './modelo';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { resultadoResistencia, umbralPifia } from './reglas';
 import { activo, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe } from './calculos';
-import { atributo, controlEnfrentado, dificultadPuntosPresion, type EstadoMushin } from './maniobras';
+import { atributo, capacidad, controlEnfrentado, dificultadPuntosPresion, type EstadoMushin } from './maniobras';
 import type { Golpe } from './golpe';
 import { imponer, nivelCondicion } from './condiciones';
 import { aplicarEstado, ESTADOS_DE_ANIMO, NOMBRE_ESTADO } from './efectos/estados';
@@ -156,7 +156,7 @@ const DANO_GRADO = [0, 0, 8, 30, 75, 175];
  * combate, queda fuera del alcance de todos.
  */
 export function impacto(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, fuerza: number, atraer: boolean) {
-  const dif = controlEnfrentado(ctx.rng, fuerza, atributo(def, 'FUE') + modControl(def));
+  const dif = controlEnfrentado(ctx.rng, fuerza, atributo(def, 'FUE') + capacidad(def.ki?.activo, 'FUE') + modControl(def));
   if (dif <= 0) {
     motor.log(ctx, () => `  ${def.ficha.nombre} aguanta el Impacto (control ${dif}).`);
     return;

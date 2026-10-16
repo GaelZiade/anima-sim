@@ -12,7 +12,7 @@ import {
   type EstadoMushin, type Maniobra,
 } from './maniobras';
 import { localizacionArmadura, type Ranura } from './rasgos';
-import { ajusteTaEnergia, type ModKi } from './ki';
+import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
 import { condicion } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
@@ -171,7 +171,8 @@ export function propioDefensa(l: Luchador): number {
 }
 
 export function propioTurno(l: Luchador): number {
-  return bonoVariable(l, 'turno') + bonoOrochi(l) + (l.ki?.activo.turno ?? 0) + (l.bono?.turno ?? 0);
+  // Lentitud (Armadura del Ki): −5 al turno por punto de TA (Dominus p.61).
+  return bonoVariable(l, 'turno') + bonoOrochi(l) + (l.ki ? l.ki.activo.turno - 5 * l.ki.activo.lentitud : 0) + (l.bono?.turno ?? 0);
 }
 
 /**
@@ -179,8 +180,19 @@ export function propioTurno(l: Luchador): number {
  * (Core p.62); cada 20 de negativo a toda acción le resta 1 (Core p.232), y los bonos no lo suben.
  */
 export function metrosTotales(l: Luchador): number {
-  const tope = Math.min(l.ficha.tipoMovimiento, l.cap.est.topeMovimiento);
-  return metrosPorAsalto(Math.max(0, tope - Math.max(0, Math.trunc(penAccion(l) / 20))));
+  return metrosPorAsalto(Math.max(0, tipoMovimientoKi(l) - Math.max(0, Math.trunc(penAccion(l) / 20))));
+}
+
+/**
+ * Tipo de movimiento con el tope y el Ki: Incremento de movimiento suma de a uno hasta 13 y de a medio
+ * por encima, sin necesitar Inhumanidad ni Zen; Lentitud resta, sin bajar de la mitad (Dominus p.61).
+ */
+function tipoMovimientoKi(l: Luchador): number {
+  let tm = Math.min(l.ficha.tipoMovimiento, l.cap.est.topeMovimiento);
+  const ki = l.ki?.activo;
+  if (!ki || (!ki.movimiento && !ki.lentitud)) return tm;
+  for (let i = 0; i < ki.movimiento; i++) tm += tm < 13 ? 1 : 0.5;
+  return Math.max(Math.floor(l.ficha.tipoMovimiento / 2), Math.floor(tm) - ki.lentitud);
 }
 
 /** Dónde está `atacante` respecto de `defensor`, según el orden en que se trabó con él. */
@@ -222,7 +234,8 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
   const o = l.entorno.oscuridad;
   // Crear Luz alrededor suyo: la oscuridad natural no lo alcanza (Core p.126).
   if (!o || (l.bono?.luz && o !== 'magica')) return SIN_CEGUERA;
-  const vision = l.cap.est.visionNocturna;
+  // Visión nocturna del Ki: como la completa (Dominus p.62).
+  const vision = l.ki?.activo.visionNocturna ? 2 : l.cap.est.visionNocturna;
   if (o === 'penumbra') return vision ? SIN_CEGUERA : { nivel: 1, factor: 1, localiza: false };
   if (o === 'total' && vision === 2) return SIN_CEGUERA;
   return { nivel: 2, factor: vision ? 0.5 : 1, localiza: false };
@@ -448,7 +461,7 @@ function penArea(def: Luchador, radio: number, campo: 'parada' | 'esquiva', cent
 
 /** Los ataques de Velez arcano son invisibles para quien no detecta la energía (ceguera absoluta). */
 function noVeElAtaque(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
-  return (atk.cap.est.intangible || !!kiAtk?.invisible) && !def.cap.est.veEnergia;
+  return (atk.cap.est.intangible || !!kiAtk?.invisible) && !def.cap.est.veEnergia && !def.ki?.activo.veEnergia;
 }
 
 
@@ -552,25 +565,26 @@ export function absorcionContra(
   ki: ModKi | undefined = atk.ki?.activo, kiDef: ModKi | undefined = def.ki?.activo,
 ): number {
   if (esManiobraDeControl(maniobra)) return absorcion(0);
-  // Destruir armadura "Sin armadura" ignora toda la TA (Dominus p.60).
-  if (ki?.sinArmadura) return absorcion(0);
   const r = ranura ?? proximaRanura(atk);
   const t = tipo ?? perfilDe(atk, r).tipoAtaque;
+  // Armadura (Ki): una capa más contra todo, energía incluida, salvo la Armadura física (Dominus p.60-61).
+  const extra = kiDef?.ta && !(kiDef.taFisica && t === 'ENE') ? kiDef.ta : 0;
+  // Destruir armadura "Sin armadura" ignora toda la TA; la Inmodificable queda a la mitad (Dominus p.60-61).
+  if (ki?.sinArmadura) return absorcion(kiDef?.taInmodificable ? Math.ceil(extra / 2) : 0);
   const zona = zonaDe(maniobra);
   const reduccion = reduccionTA(def, atk, r, t, zona, ki);
   let ta = taZona(def.ficha, zona, t);
   // Armadura de energía mayor apagada (TA 2) o arcana subida a TA 6 (Dominus p.19).
   if (t === 'ENE') ta = Math.max(0, ta + ajusteTaEnergia(def));
-  // Armadura (Ki): una capa más contra todo, energía incluida: la mayor más la mitad de la otra
-  // (Dominus p.60, Core p.83).
-  const extra = kiDef?.ta ?? 0;
+  // La capa del Ki: la mayor más la mitad de la otra (Core p.83).
   if (extra) ta = Math.max(ta, extra) + Math.floor(Math.min(ta, extra) / 2);
   // Armadura mágica (Armadura de Luz): otra capa, igual (Core p.83, p.127).
   const magica = def.magia?.armadura ? taMagica(def, t) : 0;
   if (magica) ta = Math.max(ta, magica) + Math.floor(Math.min(ta, magica) / 2);
   // Protección Final, Campeón: +TA contra todo (Arcana p.35).
   ta += def.bono?.ta ?? 0;
-  const abs = absorcion(Math.max(0, ta - reduccion));
+  // Inmodificable: lo que reste el ataque no baja la TA de la técnica (Dominus p.61).
+  const abs = absorcion(Math.max(0, ta - reduccion, kiDef?.taInmodificable ? extra : 0));
   // Un ser con acumulación sorprendido recibe el golpe de lleno: Absorción a la mitad (Core p.99).
   return def.ficha.acumulacion && atk.sorprendeA.has(def) ? Math.floor(abs / 2) : abs;
 }
@@ -915,7 +929,7 @@ export function defensaEscudoMagico(def: Luchador, atk: Luchador, kiAtk?: ModKi)
 
 /** Bono de la Frialdad (con lo que le sume Moral) a resistir efectos sobre el ánimo (Core p.54, Tabla 13). */
 export function frialdadDe(l: Luchador): number {
-  return bonoFrialdad((l.ficha.frialdad ?? 0) + (l.bono?.frialdad ?? 0));
+  return bonoFrialdad(conIncremento(l.ficha.frialdad ?? 0, l.ki?.activo.frialdad ?? 0) + (l.bono?.frialdad ?? 0));
 }
 
 // --------------------------------------------------------------------------- Resistencias

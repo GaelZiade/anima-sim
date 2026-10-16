@@ -68,7 +68,29 @@ export interface ModKi {
   turno: number;
   /** Armadura: TA contra todo, como capa adicional (Dominus p.60). */
   ta: number;
+  /** Armadura Inmodificable: nada le resta esa TA; Sin armadura la deja a la mitad (Dominus p.61). */
+  taInmodificable: boolean;
+  /** Armadura física: esa TA no vale contra la energía (Dominus p.61). */
+  taFisica: boolean;
+  /** Lentitud: −1 al Tipo de movimiento y −5 al turno por punto de TA de la técnica (Dominus p.61). */
+  lentitud: number;
+  /** Aumentar rotura y Aumentar entereza: a la del arma, y a la de la armadura (Dominus p.60). */
+  rotura: number;
+  entereza: number;
+  /** Incremento de movimiento: al Tipo de movimiento, la mitad por encima de 13, sin tope (Dominus p.61). */
+  movimiento: number;
+  /** Incremento de habilidad: las secundarias que importan en combate (Dominus p.61). */
+  acrobacias: number;
+  frialdad: number;
+  resistirDolor: number;
+  /** Capacidad incrementada: a una Característica, sólo en los controles enfrentados (Dominus p.61). */
+  capacidad: readonly { atributo: Atributo; bono: number }[];
   rf: number;
+  rm: number;
+  rp: number;
+  /** Habilidades perceptivas (Dominus p.62): Visión nocturna, y ver la energía (Ver lo sobrenatural). */
+  visionNocturna: boolean;
+  veEnergia: boolean;
   danaEnergia: boolean;
   /** Potenciar Crítico: bono a la tirada del crítico; con Crítico automático, critica si daña (Dominus p.70). */
   critico: number;
@@ -137,7 +159,9 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
   dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, proyeccion: false, estela: false, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0,
-  accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, transporte: 0, turno: 0, ta: 0, rf: 0,
+  accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, transporte: 0, turno: 0, ta: 0, taInmodificable: false, taFisica: false, lentitud: 0, rotura: 0, entereza: 0, movimiento: 0, acrobacias: 0,
+  frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
+  visionNocturna: false, veEnergia: false,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
   interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
@@ -225,10 +249,21 @@ const CATALOGO: Record<string, DefEfecto> = {
   'transporte automatico': { tipo: 'accion', clase: 'variable', aplicar: (m, _v, o) => { m.transporte = Math.max(m.transporte, metrosDe(o)); } },
   'parada en area': { tipo: 'accion', clase: 'defensa', aplicar: (m, _v, o) => { m.paradaArea = Math.max(m.paradaArea, metrosDe(o)); } },
   'incrementar turno': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('turno') },
+  'incremento de turno': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('turno') },
+  'aumentar rotura': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('rotura') },
+  'aumentar entereza': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('entereza') },
+  'incremento de movimiento': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('movimiento') },
+  'incremento de habilidad': { tipo: 'asalto', clase: 'variable', aplicar: incrementoDeHabilidad },
+  'capacidad incrementada': { tipo: 'accion', clase: 'variable', aplicar: capacidadIncrementada },
+  'incremento de resistencia magica': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('rm') },
+  'incremento de resistencia psiquica': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('rp') },
+  'habilidades perceptivas': { tipo: 'asalto', clase: 'variable', aplicar: (m, _v, o) => perceptivas(m, o) },
+  ...Object.fromEntries(['vision nocturna', 'vision radial', 'vision espiritual', 'vision de magia', 'vision de matrices', 'ver lo sobrenatural', 'ver realmente']
+    .map((n): [string, DefEfecto] => [n, { tipo: 'asalto', clase: 'variable', aplicar: (m) => perceptivas(m, [n]) }])),
   'ataque con area': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.area = Math.max(m.area, metrosDe(o)); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
   'ataque con area real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, v, o) => { m.area = Math.max(m.area, v); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
   'destruir armadura': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { if (o.some((x) => /sin armadura/.test(normalizarRasgo(x)))) m.sinArmadura = true; else m.reduccionTA = Math.max(m.reduccionTA, v); } },
-  'armadura': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('ta') },
+  'armadura': { tipo: 'asalto', clase: 'defensa', aplicar: armadura },
   'incremento de resistencia fisica': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('rf') },
   'ataque capaz de danar energia': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danaEnergia = true; } },
   'danar energia': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danaEnergia = true; } },
@@ -292,6 +327,45 @@ export function nivelMenos(dificultad: number): number {
 
 function hay(opciones: string[], re: RegExp): boolean {
   return opciones.some((x) => re.test(normalizarRasgo(x)));
+}
+
+/** Armadura con sus ventajas: Inmodificable, Armadura física y Lentitud (Dominus p.60-61). */
+function armadura(m: ModKi, v: number, o: string[]) {
+  m.ta = Math.max(m.ta, v);
+  if (hay(o, /inmodificable/)) m.taInmodificable = true;
+  if (hay(o, /armadura fisica|fisica/)) m.taFisica = true;
+  if (hay(o, /lentitud/)) m.lentitud = Math.max(m.lentitud, v);
+}
+
+/** Incremento de habilidad: sólo las secundarias que usa el combate; las demás no hacen nada acá. */
+function incrementoDeHabilidad(m: ModKi, v: number, o: string[]) {
+  if (hay(o, /acrobacia/)) m.acrobacias = Math.max(m.acrobacias, v);
+  else if (hay(o, /frialdad/)) m.frialdad = Math.max(m.frialdad, v);
+  else if (hay(o, /resistir (el )?dolor/)) m.resistirDolor = Math.max(m.resistirDolor, v);
+}
+
+const NOMBRE_ATRIBUTO: [RegExp, Atributo][] = [
+  [/fuerza/, 'FUE'], [/destreza/, 'DES'], [/agilidad/, 'AGI'], [/constitucion/, 'CON'], [/poder/, 'POD'],
+  [/voluntad/, 'VOL'], [/inteligencia/, 'INT'], [/percepcion/, 'PER'],
+];
+
+/** Capacidad incrementada: "Destreza +6" (Dominus p.61). */
+function capacidadIncrementada(m: ModKi, v: number, o: string[]) {
+  const a = NOMBRE_ATRIBUTO.find(([re]) => hay(o, re))?.[1];
+  if (a && v) m.capacidad = [...m.capacidad, { atributo: a, bono: v }];
+}
+
+/** Habilidades perceptivas: las que cambian algo en combate (Dominus p.62). */
+function perceptivas(m: ModKi, o: string[]) {
+  if (hay(o, /vision nocturna/)) m.visionNocturna = true;
+  if (hay(o, /ver lo sobrenatural|ver realmente/)) m.veEnergia = true;
+}
+
+/** Incremento de habilidad: por encima de 200, el resto del bono va a la mitad (Dominus p.61). */
+export function conIncremento(base: number, bono: number): number {
+  if (!bono) return base;
+  const total = base + bono;
+  return total <= 200 ? total : Math.max(base, 200) + Math.floor((total - Math.max(base, 200)) / 2);
 }
 
 /** Ataque a distancia: el alcance y las ventajas Proyección y Estela de destrucción (Dominus p.57-58). */

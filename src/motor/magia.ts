@@ -8,7 +8,7 @@ import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { penAccion } from './calculos';
 import { umbralPifia, type TipoAtaque } from './reglas';
-import { SIN_KI, type ModKi } from './ki';
+import { conIncremento, SIN_KI, type ModKi } from './ki';
 import type { Ranura } from './rasgos';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
@@ -332,7 +332,8 @@ export function costeConjuro(g: Grado, control = false): number {
 
 /** Resistencia Mágica: la de la planilla, o la Presencia más el bono de Poder (Core p.12). */
 export function rmDe(l: Luchador): number {
-  return l.ficha.rm ?? presenciaDe(l) + bonoCaracteristica(atributo(l, 'POD'));
+  // Incremento de Resistencia Mágica del Ki (Dominus p.62).
+  return (l.ficha.rm ?? presenciaDe(l) + bonoCaracteristica(atributo(l, 'POD'))) + (l.ki?.activo.rm ?? 0);
 }
 
 /** Presencia: la de la planilla, o la que deja la RF sin el bono de Constitución (Core p.12). */
@@ -487,7 +488,7 @@ export function danoAlAcumular(l: Luchador, dano: number, rng: Rng, critico = fa
   // Con acumulación de daño no lo hace, salvo que el ataque le cause un crítico (Core p.118).
   if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || (l.ficha.acumulacion && !critico)) return null;
   // Preparando un conjuro determinado (y sin magia pura en juego), +40 (Core p.118).
-  const habilidad = (l.ficha.resistirDolor ?? 0) + (e.acumulado <= 0 ? 40 : 0);
+  const habilidad = conIncremento(l.ficha.resistirDolor ?? 0, l.ki?.activo.resistirDolor ?? 0) + (e.acumulado <= 0 ? 40 : 0);
   const t = tirarD100(rng, umbralPifia(habilidad, l.cap.ajustePifia));
   const tirada = habilidad + t.valor;
   if (!t.pifia && tirada >= 2 * dano) return { tirada, resultado: 'conserva' };

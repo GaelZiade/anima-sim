@@ -948,7 +948,7 @@ function mejorManiobra(
     }
 
     if (m === 'derribo' || m === 'presa' || m === 'desarmar') {
-      const c = caracteristicasControl(m, atk, def, ki?.apresamiento);
+      const c = caracteristicasControl(m, atk, def, ki?.apresamiento, ki);
       const bonoC = m === 'desarmar'
         ? (esContra ? e.controlDesarmarEnContra : e.controlDesarmar)
         : (esContra ? e.controlPresaDerriboEnContra : e.controlPresaDerribo);
@@ -2016,19 +2016,62 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
     const ef = efectosDe(t);
     const bono = ef.asalto.turno;
     const sube = ef.asalto;
-    if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
+    const generico = cambiaElAsalto(sube);
+    if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision && !generico) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
     // Intangibilidad (Dominus p.69): le ahorra lo que le pegarían este asalto quienes no dañan energía.
     let intangible = 0;
     if (ef.asalto.intangible)
       for (const e of enemigos(ctx, l)) if (!e.cap.danaEnergia && e.ficha.tipoAtaque !== 'ENE' && alcanzable(e, l)) intangible += lambda(l) * amenaza(e, l);
     const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible + valorAccionAdicional(ctx, l, sube.accionesAdicionales) +
-      valorPrevision(ctx, l, sube.prevision) - costoTecnica(l, rivalPrincipal(ctx, l), t);
+      valorPrevision(ctx, l, sube.prevision) + (generico ? valorEfectosDeAsalto(ctx, l, sube) : 0) - costoTecnica(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
     }
   }
   return mejor;
+}
+
+/**
+ * Daño de `a` por asalto contra su mejor blanco y el que recibe de quienes lo pueden atacar. Quien
+ * pelea con conjuros (le queda zeon) no usa sus ataques físicos: no hace daño con ellos.
+ */
+export function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe: number } {
+  const conMagia = !!a.magia && a.magia.reserva - a.magia.acumulado >= 50;
+  let hace = 0;
+  let recibe = 0;
+  for (const e of enemigos(ctx, a)) {
+    if (!conMagia) hace = Math.max(hace, danoEsperado(a, e, ataqueFinal(a, e), defensaFinal(e, a)) * Math.max(1, a.ataquesDeclarados || 1));
+    if (faltaParaLlegar(e, a) <= metrosTotales(e)) recibe += danoEsperado(e, a, ataqueFinal(e, a), defensaFinal(a, e)) * Math.max(1, e.ataquesDeclarados || 1);
+  }
+  return { hace, recibe };
+}
+
+/**
+ * Efectos de Asalto que cambian cómo le va este asalto sin otra cuenta propia (Incremento de
+ * movimiento, Habilidades perceptivas, resistencias…): el intercambio con ellos menos sin ellos, y si
+ * el movimiento le deja llegar a pegarle a quien antes no alcanzaba, ese golpe.
+ */
+function valorEfectosDeAsalto(ctx: Contexto, l: Luchador, asalto: ModKi): number {
+  const e = l.ki;
+  if (!e) return 0;
+  const antes = intercambio(ctx, l);
+  const llegaba = new Set(enemigos(ctx, l).filter((x) => alcanzable(l, x)));
+  return conCambio(() => {
+    const previo = e.activo;
+    e.activo = combinar(previo, asalto);
+    return () => { e.activo = previo; };
+  }, () => {
+    const d = intercambio(ctx, l);
+    let v = d.hace - antes.hace + lambda(l) * (antes.recibe - d.recibe);
+    if (!llegaba.size) for (const x of enemigos(ctx, l)) if (alcanzable(l, x)) v = Math.max(v, valorAtaque(l, x, {}));
+    return v;
+  });
+}
+
+/** Los efectos de Asalto que valora `valorEfectosDeAsalto`. */
+function cambiaElAsalto(m: ModKi): boolean {
+  return !!(m.movimiento || m.visionNocturna || m.veEnergia || m.rm || m.rf || m.capacidad.length || m.lentitud);
 }
 
 /** Acción adicional (Dominus p.56-57): el −25 que se ahorra en sus ataques si tiene que levantarse o moverse con acción activa. */
