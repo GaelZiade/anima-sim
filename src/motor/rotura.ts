@@ -26,6 +26,16 @@ function enterezaKi(l: Luchador): number {
   return l.ki?.activo.entereza ?? 0;
 }
 
+/** Entereza del arma que empuña, con Aumentar entereza. */
+export function enterezaArma(l: Luchador): number {
+  return (l.ficha.arma?.entereza ?? 10) + enterezaKi(l);
+}
+
+/** Chance de que d10 + rotura supere la entereza (la del control de abajo, para la IA). */
+export function pRompe(rotura: number, entereza: number): number {
+  return Math.max(0, Math.min(10, 10 + rotura - entereza)) / 10;
+}
+
 /** Control de rotura: d10 + rotura contra la entereza; devuelve por cuánto la supera (0 si no). */
 function controlRotura(ctx: Contexto, rotura: number, entereza: number): number {
   return Math.max(0, rotura + dado(ctx.rng, 10) - entereza);
@@ -59,8 +69,8 @@ export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: 
     return;
   }
   const rDef = { pen: 0, sinArmas: false };
-  if (controlRotura(ctx, roturaDe(atk, ranura), (def.ficha.arma?.entereza ?? 10) + enterezaKi(def)) > 0) romperArma(motor, ctx, def);
-  if (activo(atk) && controlRotura(ctx, roturaDe(def, rDef), (atk.ficha.arma?.entereza ?? 10) + enterezaKi(atk)) > 0) romperArma(motor, ctx, atk);
+  if (controlRotura(ctx, roturaDe(atk, ranura), enterezaArma(def)) > 0) romperArma(motor, ctx, def);
+  if (activo(atk) && controlRotura(ctx, roturaDe(def, rDef), enterezaArma(atk)) > 0) romperArma(motor, ctx, atk);
 }
 
 /**

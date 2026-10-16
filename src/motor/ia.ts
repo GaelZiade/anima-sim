@@ -15,7 +15,7 @@ import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import type { ParadaArea } from './golpe';
-import { fichaConArmaKi } from './rotura';
+import { enterezaArma, fichaConArmaKi, pRompe, roturaDe } from './rotura';
 import { rpDe } from './magia';
 import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
@@ -865,6 +865,20 @@ export function elegirManiobra(
   return { ...mejor.plan, tecnica: elegida };
 }
 
+/**
+ * Lo que vale la rotura si el rival para con su arma (`pParada`): romperle el arma (sin calidad lo
+ * desarma; con calidad pierde un grado, unos 5 de cada 100 de lo que pega) menos el riesgo de que se
+ * rompa la propia (Core p.93). Aumentar rotura y entereza del Ki ya están en los valores.
+ */
+function valorRotura(atk: Luchador, def: Luchador, r: Ranura, pParada: number, amen: number): number {
+  if (!pParada || r.sinArmas || r.proyectil || atk.cap.desarmado || def.cap.desarmado || (def.ficha.tipoDefensa ?? 'parada') !== 'parada') return 0;
+  const perdida = (l: Luchador, a: number) => ((l.ficha.arma?.calidad ?? 0) < 5 ? (l.ficha.sinArmas ? Math.max(0, 1 - l.ficha.sinArmas.ataque / Math.max(1, l.ficha.ataque)) : 0.5) : 0.1) * a;
+  // Lo que el rival le deja de pegar (por λ) y lo que él deja de pegarle, dos asaltos.
+  const rompeSuya = pRompe(roturaDe(atk, r), enterezaArma(def)) * perdida(def, 2 * lambda(atk) * amen);
+  const rompeMia = pRompe(roturaDe(def, { pen: 0, sinArmas: false }), enterezaArma(atk)) * perdida(atk, 2 * amenaza(atk, def));
+  return pParada * (rompeSuya - rompeMia);
+}
+
 /** La mejor maniobra con estos efectos de Ki, y lo que vale en PV. */
 function mejorManiobra(
   ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, ki: ModKi | undefined, soloNormal: boolean,
@@ -997,6 +1011,8 @@ function mejorManiobra(
     // una vez, si lo impacta alguno (Dominus p.55). Con Combo cada golpe sigue sólo si el anterior
     // impactó; con Ataque continuo sólo queda la contra del último; los limitados valen como un ataque
     // común (Dominus p.56).
+    // Rotura (opcional, Core p.93): al parar con el arma chocan las dos y cada una puede romperse.
+    if (ctx.opciones.rotura) v += valorRotura(atk, def, ranura ?? proximaRanura(atk), 1 - p.pImpacto, amen);
     const golpes = 1 + (ki?.ataquesAdicionales ?? 0);
     const efectivos = ki?.combo && p.pImpacto < 1 ? (1 - Math.pow(p.pImpacto, golpes)) / (1 - p.pImpacto) : golpes;
     const contras = ki?.continuo ? Math.min(1, efectivos) : efectivos;

@@ -756,3 +756,10 @@ describe('efectos escritos como en el libro', () => {
     expect([d.accion.ataqueFijo, d.accion.estados[0]?.rf, d.asalto.escudo, d.accion.apresamiento]).toEqual([440, 160, 400, 12]);
   });
 });
+
+describe('rotura en la IA (Core p.93)', () => {
+  it('pRompe es la chance de d10 + rotura sobre la entereza', async () => {
+    const { pRompe } = await import('../src/motor/rotura');
+    expect([pRompe(5, 15), pRompe(5, 10), pRompe(20, 10), pRompe(0, 30)]).toEqual([0, 0.5, 1, 0]);
+  });
+});
