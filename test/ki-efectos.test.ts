@@ -259,3 +259,58 @@ describe('acción y reacción (Dominus p.56-57)', () => {
     expect(recuperarAccion(ctx, l)).toBe(t);
   });
 });
+
+describe('Parada en área (Dominus p.58)', () => {
+  const area = tecnica('Onda', 'Ataque con area (5 metros), Habilidad de ataque (+10)', { DES: 1 });
+  const escudo = tecnica('Muralla', 'Parada en area (25 metros), Habilidad de parada limitada (+90)', { DES: 1 });
+  const ronda = (defensa: number, paraEnergia: boolean, semilla = 1) => {
+    const atk = crearLuchador(maestro([area], { ataque: 200 }), 'A', 0, 0);
+    const p = crearLuchador(maestro([escudo], { id: 'p', nombre: 'Protector', defensa, rasgos: paraEnergia ? { habilidadesKi: ['Extrusion de Presencia'] } : {} }), 'B', 1, 0);
+    const q = crearLuchador(rival({ id: 'q', nombre: 'Aliado', defensa: 20 }), 'B', 3, 0);
+    for (const l of [atk, p, q]) {
+      l.ataquesDeclarados = 1;
+      l.planAtaques = [{ pen: 0, sinArmas: false }];
+      l.ataquesRestantes = 0;
+    }
+    atk.ataquesRestantes = 1;
+    atk.ki!.acumulado = { DES: 5 };
+    p.ki!.acumulado = { DES: 5 };
+    const ctx: Contexto = {
+      opciones: {}, rng: crearRng(semilla), luchadores: [atk, p, q], asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+    atacar(ctx, atk, p, { esContra: false, bono: 0, tecnica: area });
+    return { q, textos: ctx.registro!.map((e) => e.texto) };
+  };
+
+  it('lectura: el radio en metros, y en kilómetros', () => {
+    expect(efectosDe(escudo).accion.paradaArea).toBe(25);
+    expect(efectosDe(tecnica('X', 'Parada en area (1 kilometro)')).accion.paradaArea).toBe(1000);
+    expect(efectosDe(escudo).desconocidos).toEqual([]);
+  });
+
+  it('si la Parada gana, el aliado del radio no recibe nada', () => {
+    const { q, textos } = ronda(400, true);
+    expect(textos.some((x) => x.includes('con Muralla'))).toBe(true);
+    expect(textos.some((x) => x.includes('cubierto por la Parada en área de Protector'))).toBe(true);
+    expect(q.pv).toBe(q.ficha.pv);
+  });
+
+  it('si pierde, el aliado recibe el daño de esa diferencia', () => {
+    let cubiertos = 0;
+    for (let s = 1; s <= 5; s++) {
+      const { q, textos } = ronda(-200, true, s);
+      const linea = textos.find((x) => x.includes('cubierto por la Parada en área'));
+      if (!linea) continue;
+      cubiertos++;
+      expect(Number(/→ (-?\d+)/.exec(linea)![1])).toBeGreaterThan(0);
+      expect(q.pv).toBeLessThan(q.ficha.pv);
+    }
+    expect(cubiertos).toBeGreaterThan(0);
+  });
+
+  it('contra un área sobrenatural, sin parar energía no puede cubrir', () => {
+    const { textos } = ronda(400, false);
+    expect(textos.some((x) => x.includes('cubierto por la Parada en área'))).toBe(false);
+  });
+});

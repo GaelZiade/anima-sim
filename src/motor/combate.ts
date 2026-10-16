@@ -18,7 +18,7 @@ import {
   atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esManiobraDeControl, esNoLetal,
   gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
 } from './maniobras';
-import type { Golpe, OpcionesCritico, ResultadoDefensa } from './golpe';
+import type { Golpe, OpcionesCritico, ParadaArea, ResultadoDefensa } from './golpe';
 import { estadoVisible, pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
@@ -797,7 +797,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
 
     // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92). Un
     // área de Ki alcanza a todos los del radio (Dominus p.58); sin Elección de blanco, aliados incluidos.
-    const blancos = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    const alcanzados = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    // Parada en área (Ki): quien cubre a sus aliados se defiende primero (Dominus p.58).
+    const golpeG = limitado ? opcionesLimitado : opcionesAtk;
+    const paradaArea = ia.elegirParadaArea(ctx, atk, alcanzados, hab, golpeG);
+    const blancos = paradaArea ? [paradaArea.quien, ...alcanzados.filter((b) => b !== paradaArea.quien)] : alcanzados;
     const contras: { quien: Luchador; bono: number }[] = [];
     let impactoCombinado = false;
     let cortaCombo = false;
@@ -810,7 +814,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
         if (!activo(atk) || !activo(blanco)) continue;
       }
       // Una técnica de Ki a distancia es una descarga: un mago la puede interceptar (Core p.117).
-      let opciones: Golpe = limitado ? opcionesLimitado : opcionesAtk;
+      let opciones: Golpe = paradaArea ? { ...golpeG, paradaArea } : golpeG;
       if (g === 0 && !arma && aDistancia && ki?.distancia && blanco === def) {
         const choque = interceptar(MOTOR, ctx, atk, blanco, hab + tA.valor, danoBase(atk, blanco, false, ranura, ki), false);
         if (choque === 'anulado' || choque === 'pierde') continue;
@@ -1161,9 +1165,15 @@ function golpeQueEntra(
 function resolverDefensa(
   ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
+  // Parada en área (Ki): lo cubre la de un aliado, que ya se defendió (Dominus p.58).
+  const pa = o.paradaArea;
+  if (pa && pa.quien !== def && pa.resultado !== undefined && def.equipo === pa.quien.equipo && distancia(def, pa.quien) <= pa.radio) {
+    return defensaCubierta(ctx, atk, def, habAtk, tA, o, etiqueta, pa);
+  }
+  const cubre = pa?.quien === def ? pa : undefined;
   // Un aliado puede defender en su lugar: Guardián (−10, sin necesitar el turno, Dominus p.86) o
   // Apartar (esquiva −30, Guardaespaldas −10; acción activa reservada, Core p.93).
-  const proteccion = ia.protectorPara(ctx, def, atk);
+  const proteccion = cubre ? null : ia.protectorPara(ctx, def, atk);
   const quienDefiende = proteccion?.quien ?? def;
   // Fascinación: al verse en peligro repite la RF (Dominus p.67).
   if (def.fascinado) repetirFascinacion(MOTOR, ctx, def);
@@ -1171,9 +1181,9 @@ function resolverDefensa(
   // Lo que hace que el golpe no llegue, antes de defenderse (intangible, holograma…).
   if (!proteccion && EVITAN_EL_GOLPE.some((evita) => evita(ctx, atk, def, o, tipoGolpe, etiqueta))) return { defensor: def, contra: null, impacto: false };
   if (proteccion?.apartar) quienDefiende.ataquesRestantes--;
-  const resiste = !proteccion && !def.ficha.acumulacion && ia.resistir(ctx, def, atk);
+  const resiste = !proteccion && !cubre && !def.ficha.acumulacion && ia.resistir(ctx, def, atk);
   // Haima: sacrifica PV para crear una sombra de sangre que recibe el golpe (Dominus p.88).
-  const sacrificio = !proteccion && def.cap.est.haima ? ia.sacrificioHaima(def, atk, habAtk) : 0;
+  const sacrificio = !proteccion && !cubre && def.cap.est.haima ? ia.sacrificioHaima(def, atk, habAtk) : 0;
   if (sacrificio) {
     def.pv -= sacrificio;
     log(ctx, () => `${def.ficha.nombre} sacrifica ${sacrificio} PV en una sombra de sangre (aguante ${2 * sacrificio}).`);
@@ -1191,7 +1201,7 @@ function resolverDefensa(
   }
   // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
   // defiende con él (no se combina con parar o esquivar).
-  if (!proteccion && def.magia) {
+  if (!proteccion && !cubre && def.magia) {
     const nuevo = iaMagia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
     if (nuevo) {
       const g = lanzar(def, nuevo.conjuro, nuevo.grado);
@@ -1199,11 +1209,11 @@ function resolverDefensa(
       log(ctx, () => `${def.ficha.nombre} levanta ${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]}, ${g.resistencia} de resistencia) [zeon ${g.zeon}; reserva ${def.magia!.reserva}].`);
     }
   }
-  const conEscudo = !proteccion && escudoDetiene(def, tipoGolpe) && iaMagia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
+  const conEscudo = !proteccion && !cubre && escudoDetiene(def, tipoGolpe) && iaMagia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
   // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
   if (!conEscudo) hacerOtraAccion(quienDefiende);
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
-  const tecnica = quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
+  const tecnica = cubre ? cubre.tecnica : quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
   let kiDef: ModKi | undefined;
   if (tecnica) {
     kiDef = ejecutar(quienDefiende, tecnica);
@@ -1237,6 +1247,7 @@ function resolverDefensa(
     // Una pifia resta su nivel directamente de la defensa, sin mínimo (Core p.98), como en el pronóstico.
     const total = fija || habDef + valorDef;
     resultado = habAtk + tA.valor - total;
+    if (cubre) cubre.resultado = resultado;
     // Con acumulación, si superan la defensa de su escudo mágico pierde la acción (Core p.99).
     if (conEscudo && def.ficha.acumulacion && resultado > 0) def.aLaDefensiva = true;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
@@ -1277,6 +1288,28 @@ function resolverDefensa(
   }
 
   if (resultado <= 0) return defensaGana(ctx, atk, quienDefiende, o, kiDef, resultado, habAtk + tA.valor);
+  return golpeRecibido(ctx, atk, def, o, resultado, baseTrasEscudo, tipoGolpe, resiste, sacrificio);
+}
+
+/**
+ * Parada en área (Dominus p.58): cubierto por la de un aliado, no se defiende. Si la Parada ganó no
+ * le pasa nada (ni contraataca); si perdió, recibe el daño por esa diferencia.
+ */
+function defensaCubierta(
+  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string, pa: ParadaArea,
+): ResultadoDefensa {
+  const resultado = pa.resultado!;
+  log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)}, cubierto por la Parada en área de ${pa.quien.ficha.nombre} → ${resultado}.`,
+    () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: o.esContra, resultado } }));
+  if (resultado <= 0) return { defensor: def, contra: null, impacto: false };
+  return golpeRecibido(ctx, atk, def, o, resultado, -1, o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque, false, 0);
+}
+
+/** El ataque superó la defensa: anímico, Cuerpo a Fuego, Haima y, si entra, el golpe. */
+function golpeRecibido(
+  ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, resultado: number, baseTrasEscudo: number, tipoGolpe: TipoAtaque,
+  resiste: boolean, sacrificio: number,
+): ResultadoDefensa {
 
 
   // Conjuro anímico (Core p.122): alcanza si logra un resultado de daño contra la TA de energía; en

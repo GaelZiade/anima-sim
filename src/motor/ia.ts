@@ -14,6 +14,7 @@ import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, PEN_ACCION_ACTIVA, 
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
+import type { ParadaArea } from './golpe';
 import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
@@ -1897,6 +1898,57 @@ export function elegirTecnicaDefensa(
     }
   }
   if (mejor && convieneGuardar(ctx, def, atk, mejor, mejorNeto)) return null;
+  return mejor;
+}
+
+/**
+ * Parada en área (Dominus p.58): contra un ataque que alcanza a varios, un blanco que para puede
+ * cubrir con una sola Parada a los aliados de su radio. Contra un área mágica o sobrenatural hace
+ * falta parar energía. Elige a quien más daño ahorra (el suyo y el de los cubiertos) por su Ki.
+ */
+export function elegirParadaArea(
+  ctx: Contexto, atk: Luchador, blancos: Luchador[], habAtk: number,
+  g: { maniobra: Maniobra; tipo?: TipoAtaque; ki?: ModKi; esContra: boolean; area?: number },
+): ParadaArea | null {
+  if (blancos.length < 2) return null;
+  const sobrenatural = !!g.ki?.sobrenatural || !!g.ki?.conjuro || (g.area ?? 0) > 0 || (g.ki?.area ?? 0) > 0 || g.tipo === 'ENE';
+  const candidatos: { b: Luchador; t: Tecnica; radio: number }[] = [];
+  for (const b of blancos) {
+    if (!b.ki || perfil(b) === 'bestia' || !activo(b) || b.ficha.acumulacion || (b.ficha.tipoDefensa ?? 'parada') !== 'parada') continue;
+    if (sobrenatural && !b.cap.est.paraEnergia) continue;
+    for (const t of tecnicasPara(b, 'defensa')) {
+      const radio = efectosDe(t).accion.paradaArea;
+      if (radio) candidatos.push({ b, t, radio });
+    }
+  }
+  if (!candidatos.length) return null;
+  nuevaDecision(ctx);
+  const opciones = { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, esContra: g.esContra };
+  // Lo que le cuesta a cada uno defenderse por su cuenta.
+  const propio = new Map<Luchador, number>();
+  const solo = (c: Luchador) => {
+    let v = propio.get(c);
+    if (v === undefined) {
+      v = c.ficha.acumulacion ? valorGolpe(atk, c, pronostico(atk, c, habAtk, 0, opciones), 0) :
+        valorGolpe(atk, c, pronostico(atk, c, habAtk, defensaFinal(c, atk, { kiAtk: g.ki, area: g.area }), opciones), 0);
+      propio.set(c, v);
+    }
+    return v;
+  };
+  let mejor: ParadaArea | null = null;
+  let mejorNeto = 0;
+  for (const { b, t, radio } of candidatos) {
+    const cubiertos = blancos.filter((c) => c !== b && c.equipo === b.equipo && activo(c) && distancia(b, c) <= radio);
+    if (!cubiertos.length) continue;
+    const hab = defensaFinal(b, atk, { ki: vistaPrevia(b, t), kiAtk: g.ki, area: g.area });
+    let ahorro = solo(b) - valorGolpe(atk, b, pronostico(atk, b, habAtk, hab, opciones), 0);
+    for (const c of cubiertos) ahorro += solo(c) - valorGolpe(atk, c, pronostico(atk, c, habAtk, hab, opciones), 0);
+    const neto = ahorro - costoTecnica(b, atk, t);
+    if (neto > mejorNeto) {
+      mejor = { quien: b, tecnica: t, radio };
+      mejorNeto = neto;
+    }
+  }
   return mejor;
 }
 

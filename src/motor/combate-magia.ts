@@ -10,6 +10,7 @@ import { umbralPifia } from './reglas';
 import { activo, ataqueMagico, puedeActuar, distancia, enAlcance, nro, penAccion } from './calculos';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { dejarDeMantener, golpeDeConjuro, lanzar, pagarDeterminada, proyeccionDeterminada, RANURA_MAGIA } from './magia';
+import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { blancosConjuro, detonarMina, efecto, radioArea, type Lanzado, type Lanzamiento, type Motor } from './efectos';
 
@@ -78,7 +79,12 @@ export function lanzarConjuro(motor: Motor, ctx: Contexto, l: Luchador, x: Lanza
     for (const a of afectados) alTerminar(motor, l, a);
   };
   h.antesDelAtaque?.(motor, lanzado, afectados);
-  const blancos = h.blancos ? h.blancos(lanzado) : blancosConjuro(ctx, l, obj, c, g, !!x.control);
+  const alcanzados = h.blancos ? h.blancos(lanzado) : blancosConjuro(ctx, l, obj, c, g, !!x.control);
+  // Parada en área (Ki): quien cubre a sus aliados se defiende primero (Dominus p.58).
+  const paradaArea = animico ? null : ia.elegirParadaArea(ctx, l, alcanzados, habPara(obj), {
+    maniobra: 'normal', esContra: false, tipo: c.ta, ki: golpeDeConjuro(c, g), ...areaDeConjuro(l, obj, c, g),
+  });
+  const blancos = paradaArea ? [paradaArea.quien, ...alcanzados.filter((b) => b !== paradaArea.quien)] : alcanzados;
   const contras: { quien: Luchador; bono: number }[] = [];
   // Choque de descargas (Core p.117): el blanco puede interceptar un conjuro de ataque con el suyo.
   let factor = 1;
@@ -92,7 +98,7 @@ export function lanzarConjuro(motor: Motor, ctx: Contexto, l: Luchador, x: Lanza
     const base: Golpe = {
       maniobra: 'normal', esContra: false, tipo: animico ? 'ENE' : c.ta, ranura: RANURA_MAGIA,
       ki: golpeDeConjuro(c, g), aDistancia: !enAlcance(l, b), animico,
-      ...(factor !== 1 ? { factorDano: factor } : {}), ...areaDeConjuro(l, obj, c, g),
+      ...(factor !== 1 ? { factorDano: factor } : {}), ...areaDeConjuro(l, obj, c, g), ...(paradaArea ? { paradaArea } : {}),
     };
     const golpe = h.golpe ? h.golpe(lanzado, base) : base;
     const r = motor.resolverDefensa(ctx, l, b, habPara(b), t, golpe, etiqueta(b));

@@ -51,6 +51,11 @@ export interface ModKi {
   /** Previsión: cuánto del −90 de la Sorpresa por turno anula contra un rival, 45 o 90 (Dominus p.57). */
   prevision: number;
   defensasAdicionales: number;
+  /**
+   * Parada en área: radio en metros (0 si no hay). Una sola Parada cubre a los aliados del radio; contra
+   * un área sobrenatural hace falta parar energía (Dominus p.58).
+   */
+  paradaArea: number;
   turno: number;
   /** Armadura: TA contra todo, como capa adicional (Dominus p.60). */
   ta: number;
@@ -123,7 +128,7 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
   dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0,
-  accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, turno: 0, ta: 0, rf: 0,
+  accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, turno: 0, ta: 0, rf: 0,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
   interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
@@ -208,8 +213,9 @@ const CATALOGO: Record<string, DefEfecto> = {
   'prevision': { tipo: 'asalto', clase: 'variable', aplicar: (m, _v, o) => { m.prevision = Math.max(m.prevision, hay(o, /complet/) ? 90 : 45); } },
   'camuflar ataque': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.camuflar = Math.max(m.camuflar, v || dificultadDeTexto(o)); } },
   'defensa adicional': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('defensasAdicionales') },
+  'parada en area': { tipo: 'accion', clase: 'defensa', aplicar: (m, _v, o) => { m.paradaArea = Math.max(m.paradaArea, metrosDe(o)); } },
   'incrementar turno': { tipo: 'asalto', clase: 'variable', aplicar: SUMAR('turno') },
-  'ataque con area': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.area = Math.max(m.area, v); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
+  'ataque con area': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.area = Math.max(m.area, metrosDe(o)); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
   'ataque con area real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, v, o) => { m.area = Math.max(m.area, v); if (o.some((x) => /eleccion/.test(normalizarRasgo(x)))) m.eleccionBlanco = true; } },
   'destruir armadura': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { if (o.some((x) => /sin armadura/.test(normalizarRasgo(x)))) m.sinArmadura = true; else m.reduccionTA = Math.max(m.reduccionTA, v); } },
   'armadura': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('ta') },
@@ -351,6 +357,11 @@ function valorDe(opciones: string[]): number {
     if (n) return Number(n[1]);
   }
   return 0;
+}
+
+/** Un radio o una distancia en metros: "25 metros" → 25, "1 kilómetro" → 1000. */
+function metrosDe(opciones: string[]): number {
+  return valorDe(opciones) * (opciones.some((o) => /kil[oó]metro|\bkm\b/i.test(o)) ? 1000 : 1);
 }
 
 export interface EfectosTecnica {

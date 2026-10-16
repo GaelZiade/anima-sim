@@ -3,7 +3,7 @@
 
 import type { Conjuro } from './conjuros';
 import type { ModKi } from './ki';
-import type { Luchador } from './modelo';
+import type { Luchador, Tecnica } from './modelo';
 import type { EstadoMushin, Maniobra } from './maniobras';
 import type { Ranura } from './rasgos';
 import type { TipoAtaque } from './reglas';
@@ -14,6 +14,18 @@ export interface ResultadoDefensa {
   contra: number | null;
   /** El ataque lo alcanzó (resultado positivo), dañara o no. */
   impacto: boolean;
+}
+
+/**
+ * Parada en área (Dominus p.58): quien cubre se defiende primero con su técnica; su resultado vale
+ * para los aliados de su radio, que no se defienden.
+ */
+export interface ParadaArea {
+  quien: Luchador;
+  tecnica: Tecnica;
+  radio: number;
+  /** Ataque final menos su defensa final, una vez que se defendió. */
+  resultado?: number;
 }
 
 export interface Golpe {
@@ -42,6 +54,8 @@ export interface Golpe {
    */
   area?: number;
   centroArea?: { x: number; y: number };
+  /** Un blanco del área la cubre con su Parada en área. */
+  paradaArea?: ParadaArea;
 }
 
 /** Cómo se calcula un crítico. */
