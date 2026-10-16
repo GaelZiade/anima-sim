@@ -15,6 +15,8 @@ import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import type { ParadaArea } from './golpe';
+import { fichaConArmaKi } from './rotura';
+import { rpDe } from './magia';
 import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
@@ -2133,7 +2135,7 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
     const bono = ef.asalto.turno;
     const sube = ef.asalto;
     const generico = cambiaElAsalto(sube);
-    if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision && !generico) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
+    if ((!bono && !sube.intangible && !sube.accionesAdicionales && !sube.prevision && !generico && !sube.espejismos) || ef.clase !== 'variable' || enUso(l.ki, t) || !puedeEjecutar(l, t)) continue;
     // Intangibilidad (Dominus p.69): le ahorra lo que le pegarían este asalto quienes no dañan energía.
     let intangible = 0;
     if (ef.asalto.intangible) {
@@ -2142,7 +2144,7 @@ export function tecnicaDeTurno(ctx: Contexto, l: Luchador): Tecnica | null {
       if (ef.asalto.intangibleOtros) for (const a of aliadosIntangibles(ctx, l, ef.asalto.intangibleOtros * presenciaBase(l.ficha))) intangible += amenazaFisica(ctx, a);
     }
     const neto = (bono ? valorTurno(ctx, l, bono) : 0) + intangible + valorAccionAdicional(ctx, l, sube.accionesAdicionales) +
-      valorPrevision(ctx, l, sube.prevision) + (generico ? valorEfectosDeAsalto(ctx, l, sube) : 0) - costoTecnica(l, rivalPrincipal(ctx, l), t);
+      valorPrevision(ctx, l, sube.prevision) + (generico ? valorEfectosDeAsalto(ctx, l, sube) : 0) + valorEspejismo(ctx, l, sube) - costoTecnica(l, rivalPrincipal(ctx, l), t);
     if (neto > mejorNeto) {
       mejor = t;
       mejorNeto = neto;
@@ -2176,10 +2178,23 @@ function valorEfectosDeAsalto(ctx: Contexto, l: Luchador, asalto: ModKi): number
   if (!e) return 0;
   const antes = intercambio(ctx, l);
   const llegaba = new Set(enemigos(ctx, l).filter((x) => alcanzable(l, x)));
+  // Armas físicas de Ki: con el arma de la técnica en la mano (Dominus p.63).
+  const armada = asalto.armaKi >= 0 && !l.sinArmaKi ? fichaConArmaKi(l, asalto.armaKi) : null;
   return conCambio(() => {
     const previo = e.activo;
+    const ficha = l.ficha, cap = l.cap, desarmado = l.desarmado;
     e.activo = combinar(previo, asalto);
-    return () => { e.activo = previo; };
+    if (armada) {
+      l.ficha = armada;
+      l.cap = capacidades(armada);
+      l.desarmado = false;
+    }
+    return () => {
+      e.activo = previo;
+      l.ficha = ficha;
+      l.cap = cap;
+      l.desarmado = desarmado;
+    };
   }, () => {
     const d = intercambio(ctx, l);
     let v = d.hace - antes.hace + lambda(l) * (antes.recibe - d.recibe);
@@ -2190,7 +2205,26 @@ function valorEfectosDeAsalto(ctx: Contexto, l: Luchador, asalto: ModKi): number
 
 /** Los efectos de Asalto que valora `valorEfectosDeAsalto`. */
 function cambiaElAsalto(m: ModKi): boolean {
-  return !!(m.movimiento || m.visionNocturna || m.veEnergia || m.rm || m.rf || m.capacidad.length || m.lentitud);
+  return !!(m.movimiento || m.visionNocturna || m.veEnergia || m.rm || m.rf || m.capacidad.length || m.lentitud) || m.armaKi >= 0;
+}
+
+/**
+ * Espejismo (Dominus p.65-66): de cada golpe que le tiren quienes no las descubren, n de cada n+1
+ * van a una ilusión; y si son fantasmales, cada una le pega a su blanco y le hace daño si falla la RP.
+ */
+function valorEspejismo(ctx: Contexto, l: Luchador, m: ModKi): number {
+  if (!m.espejismos) return 0;
+  const n = m.espejismos;
+  let v = 0;
+  for (const e of enemigos(ctx, l)) {
+    const ve = e.cap.est.veEnergia || !!e.ki?.activo.veEnergia || (e.cap.est.deteccionKi && !m.espejismoIndeteccion);
+    if (!ve && alcanzable(e, l)) v += lambda(l) * amenaza(e, l) * n / (n + 1);
+  }
+  const rival = rivalPrincipal(ctx, l);
+  if (m.espejismoFantasmal && rival && alcanzable(l, rival)) {
+    v += n * 0.5 * fallaResistencia(rpDe(rival), m.espejismoFantasmal).p * amenaza(l, rival) / Math.max(1, l.ataquesDeclarados || 1);
+  }
+  return v;
 }
 
 /** Acción adicional (Dominus p.56-57): el −25 que se ahorra en sus ataques si tiene que levantarse o moverse con acción activa. */

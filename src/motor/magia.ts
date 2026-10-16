@@ -336,6 +336,11 @@ export function rmDe(l: Luchador): number {
   return (l.ficha.rm ?? presenciaDe(l) + bonoCaracteristica(atributo(l, 'POD'))) + (l.ki?.activo.rm ?? 0);
 }
 
+/** RP: Presencia + bono de Voluntad (Core p.12), con el Incremento de Resistencia Psíquica del Ki. */
+export function rpDe(l: Luchador): number {
+  return presenciaDe(l) + bonoCaracteristica(atributo(l, 'VOL')) + (l.ki?.activo.rp ?? 0);
+}
+
 /** Presencia: la de la planilla, o la que deja la RF sin el bono de Constitución (Core p.12). */
 export function presenciaDe(l: Luchador): number {
   return l.ficha.presencia ?? Math.max(0, l.ficha.rf - bonoCaracteristica(atributo(l, 'CON')));

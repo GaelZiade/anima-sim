@@ -3,9 +3,10 @@
 // Mushin. Recibe el motor por `Motor`, como los efectos de conjuro.
 
 import type { Contexto, Luchador, Tecnica } from './modelo';
+import { fichaConArmaKi } from './rotura';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { resultadoResistencia, umbralPifia } from './reglas';
-import { activo, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe } from './calculos';
+import { activo, ataqueFinal, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe, proximaRanura } from './calculos';
 import { atributo, capacidad, controlEnfrentado, dificultadPuntosPresion, type EstadoMushin } from './maniobras';
 import type { Golpe } from './golpe';
 import { imponer, nivelCondicion } from './condiciones';
@@ -357,3 +358,91 @@ export function detectarPresencias(motor: Motor, ctx: Contexto) {
   }
 }
 
+
+// --------------------------------------------------------------------------- efectos de Asalto con estado
+
+/**
+ * Lo que dejan los efectos de Asalto activos, al ejecutar una técnica y al empezar cada asalto:
+ * - Espejismo: aparecen sus ilusiones; cada rival que ve la energía, o que detecta el Ki y supera la
+ *   Indetección, las descubre. Al terminar la técnica se desvanecen (Dominus p.65-66).
+ * - Armas físicas de Ki: empuña su arma (aunque lo hayan desarmado) con la calidad de la técnica; al
+ *   terminar, vuelve a como estaba (Dominus p.63).
+ * - Intangibilidad con Afectar a otros: los aliados que elige (Dominus p.69).
+ */
+export function efectosDeAsalto(motor: Motor, ctx: Contexto, l: Luchador, recienEjecutada: boolean) {
+  const ki = l.ki?.activo;
+  if (l.espejismos && !ki?.espejismos) {
+    l.espejismos = null;
+    motor.log(ctx, () => `  Las ilusiones de ${l.ficha.nombre} se desvanecen.`);
+  } else if (ki?.espejismos && !l.espejismos && recienEjecutada) crearEspejismos(motor, ctx, l, ki);
+  if (l.sinArmaKi && (!ki || ki.armaKi < 0)) {
+    const { ficha, desarmado } = l.sinArmaKi;
+    l.sinArmaKi = null;
+    motor.cambiarFicha(l, ficha);
+    l.desarmado = desarmado;
+    motor.log(ctx, () => `  El arma de Ki de ${l.ficha.nombre} desaparece.`);
+  } else if (ki && ki.armaKi >= 0 && !l.sinArmaKi && recienEjecutada) {
+    const armada = fichaConArmaKi(l, ki.armaKi);
+    if (armada) {
+      l.sinArmaKi = { ficha: l.ficha, desarmado: l.desarmado };
+      motor.cambiarFicha(l, armada);
+      l.desarmado = false;
+      motor.log(ctx, () => `  ${l.ficha.nombre} empuña un arma de Ki de calidad +${ki.armaKi}.`);
+    }
+  }
+  if (recienEjecutada && ki?.intangibleOtros) {
+    for (const a of ia.aliadosIntangibles(ctx, l, ki.intangibleOtros * presenciaBase(l.ficha))) {
+      if (a.intangiblePor === l) continue;
+      a.intangiblePor = l;
+      motor.log(ctx, () => `  ${a.ficha.nombre} también se vuelve intangible.`);
+    }
+  }
+}
+
+function crearEspejismos(motor: Motor, ctx: Contexto, l: Luchador, ki: ModKi) {
+  const descubren = new Set<Luchador>();
+  for (const e of ctx.luchadores) {
+    if (e.equipo === l.equipo || !activo(e)) continue;
+    if (e.cap.est.veEnergia || e.ki?.activo.veEnergia) descubren.add(e);
+    else if (e.cap.est.deteccionKi) {
+      // Detección del Ki contra la Indetección; sin ella, quien detecta el Ki las descubre.
+      const base = Math.floor(((e.ficha.cm ?? 0) + (e.ficha.advertir ?? 0)) / 2);
+      const t = motor.tirar(ctx, umbralPifia(base, e.cap.ajustePifia));
+      if (!ki.espejismoIndeteccion || (!t.pifia && base - penAccion(e) + t.valor >= ki.espejismoIndeteccion)) descubren.add(e);
+    }
+  }
+  l.espejismos = { n: ki.espejismos, indeteccion: ki.espejismoIndeteccion, fantasmal: ki.espejismoFantasmal, descubren };
+  const vistos = [...descubren].map((x) => x.ficha.nombre).join(', ');
+  motor.log(ctx, () => `  Aparecen ${ki.espejismos} ilusiones de ${l.ficha.nombre}${vistos ? ` (${vistos} las descubre${descubren.size > 1 ? 'n' : ''})` : ''}.`);
+}
+
+/**
+ * Espejismo: quien no las descubrió no sabe cuál es el verdadero; el ataque va a uno al azar, y si es
+ * una ilusión, la deshace. Devuelve si el ataque se lo llevó una ilusión.
+ */
+export function golpeAIlusion(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador): boolean {
+  const e = def.espejismos;
+  if (!e?.n || e.descubren.has(atk) || atk.cap.est.veEnergia || atk.ki?.activo.veEnergia) return false;
+  if (ctx.rng.next() * (e.n + 1) < 1) return false;
+  e.n--;
+  motor.log(ctx, () => `${atk.ficha.nombre} ataca a una ilusión de ${def.ficha.nombre}, que se deshace (le quedan ${e.n}).`);
+  return true;
+}
+
+/**
+ * Las ilusiones atacan cada una a su blanco, con su habilidad (un ataque natural). Quien las descubrió
+ * no se defiende de ellas. Si alcanzan, no hacen nada, salvo las fantasmales a quien falle la RP
+ * (Dominus p.65-66).
+ */
+export function ataquesDeIlusiones(motor: Motor, ctx: Contexto, l: Luchador, blanco: Luchador | null) {
+  const e = l.espejismos;
+  if (!e?.n || !blanco || !activo(blanco) || !enAlcance(l, blanco) || e.descubren.has(blanco)) return;
+  const ranura = proximaRanura(l);
+  for (let i = 0; i < e.n && activo(blanco) && activo(l); i++) {
+    const hab = ataqueFinal(l, blanco, { ranura });
+    const t = motor.tirar(ctx, l.cap.umbralAtaque);
+    if (t.pifia) continue;
+    const golpe: Golpe = { maniobra: 'normal', esContra: false, ranura, ilusion: { fantasmal: e.fantasmal } };
+    motor.resolverDefensa(ctx, l, blanco, hab, t, golpe, `Una ilusión de ${l.ficha.nombre} ataca a ${blanco.ficha.nombre}`);
+  }
+}

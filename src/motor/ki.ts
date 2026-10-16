@@ -111,6 +111,15 @@ export interface ModKi {
   impacto: number;
   atraer: boolean;
   /** Apresamiento: Presa sin penalizador con este valor de característica (Dominus p.64). */
+  /**
+   * Espejismo (Dominus p.65): cuántas ilusiones de sí mismo, la dificultad de Indetección (0: quien
+   * detecta el Ki las descubre) y la RP de las Ilusiones fantasmales (0: no dañan).
+   */
+  espejismos: number;
+  espejismoIndeteccion: number;
+  espejismoFantasmal: number;
+  /** Armas físicas de Ki: calidad del arma que crea (−1 si no crea ninguna, Dominus p.63). */
+  armaKi: number;
   /** Choque físico: la técnica puede interceptar una descarga como una a distancia (Dominus p.65). */
   choqueFisico: boolean;
   apresamiento: number;
@@ -185,7 +194,7 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
   visionNocturna: false, veEnergia: false,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
-  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
+  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, espejismos: 0, espejismoIndeteccion: 0, espejismoFantasmal: 0, armaKi: -1, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
   interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, intangibleOtros: 0, fusion: false, reflectar: false, reflectarEligeBlanco: false, reflectarEsoterico: false, absorcionKi: 0, indirecto: false,
   danoReducido: 0, soloContra: '',
 });
@@ -297,6 +306,8 @@ const CATALOGO: Record<string, DefEfecto> = {
   'marca menor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 20); } },
   'marca mayor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 50); } },
   'impacto': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.impacto = Math.max(m.impacto, v); if (hay(o, /atraer/)) m.atraer = true; } },
+  'espejismo': { tipo: 'asalto', clase: 'variable', aplicar: espejismo },
+  'armas fisicas de ki': { tipo: 'asalto', clase: 'variable', aplicar: (m, v) => { m.armaKi = Math.max(m.armaKi, v); } },
   'choque fisico': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.choqueFisico = true; } },
   'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.apresamiento = Math.max(m.apresamiento, v); if (hay(o, /existencial/)) m.presaExistencial = true; } },
   'estados sobrenaturales': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.estados = [...m.estados, ...leerEstados(o)]; } },
@@ -419,6 +430,15 @@ function intangibilidad(m: ModKi, _v: number, o: string[]) {
   if (hay(o, /presencia extendida/)) m.intangibleOtros = 5;
   else if (hay(o, /afectar a otros|presencia simple/)) m.intangibleOtros = Math.max(m.intangibleOtros, 1);
   if (hay(o, /fusion/)) m.fusion = true;
+}
+
+/** Espejismo: cuántos, con Indetección (su dificultad) e Ilusiones fantasmales (la RP) (Dominus p.65-66). */
+function espejismo(m: ModKi, _v: number, o: string[]) {
+  const ventaja = /deteccion|indeteccion|fantasmal|rp|aspecto/;
+  m.espejismos = Math.max(m.espejismos, valorDe(o.filter((x) => !ventaja.test(normalizarRasgo(x)))) || 1);
+  const ind = o.filter((x) => /deteccion|indeteccion/.test(normalizarRasgo(x)));
+  if (ind.length) m.espejismoIndeteccion = Math.max(m.espejismoIndeteccion, dificultadDeTexto(ind));
+  m.espejismoFantasmal = Math.max(m.espejismoFantasmal, valorEn(o, /fantasmal|\brp\b/));
 }
 
 /** El número de la opción que dice `re` ("Regeneración 100" → 100), o 0. */
@@ -628,6 +648,18 @@ function leerDesventaja(d: Desventajas, nombre: string, opciones: string[]): boo
 
 const efectosCache = new WeakMap<Tecnica, EfectosTecnica>();
 
+/**
+ * Un efecto escrito como en el libro, con el valor en el nombre ("Armadura 4", "1 Espejismo",
+ * "Ataque a distancia 100 metros", "Armas físicas de Ki calidad +10"): el valor pasa a las opciones.
+ */
+function conValorAparte(e: EfectoTecnica): EfectoTecnica {
+  if (CATALOGO[normalizarRasgo(e.nombre)]) return e;
+  const delante = /^(\d+)\s+(.+)$/.exec(e.nombre);
+  const detras = /^(.+?)\s+((?:calidad\s+)?[+\-x]?\d[\d.]*(?:\s*(?:metros?|kil[oó]metros?|km))?)$/i.exec(e.nombre);
+  const [nombre, valor] = delante ? [delante[2], delante[1]] : detras ? [detras[1], detras[2]] : [e.nombre, ''];
+  return valor && CATALOGO[normalizarRasgo(nombre)] ? { ...e, nombre, opciones: [valor, ...e.opciones] } : e;
+}
+
 /** Efectos de una técnica, ya interpretados. */
 export function efectosDe(t: Tecnica): EfectosTecnica {
   let r = efectosCache.get(t);
@@ -637,7 +669,8 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
   const clases = new Set<Clase>();
   const desconocidos: string[] = [];
   let desventajas = SIN_DESVENTAJAS;
-  for (const e of t.efectos) {
+  for (const e0 of t.efectos) {
+    const e = conValorAparte(e0);
     const nombre = normalizarRasgo(e.nombre);
     const def = CATALOGO[nombre];
     if (!def) {

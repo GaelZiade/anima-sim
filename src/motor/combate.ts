@@ -24,7 +24,7 @@ import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, fusion, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, ataquesDeIlusiones, destruccionPorKi, detectarPresencias, efectosAlImpactar, efectosDeAsalto, estadosAutomaticos, fusion, golpeAIlusion, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
 } from './combate-ki';
 import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
@@ -32,7 +32,7 @@ import { cruzarMuros, transportar, type Motor } from './efectos';
 import { GRADOS } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
-  rmDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
+  rmDe, rpDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, presenciaBase, efectosDe, cumpleCircunstancias, defensaSirve,
+  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, efectosDe, cumpleCircunstancias, defensaSirve,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, intangiblePor: null, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, intangiblePor: null, espejismos: null, fichaArmada: null, sinArmaKi: null, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -329,6 +329,7 @@ function jugarAsalto(ctx: Contexto) {
       const auraAntes = l.ki.auraActiva;
       const cansancioAntes = l.cansancio;
       empezarAsalto(l, decision, penAccion(l), ctx.asalto);
+      efectosDeAsalto(MOTOR, ctx, l, false);
       if (l.ki.armaduraActiva && !armaduraAntes) log(ctx, () => `${l.ficha.nombre} enciende su Armadura de energía (TA ${taEnergia(l)} contra energía) [reserva ${l.ki!.reserva}].`);
       if (!l.ki.armaduraActiva && armaduraAntes) log(ctx, () => `${l.ficha.nombre} apaga su Armadura de energía.`);
       if (l.ki.auraActiva && !auraAntes) log(ctx, () => `${l.ficha.nombre} desencadena su Aura de combate (dificultad ${dificultadAura(l, penAccion(l))}, ${radioAura(l)} m) [reserva ${l.ki!.reserva}].`);
@@ -341,12 +342,7 @@ function jugarAsalto(ctx: Contexto) {
         l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
         log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre} [Ki ${textoKi(l)}].`);
         trasLaTecnica(ctx, l);
-        // Intangibilidad con Afectar a otros: también a los aliados que elija (Dominus p.69).
-        const otros = l.ki!.activo.intangibleOtros;
-        if (otros) for (const a of ia.aliadosIntangibles(ctx, l, otros * presenciaBase(l.ficha))) {
-          a.intangiblePor = l;
-          log(ctx, () => `  ${a.ficha.nombre} también se vuelve intangible.`);
-        }
+        efectosDeAsalto(MOTOR, ctx, l, true);
       }
     }
   }
@@ -503,6 +499,8 @@ function turno(ctx: Contexto, l: Luchador) {
       }
       atacar(ctx, l, obj, { esContra: false, bono: 0 });
     }
+    // Espejismo: sus ilusiones atacan a su blanco (Dominus p.65).
+    if (l.espejismos?.n && puedeActuar(l)) ataquesDeIlusiones(MOTOR, ctx, l, ia.elegirObjetivo(ctx, l));
     // Apuntar se pierde si hace otra cosa (Tabla 47).
     if (!l.disparo) l.apuntando = null;
     // Sin ataques pero sin trabarse: igual se acerca (salvo quien usó un arma a distancia).
@@ -726,6 +724,11 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   ctx.ataquesEnAsalto++;
   atk.stats.ataquesHechos++;
   if (a.esContra) atk.stats.contrasHechas++;
+  // Espejismo: puede que ataque a una ilusión (Dominus p.65).
+  if (golpeAIlusion(MOTOR, ctx, atk, def)) {
+    if (!a.esContra || !atk.cap.est.contrasIlimitadas) atk.ataquesRestantes--;
+    return;
+  }
   // Atacar es hacer otra cosa que lanzar: si acumulaba magia, este asalto acumula la mitad (Core p.117).
   hacerOtraAccion(atk);
 
@@ -759,6 +762,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   if (plan.tecnica) {
     ki = ejecutar(atk, plan.tecnica);
     atk.stats.tecnicas[plan.tecnica.nombre] = (atk.stats.tecnicas[plan.tecnica.nombre] ?? 0) + 1;
+    efectosDeAsalto(MOTOR, ctx, atk, true);
   } else ki = modDeAccion(atk, 'ataque', true);
   // Ataque especializado: contra otra clase de defensa la técnica no tiene ningún efecto (Dominus p.72).
   if (ki?.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) ki = atk.ki?.activo;
@@ -1294,6 +1298,7 @@ function defenderse(
   if (tecnica) {
     kiDef = ejecutar(quienDefiende, tecnica);
     quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+    efectosDeAsalto(MOTOR, ctx, quienDefiende, true);
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
   const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk, o.ki) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined, area: o.area, centroArea: o.centroArea }) - (proteccion?.pen ?? 0) - trasAtrapar;
   quienDefiende.previenePendiente.delete(atk);
@@ -1392,6 +1397,11 @@ function golpeRecibido(
   ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, resultado: number, baseTrasEscudo: number, tipoGolpe: TipoAtaque,
   resiste: boolean, sacrificio: number,
 ): ResultadoDefensa {
+  // El golpe de una ilusión no hace nada, salvo si es fantasmal y falla la RP (Dominus p.66).
+  if (o.ilusion && (!o.ilusion.fantasmal || !controlResistencia(ctx, def, 'RP', rpDe(def), o.ilusion.fantasmal, 'la ilusión fantasmal').falla)) {
+    log(ctx, () => `  El golpe es ilusorio: no le hace nada.`);
+    return { defensor: def, contra: null, impacto: false };
+  }
 
 
   // Conjuro anímico (Core p.122): alcanza si logra un resultado de daño contra la TA de energía; en
@@ -1532,6 +1542,7 @@ function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derrib
 /** Lo desarman: pasa a pelear con su perfil sin armas (Core p.92). */
 function desarmar(ctx: Contexto, l: Luchador, por: Luchador) {
   if (l.desarmado || l.cap.desarmado) return;
+  l.fichaArmada = l.ficha;
   const s = l.ficha.sinArmas;
   l.desarmado = true;
   l.ficha = {

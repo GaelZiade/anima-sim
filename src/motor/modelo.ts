@@ -456,6 +456,15 @@ export interface Luchador {
   camuflajeConocido: Map<Luchador, 'visto' | 'superado'>;
   /** Transporte automático: cuántas veces vio cada rival que se transporta para atacarlo (Dominus p.59). */
   transportesVistos: Map<Luchador, number>;
+  /**
+   * Espejismo (Ki): ilusiones de sí mismo que le quedan, su Indetección, la RP de las fantasmales y
+   * quiénes ya las descubrieron (Dominus p.65-66).
+   */
+  espejismos: { n: number; indeteccion: number; fantasmal: number; descubren: Set<Luchador> } | null;
+  /** La ficha armada que tenía antes de que lo desarmaran (un Arma física de Ki la imita). */
+  fichaArmada: Ficha | null;
+  /** Arma física de Ki en la mano: la ficha y si estaba desarmado antes de crearla (Dominus p.63). */
+  sinArmaKi: { ficha: Ficha; desarmado: boolean } | null;
   /** Intangible por la técnica de un aliado (Afectar a otros), mientras éste la mantenga (Dominus p.69). */
   intangiblePor: Luchador | null;
   /** Lo atrapó una Presa existencial: controla con su Poder y no se libra con transportes (Dominus p.64). */

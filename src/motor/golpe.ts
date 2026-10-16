@@ -54,6 +54,8 @@ export interface Golpe {
    */
   area?: number;
   centroArea?: { x: number; y: number };
+  /** El golpe de una ilusión (Espejismo): no hace nada, salvo si es fantasmal y falla la RP (Dominus p.66). */
+  ilusion?: { fantasmal: number };
   /** Un blanco del área la cubre con su Parada en área. */
   paradaArea?: ParadaArea;
 }

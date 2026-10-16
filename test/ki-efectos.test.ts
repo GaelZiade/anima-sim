@@ -705,3 +705,41 @@ describe('desventajas que faltaban (Dominus p.71-75)', () => {
     expect(atk.estado).toBe('muerto');
   });
 });
+
+describe('Espejismo y Armas físicas de Ki (Dominus p.63-66)', () => {
+  it('lectura, también con el valor en el nombre como en el libro', () => {
+    const e = efectosDe({ nombre: 'E', nivel: 2, cm: 0, coste: {}, mantenimiento: 0, combinable: false, efectos: leerEfectosTecnica('Espejismo 4 (Detección dificultad: Inhumano, Ilusión Fantasmal RP 180), Armas físicas de Ki calidad +10 (1 Arma adicional), Armadura 4 (Inmodificable)') });
+    expect(e.desconocidos).toEqual([]);
+    expect(e.asalto).toMatchObject({ espejismos: 4, espejismoIndeteccion: 320, espejismoFantasmal: 180, armaKi: 10, ta: 4, taInmodificable: true });
+  });
+
+  it('Espejismo: los ataques de quien no las descubre a veces van a una ilusión; quien ve la energía, no', () => {
+    const t = tecnica('Sombras', 'Espejismo (4)', { DES: 1 });
+    let ilusiones = 0;
+    let conVision = 0;
+    for (let s = 1; s <= 8; s++) {
+      for (const vision of [false, true]) {
+        const r = simularCombate(
+          [maestro([t], { id: 'm', nombre: 'Mago' })],
+          [rival({ id: 'r', nombre: 'Rival', rasgos: vision ? { ventajas: ['Ver lo sobrenatural'] } : {} })],
+          { semilla: s, registrar: true, maxAsaltos: 3 },
+        );
+        const n = r.registro!.filter((x) => x.texto.includes('ataca a una ilusión de Mago')).length;
+        if (vision) conVision += n;
+        else ilusiones += n;
+      }
+    }
+    expect(ilusiones).toBeGreaterThan(0);
+    expect(conVision).toBe(0);
+  });
+
+  it('Armas físicas de Ki: desarmado, vuelve a empuñar su arma con la calidad de la técnica', async () => {
+    const { fichaConArmaKi } = await import('../src/motor/rotura');
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')], { arma: { nombre: 'Espada', calidad: 0 } }), 'A', 0, 0);
+    const armado = l.ficha;
+    l.fichaArmada = armado;
+    l.desarmado = true;
+    const f = fichaConArmaKi(l, 10)!;
+    expect([f.ataque, f.danoBase, f.arma!.calidad]).toEqual([armado.ataque + 10, armado.danoBase + 20, 10]);
+  });
+});

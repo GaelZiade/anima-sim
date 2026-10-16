@@ -1,6 +1,6 @@
 // Rotura y entereza de armas y armaduras (Core p.93, regla opcional).
 
-import type { Contexto, Luchador } from './modelo';
+import type { Contexto, Ficha, Luchador } from './modelo';
 import { dado } from './rng';
 import { capacidades, localizacionArmadura, type Ranura } from './rasgos';
 import { esMaestro } from './reglas';
@@ -76,17 +76,37 @@ export function romperArma(motor: Motor, ctx: Contexto, l: Luchador) {
     motor.desarmar(ctx, l, l);
     return;
   }
-  const paraConEsta = (l.ficha.tipoDefensa ?? 'parada') === 'parada';
-  l.ficha = {
-    ...l.ficha,
-    ataque: l.ficha.ataque - 5,
-    defensa: l.ficha.defensa - (paraConEsta ? 5 : 0),
-    turno: l.ficha.turno - 5,
-    danoBase: l.ficha.danoBase - 10,
-    arma: { ...arma, calidad: calidad - 5, rotura: (arma.rotura ?? 0) - 2, entereza: (arma.entereza ?? 10) - 10 },
-  };
+  l.ficha = fichaConCalidad(l.ficha, calidad - 5);
   l.cap = capacidades(l.ficha);
   motor.log(ctx, () => `  El arma de ${l.ficha.nombre} se mella: baja a calidad +${calidad - 5}.`);
+}
+
+/**
+ * La ficha con su arma de otra calidad: por cada 5, ±5 al ataque, a la parada (si para con ella) y al
+ * turno, ±10 al daño, ±2 a la rotura y ±10 a la entereza (Core p.76, Tabla 30).
+ */
+export function fichaConCalidad(f: Ficha, calidad: number): Ficha {
+  const arma = f.arma ?? {};
+  const g = (calidad - (arma.calidad ?? 0)) / 5;
+  if (!g) return f;
+  const paraConEsta = (f.tipoDefensa ?? 'parada') === 'parada';
+  return {
+    ...f,
+    ataque: f.ataque + 5 * g,
+    defensa: f.defensa + (paraConEsta ? 5 * g : 0),
+    turno: f.turno + 5 * g,
+    danoBase: f.danoBase + 10 * g,
+    arma: { ...arma, calidad, rotura: (arma.rotura ?? 0) + 2 * g, entereza: (arma.entereza ?? 10) + 10 * g },
+  };
+}
+
+/**
+ * Armas físicas de Ki (Dominus p.63): la ficha con su arma (la que tenía si lo desarmaron o se la
+ * rompieron) de la calidad de la técnica; null si nunca tuvo una.
+ */
+export function fichaConArmaKi(l: Luchador, calidad: number): Ficha | null {
+  const base = l.desarmado || l.cap.desarmado ? l.fichaArmada ?? l.armaRota : l.ficha;
+  return base && !base.arma?.desarmado ? fichaConCalidad(base, calidad) : null;
 }
 
 /**
