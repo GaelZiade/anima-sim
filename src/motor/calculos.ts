@@ -663,6 +663,9 @@ function reduccionHakyoukuken(def: Luchador, atk: Luchador, t: TipoAtaque, zona:
 }
 
 /** Daño base de este ataque: Godhand, Kung Fu en daño y Aikido en las contras. */
+/** Tipos de ataque elementales: los de Fuego, Aire y Agua (Dominus p.63). */
+const ELEMENTALES: ReadonlySet<TipoAtaque> = new Set(['CAL', 'ELE', 'FRI']);
+
 export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?: Ranura, ki: ModKi | undefined = atk.ki?.activo): number {
   const e = atk.cap.est;
   let arma = perfilDe(atk, ranura ?? proximaRanura(atk)).danoBase;
@@ -673,6 +676,10 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     if (ki.danoFijo) arma = ki.danoFijo;
     if (ki.area || ki.distancia) arma = Math.max(arma, 2 * (atk.ficha.presencia ?? 0) + bonoCaracteristica(atributo(atk, 'POD')));
     arma = arma * ki.multDano + ki.dano;
+    // Dañar energía o Ataque elemental en quien ya lo hace por sí mismo (su habilidad o su arma): +10
+    // al daño base de la técnica (Dominus p.63).
+    if (ki.danaEnergia && atk.cap.danaEnergia) arma += 10;
+    if (ki.elemento && ELEMENTALES.has(perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque)) arma += 10;
   }
   let d = arma + bonoVariable(atk, 'dano');
   // Conjuros de Guerra (Destrucción Desencadenada, Campeón): al daño de sus ataques, no de los conjuros.

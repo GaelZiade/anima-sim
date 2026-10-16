@@ -105,7 +105,11 @@ export interface ModKi {
   impacto: number;
   atraer: boolean;
   /** Apresamiento: Presa sin penalizador con este valor de característica (Dominus p.64). */
+  /** Choque físico: la técnica puede interceptar una descarga como una a distancia (Dominus p.65). */
+  choqueFisico: boolean;
   apresamiento: number;
+  /** Presa existencial: el apresado controla con su Poder y no se libra con transportes (Dominus p.64). */
+  presaExistencial: boolean;
   /** Estados sobrenaturales (Dominus p.66): cada uno con su RF. */
   estados: readonly EstadoSobrenatural[];
   /** Interrupción del Ki: RF contra el daño más este valor (Dominus p.69). */
@@ -113,8 +117,11 @@ export interface ModKi {
   interrupcion: number;
   /** Escudo de energía: resistencia del escudo (Dominus p.66). */
   escudo: number;
+  /** Regeneración del Escudo o la Acumulación mantenidos: lo que recuperan cada asalto (Dominus p.65-66). */
+  regeneraEscudo: number;
   /** Acumulación: PV de pantalla y TA natural 4 (Dominus p.65). */
   pantalla: number;
+  regeneraPantalla: number;
   /** Intangibilidad: los ataques que no son de energía lo atraviesan (Dominus p.69). */
   intangible: boolean;
   /** Reflectar el ataque: una defensa con éxito lo devuelve (Dominus p.71). */
@@ -163,8 +170,8 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
   visionNocturna: false, veEnergia: false,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
-  atraer: false, apresamiento: 0, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
-  interrupcion: 0, escudo: 0, pantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
+  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false,
+  interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, reflectar: false, absorcionKi: 0, indirecto: false,
   danoReducido: 0, soloContra: '',
 });
 
@@ -275,11 +282,12 @@ const CATALOGO: Record<string, DefEfecto> = {
   'marca menor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 20); } },
   'marca mayor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 50); } },
   'impacto': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.impacto = Math.max(m.impacto, v); if (hay(o, /atraer/)) m.atraer = true; } },
-  'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('apresamiento') },
+  'choque fisico': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.choqueFisico = true; } },
+  'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.apresamiento = Math.max(m.apresamiento, v); if (hay(o, /existencial/)) m.presaExistencial = true; } },
   'estados sobrenaturales': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.estados = [...m.estados, ...leerEstados(o)]; } },
   'interrupcion': { tipo: 'accion', clase: 'ataque', aplicar: (m, v) => { m.interrumpe = true; m.interrupcion = Math.max(m.interrupcion, v); } },
-  'escudo de energia': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('escudo') },
-  'acumulacion': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v) => { m.pantalla = Math.max(m.pantalla, v); m.ta = Math.max(m.ta, 4); } },
+  'escudo de energia': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v, o) => { m.escudo = Math.max(m.escudo, v); m.regeneraEscudo = Math.max(m.regeneraEscudo, valorEn(o, /regeneracion/)); } },
+  'acumulacion': { tipo: 'asalto', clase: 'defensa', aplicar: (m, v, o) => { m.pantalla = Math.max(m.pantalla, v); m.ta = Math.max(m.ta, 4); m.regeneraPantalla = Math.max(m.regeneraPantalla, valorEn(o, /regeneracion/)); } },
   'intangibilidad': { tipo: 'asalto', clase: 'variable', aplicar: (m) => { m.intangible = true; } },
   'reflectar el ataque': { tipo: 'accion', clase: 'defensa', aplicar: (m) => { m.reflectar = true; } },
   'absorcion de ki': { tipo: 'accion', clase: 'defensa', aplicar: (m, v) => { m.absorcionKi = Math.max(m.absorcionKi, v || Infinity); } },
@@ -366,6 +374,22 @@ export function conIncremento(base: number, bono: number): number {
   if (!bono) return base;
   const total = base + bono;
   return total <= 200 ? total : Math.max(base, 200) + Math.floor((total - Math.max(base, 200)) / 2);
+}
+
+/** El número de la opción que dice `re` ("Regeneración 100" → 100), o 0. */
+function valorEn(opciones: string[], re: RegExp): number {
+  const o = opciones.find((x) => re.test(normalizarRasgo(x)));
+  return o ? valorDe([o]) : 0;
+}
+
+/**
+ * Técnica de Apresamiento Mantenida: mientras la mantiene, sostiene la presa con el valor de la técnica
+ * (Dominus p.65). 0 si no mantiene ninguna.
+ */
+export function apresamientoMantenido(l: Luchador): number {
+  let v = 0;
+  if (l.ki) for (const t of l.ki.mantenidas.keys()) v = Math.max(v, efectosDe(t).accion.apresamiento);
+  return v;
 }
 
 /** Ataque a distancia: el alcance y las ventajas Proyección y Estela de destrucción (Dominus p.57-58). */
@@ -923,8 +947,11 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
       e.activo = combinar(e.activo, efectosDe(t).asalto);
     } else e.mantenidas.delete(t);
   }
-  // Escudo y Acumulación duran el asalto; si se mantienen, conservan el daño sufrido (Dominus p.65-66).
+  // Escudo y Acumulación duran el asalto; si se mantienen, conservan el daño sufrido, salvo lo que
+  // recuperen por Regeneración al empezar el asalto (Dominus p.65-66).
   if (!e.activo.escudo) l.escudoKi = 0;
+  else if (l.escudoKi > 0 && e.activo.regeneraEscudo) l.escudoKi = Math.min(e.activo.escudo, l.escudoKi + e.activo.regeneraEscudo);
+  if (e.activo.pantalla && l.pantallaKi > 0 && e.activo.regeneraPantalla) l.pantallaKi = Math.min(e.activo.pantalla, l.pantallaKi + e.activo.regeneraPantalla);
   if (!e.activo.pantalla && e.pantallaConvirtio) {
     l.pantallaKi = 0;
     acumulacionKi(l, e, false);

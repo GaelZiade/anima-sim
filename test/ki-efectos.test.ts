@@ -476,3 +476,62 @@ describe('entereza, armadura e incrementos (Dominus p.60-62)', () => {
     expect(conIncremento(50, 100)).toBe(150);
   });
 });
+
+describe('efectos variados (Dominus p.63-66)', () => {
+  it('Dañar energía y Ataque elemental: +10 al daño base si ya lo hacía por sí mismo', async () => {
+    const { danoBase } = await import('../src/motor/calculos');
+    const { SIN_KI } = await import('../src/motor/ki');
+    const def = crearLuchador(rival(), 'B', 1, 0);
+    const comun = crearLuchador(rival(), 'A', 0, 0);
+    const fuego = crearLuchador(rival({ tipoAtaque: 'CAL' }), 'A', 0, 0);
+    const base = danoBase(comun, def, false, undefined, SIN_KI);
+    expect(danoBase(comun, def, false, undefined, { ...SIN_KI, elemento: 'CAL' })).toBe(base);
+    expect(danoBase(fuego, def, false, undefined, { ...SIN_KI, elemento: 'CAL' })).toBe(base + 10);
+    expect(danoBase(comun, def, false, undefined, { ...SIN_KI, danaEnergia: true })).toBe(base);
+  });
+
+  it('Regeneración: el escudo mantenido recupera al empezar el asalto, sin pasar su resistencia', () => {
+    const t = tecnica('Muro', 'Escudo de energia (300, Regeneracion 100)', { DES: 1 }, { mantenimiento: 1 });
+    expect(efectosDe(t).asalto).toMatchObject({ escudo: 300, regeneraEscudo: 100 });
+    expect(efectosDe(tecnica('P', 'Acumulacion (200, Regeneracion 50)')).asalto).toMatchObject({ pantalla: 200, regeneraPantalla: 50 });
+    const l = crearLuchador(maestro([t]), 'A', 0, 0);
+    l.ki!.acumulado = { DES: 5 };
+    ejecutar(l, t);
+    l.escudoKi = 120;
+    empezarAsalto(l, decision(), 0, 2);
+    expect(l.escudoKi).toBe(220);
+    empezarAsalto(l, decision(), 0, 3);
+    expect(l.escudoKi).toBe(300);
+  });
+
+  it('Presa existencial: el apresado controla con su Poder; la técnica mantenida sostiene la presa', async () => {
+    const { caracteristicasControl } = await import('../src/motor/maniobras');
+    const { SIN_KI, apresamientoMantenido } = await import('../src/motor/ki');
+    const atk = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')]), 'A', 0, 0);
+    const def = crearLuchador(rival({ atributos: { FUE: 12, AGI: 12, POD: 3 } }), 'B', 1, 0);
+    const ki = { ...SIN_KI, apresamiento: 12 };
+    expect(caracteristicasControl('presa', atk, def, 12, ki).def).toBe(12);
+    expect(caracteristicasControl('presa', atk, def, 12, { ...ki, presaExistencial: true }).def).toBe(3);
+    expect(efectosDe(tecnica('Lazo', 'Apresamiento (12, Presa existencial)')).accion).toMatchObject({ apresamiento: 12, presaExistencial: true });
+    const lazo = tecnica('Lazo', 'Apresamiento (14)', { DES: 1 }, { mantenimiento: 1 });
+    const captor = crearLuchador(maestro([lazo]), 'A', 0, 0);
+    captor.ki!.acumulado = { DES: 5 };
+    ejecutar(captor, lazo);
+    expect(apresamientoMantenido(captor)).toBe(14);
+  });
+
+  it('Choque físico: con disparos paralelos, la técnica intercepta una descarga de Ki', () => {
+    const rayo = tecnica('Rayo', 'Ataque a distancia (50 metros)', { DES: 1 });
+    const choque = tecnica('Puño', 'Choque fisico, Aumento de dano (+100)', { DES: 1 });
+    let chocan = 0;
+    for (let semilla = 1; semilla <= 10; semilla++) {
+      const r = simularCombate(
+        [maestro([rayo], { id: 'a', nombre: 'Tirador', turno: 100, ataque: 150 })],
+        [maestro([choque], { id: 'b', nombre: 'Puño', turno: 100, ataque: 200 })],
+        { semilla, registrar: true, distanciaInicial: 20, escenario: { disparosParalelos: true }, maxAsaltos: 3 },
+      );
+      if (r.registro!.some((e) => e.texto.includes('intercepta con Puño'))) chocan++;
+    }
+    expect(chocan).toBeGreaterThan(0);
+  });
+});

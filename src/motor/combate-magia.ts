@@ -2,12 +2,13 @@
 // anímicos y efectos del registro), el choque de descargas, las zonas que atacan cada asalto y percibir
 // a los invisibles. El motor se presta por `Motor` (efectos/tipos.ts), como en los efectos.
 
-import type { Contexto, Luchador } from './modelo';
+import type { Contexto, Luchador, Tecnica } from './modelo';
 import type { Golpe } from './golpe';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { umbralPifia } from './reglas';
-import { activo, ataqueMagico, puedeActuar, distancia, enAlcance, nro, penAccion } from './calculos';
+import { activo, ataqueFinal, ataqueMagico, danoBase, puedeActuar, distancia, enAlcance, nro, penAccion, proximaRanura } from './calculos';
+import { ejecutar, textoKi } from './ki';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { dejarDeMantener, golpeDeConjuro, lanzar, pagarDeterminada, proyeccionDeterminada, RANURA_MAGIA } from './magia';
 import * as ia from './ia';
@@ -126,10 +127,13 @@ export function areaDeConjuro(l: Luchador, obj: Luchador, c: Conjuro, g: Grado):
  * choque, 'anulado', 'pierde' (la del defensor lo alcanza a él) o el factor de daño con que pasa.
  */
 export function interceptar(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean): 'anulado' | 'pierde' | number | null {
-  if (!ctx.opciones.disparosParalelos || !def.magia || def.haActuado || def === ctx.turnoDe || !puedeActuar(def) || def.ataquesRestantes <= 0) return null;
+  if (!ctx.opciones.disparosParalelos || (!def.magia && !def.ki) || def.haActuado || def === ctx.turnoDe || !puedeActuar(def) || def.ataquesRestantes <= 0) return null;
   if (Math.abs(def.iniciativa - atk.iniciativa) >= 25) return null;
-  const x = iaMagia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago);
-  if (!x) return null;
+  const x = def.magia ? iaMagia.interceptarCon(ctx, def, atk, resultado, baseAtk, atkEsMago) : null;
+  if (!x) {
+    const t = ia.choqueFisicoCon(ctx, def, atk, resultado, baseAtk + (atkEsMago ? bonoCaracteristica(atributo(atk, 'POD')) : 0));
+    return t ? choqueFisico(motor, ctx, atk, def, resultado, baseAtk, atkEsMago, t) : null;
+  }
   const c = x.conjuro;
   const g = lanzar(def, c, x.grado, x.innato ? { innato: true } : {}, false);
   def.haActuado = true;
@@ -166,11 +170,54 @@ export function interceptar(motor: Motor, ctx: Contexto, atk: Luchador, def: Luc
   const totA = dA + baseAtk + poder(atk, atkEsMago);
   const totD = dD + (g.dano ?? 0) + poder(def, true);
   const dif = Math.abs(totA - totD);
-  const factor = dif > 100 ? 1 : dif > 50 ? 0.5 : 0;
+  const factor = factorChoque(dif);
   motor.log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} contra ${resultado} → ¡chocan! ${atk.ficha.nombre} ${totA} [${dA}+${baseAtk}${atkEsMago ? `+${poder(atk, true)}` : ''}] contra ${def.ficha.nombre} ${totD} [${dD}+${g.dano ?? 0}+${poder(def, true)}]: ${factor === 0 ? 'se anulan' : `${totA > totD ? atk.ficha.nombre : def.ficha.nombre} pasa${factor === 0.5 ? ' con la mitad de daño' : ''}`} (Tabla 57).`);
   if (factor === 0) return 'anulado';
   if (totA > totD) return factor;
   motor.resolverDefensa(ctx, def, atk, habDef, t, { ...golpeDef, ...(factor !== 1 ? { factorDano: factor } : {}) }, `  La descarga de ${def.ficha.nombre} sigue hacia ${atk.ficha.nombre}`);
+  return 'pierde';
+}
+
+/** Tabla 57: hasta 50 de diferencia se anulan; de 51 a 100 la ganadora pasa con la mitad; más, entera. */
+function factorChoque(dif: number): number {
+  return dif > 100 ? 1 : dif > 50 ? 0.5 : 0;
+}
+
+/**
+ * Choque físico (Dominus p.65): una técnica de Ki con este Efecto intercepta la descarga como si
+ * fuera un ataque a distancia, con las reglas del choque (Core p.117, Tabla 57): su ataque tiene que
+ * llegar a 50 de la habilidad del atacante, y cada uno tira 1d100 + su daño base (el Poder, sólo los
+ * magos). Si gana la técnica, sigue hacia el atacante sólo si lo tiene a su alcance.
+ */
+function choqueFisico(
+  motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean, tecnica: Tecnica,
+): 'anulado' | 'pierde' | number | null {
+  const ki = ejecutar(def, tecnica);
+  def.stats.tecnicas[tecnica.nombre] = (def.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+  def.haActuado = true;
+  def.ataquesRestantes = 0;
+  const t = motor.tirar(ctx, def.cap.umbralAtaque);
+  const habDef = ataqueFinal(def, atk, { ki });
+  const etiqueta = `${def.ficha.nombre} intercepta con ${tecnica.nombre} [Ki ${textoKi(def)}]`;
+  if (t.pifia) {
+    motor.log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${t.natural}): no la detiene.`);
+    return null;
+  }
+  if (habDef + t.valor < resultado - 50) {
+    motor.log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} no llega a 50 de ${resultado}; no chocan.`);
+    return null;
+  }
+  const baseDef = danoBase(def, atk, false, undefined, ki);
+  const poderAtk = atkEsMago ? bonoCaracteristica(atributo(atk, 'POD')) : 0;
+  const dA = tirarD100Cerrada(ctx.rng), dD = tirarD100Cerrada(ctx.rng);
+  const totA = dA + baseAtk + poderAtk, totD = dD + baseDef;
+  const factor = factorChoque(Math.abs(totA - totD));
+  motor.log(ctx, () => `${etiqueta}: ${textoTirada(habDef, t)} contra ${resultado} → ¡chocan! ${atk.ficha.nombre} ${totA} [${dA}+${baseAtk}${poderAtk ? `+${poderAtk}` : ''}] contra ${def.ficha.nombre} ${totD} [${dD}+${baseDef}]: ${factor === 0 ? 'se anulan' : `${totA > totD ? atk.ficha.nombre : def.ficha.nombre} pasa${factor === 0.5 ? ' con la mitad de daño' : ''}`} (Tabla 57).`);
+  if (factor === 0) return 'anulado';
+  if (totA > totD) return factor;
+  if (!enAlcance(def, atk)) return 'anulado';
+  const golpe: Golpe = { maniobra: 'normal', esContra: false, ranura: proximaRanura(def), ki, ...(factor !== 1 ? { factorDano: factor } : {}) };
+  motor.resolverDefensa(ctx, def, atk, habDef, t, golpe, `  La técnica de ${def.ficha.nombre} sigue hacia ${atk.ficha.nombre}`);
   return 'pierde';
 }
 

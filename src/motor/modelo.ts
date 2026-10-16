@@ -456,6 +456,8 @@ export interface Luchador {
   camuflajeConocido: Map<Luchador, 'visto' | 'superado'>;
   /** Transporte automático: cuántas veces vio cada rival que se transporta para atacarlo (Dominus p.59). */
   transportesVistos: Map<Luchador, number>;
+  /** Lo atrapó una Presa existencial: controla con su Poder y no se libra con transportes (Dominus p.64). */
+  presaExistencial: boolean;
   /** Se retira con un Transporte automático: se defiende sin defensas previas ni posición (Dominus p.59). */
   defensaPlena: boolean;
   /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.86). */

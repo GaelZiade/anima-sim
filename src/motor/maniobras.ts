@@ -168,7 +168,8 @@ export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk:
   const mejor = (l: Luchador, as: readonly Atributo[]) => mejorCaracteristica(l, as, l === atk ? kiAtk : l.ki?.activo);
   if (m === 'desarmar') return { atk: mejor(atk, ['FUE', 'DES']), def: mejor(def, ['FUE', 'DES']) };
   // Apresamiento (Ki): usa el valor de la técnica en lugar de su Fuerza o Destreza (Dominus p.64).
-  if (m === 'presa' && apresamiento) return { atk: apresamiento, def: mejor(def, ['FUE', 'AGI']) };
+  // Presa existencial: el apresado controla con su Poder (Dominus p.64).
+  if (m === 'presa' && apresamiento) return { atk: apresamiento, def: kiAtk?.presaExistencial ? mejor(def, ['POD']) : mejor(def, ['FUE', 'AGI']) };
   // Un arma con regla Presa usa su propia Fuerza, no la del portador (Core p.76).
   if (m === 'presa' && atk.cap.est.fuerzaPresaArma) return { atk: atk.cap.est.fuerzaPresaArma, def: mejor(def, ['FUE', 'AGI']) };
   // Presa Inusual: con armas sin regla de Presa se usa la Destreza con −3 (Dominus p.28).

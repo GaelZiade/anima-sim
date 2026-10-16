@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia, conIncremento,
+  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -1075,7 +1075,7 @@ function defensaGana(
     if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
   }
   // Transporte automático atado a la defensa: con éxito puede retirarse del combate (Dominus p.59).
-  if (kiDef?.transporte && ia.valorRetirada(ctx, quienDefiende, kiDef.transporte) > 0 && retirarseConTransporte(ctx, quienDefiende, atk, kiDef.transporte)) {
+  if (kiDef?.transporte && !quienDefiende.presaExistencial && ia.valorRetirada(ctx, quienDefiende, kiDef.transporte) > 0 && retirarseConTransporte(ctx, quienDefiende, atk, kiDef.transporte)) {
     return { defensor: quienDefiende, contra: null, impacto: false };
   }
   // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
@@ -1452,6 +1452,7 @@ function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derrib
   } else if (m === 'presa') {
     soltar(def);
     def.apresadoPor = atk;
+    def.presaExistencial = !!kiAtk?.presaExistencial && !!apresamiento;
     def.paralisis = gradoPresa(dif);
     atk.apresando = def;
     log(ctx, () => `  ${def.ficha.nombre} queda apresado (${['', 'parálisis menor', 'parálisis parcial', 'parálisis completa'][def.paralisis]}).`);
@@ -1481,6 +1482,7 @@ function desarmar(ctx: Contexto, l: Luchador, por: Luchador) {
 function soltar(l: Luchador) {
   if (l.apresadoPor) l.apresadoPor.apresando = null;
   l.apresadoPor = null;
+  l.presaExistencial = false;
   l.paralisis = 0;
   l.atadura = 0;
 }
@@ -1511,9 +1513,10 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
     return true;
   }
   if (l.paralisis >= 3) return false; // presa perfecta: ya no puede librarse
-  const yo = mejorCaracteristica(l, ['FUE', 'AGI']) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
-  // Quien presa con un arma con regla Presa sostiene con la Fuerza del arma (Core p.76).
-  const el = (captor.cap.est.fuerzaPresaArma || mejorCaracteristica(captor, ['FUE', 'DES'])) + modControl(captor);
+  const yo = mejorCaracteristica(l, l.presaExistencial ? ['POD'] : ['FUE', 'AGI']) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
+  // Quien presa con un arma con regla Presa sostiene con la Fuerza del arma (Core p.76); con una
+  // técnica de Apresamiento mantenida, con su valor (Dominus p.65).
+  const el = Math.max(captor.cap.est.fuerzaPresaArma || mejorCaracteristica(captor, ['FUE', 'DES']), apresamientoMantenido(captor)) + modControl(captor);
   let dif = controlEnfrentado(ctx.rng, yo, el);
   if (dif <= 0 && l.cap.est.repiteControlDefensivo && !l.repitioControl) {
     l.repitioControl = true;
@@ -1637,6 +1640,10 @@ const ADVERTIR_TRANSPORTE = { dificultad: 140, veces: 2 } as const;
 
 /** Llega al instante junto al blanco, sin gastar movimiento (Transporte automático, Proyección). */
 function llegarJunto(ctx: Contexto, atk: Luchador, def: Luchador, como: string) {
+  // Un transporte lo libra de una presa, salvo de una existencial (Dominus p.64).
+  if (atk.apresadoPor && !atk.presaExistencial) soltar(atk);
+  if (atk.apresadoPor) return;
+  if (atk.apresando) soltar(atk.apresando);
   const metros = distancia(atk, def);
   const desde = { ...atk.pos };
   moverHacia(MOTOR, ctx, atk, def, Infinity);

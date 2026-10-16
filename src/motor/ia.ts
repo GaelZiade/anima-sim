@@ -1767,7 +1767,7 @@ export function contraKiADistancia(ctx: Contexto, l: Luchador, atk: Luchador): {
  * y conserva el bono. La técnica que más rinde, si rinde algo.
  */
 export function contraConTransporte(ctx: Contexto, l: Luchador, atk: Luchador, bono: number): Tecnica | null {
-  if (!l.ki || perfil(l) === 'bestia') return null;
+  if (!l.ki || perfil(l) === 'bestia' || l.presaExistencial) return null;
   const d = distancia(l, atk);
   const candidatas = tecnicasPara(l, 'ataque', true).filter((t) => efectosDe(t).accion.transporte + ALCANCE + 1e-6 >= d);
   if (!candidatas.length || visionEntre(ctx.luchadores, l, atk) === 'bloqueada') return null;
@@ -1799,6 +1799,28 @@ export function valorRetirada(ctx: Contexto, l: Luchador, metros: number): numbe
 /** Lo suyo es pelear de lejos: lanza conjuros, tiene armas a distancia o técnicas de Ki a distancia. */
 function peleaDeLejos(l: Luchador): boolean {
   return !!l.magia || !!l.ficha.armasDistancia?.length || repertorio(l.ficha).some((t) => efectosDe(t).accion.distancia > 0);
+}
+
+/**
+ * Choque físico (Dominus p.65): la técnica con la que intercepta una descarga, si su ataque llega a 50
+ * de la habilidad del atacante con chance de 1 en 2 y su daño base puede competir con el de la
+ * descarga (como al interceptar con un conjuro).
+ */
+export function choqueFisicoCon(_ctx: Contexto, l: Luchador, atk: Luchador, resultado: number, totalAtk: number): Tecnica | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  let mejor: Tecnica | null = null;
+  let mejorDano = -1;
+  for (const t of tecnicasPara(l, 'ataque')) {
+    const k = vistaPrevia(l, t);
+    if (!k.choqueFisico) continue;
+    const pLlega = tabla(l.cap.umbralAtaque, 0, true).pImpacto(ataqueFinal(l, atk, { ki: k }) - (resultado - 50) + 1);
+    const dano = danoBase(l, atk, false, undefined, k);
+    if (pLlega >= 0.5 && dano >= totalAtk - 50 && dano - costoTecnica(l, atk, t) / 10 > mejorDano) {
+      mejor = t;
+      mejorDano = dano;
+    }
+  }
+  return mejor;
 }
 
 /** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */
