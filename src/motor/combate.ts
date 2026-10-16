@@ -24,11 +24,11 @@ import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, destruccionPorKi, detectarPresencias, efectosAlImpactar, estadosAutomaticos, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
 } from './combate-ki';
 import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
-import { cruzarMuros, type Motor } from './efectos';
+import { cruzarMuros, transportar, type Motor } from './efectos';
 import { GRADOS } from './conjuros';
 import {
   crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos,
+  nivelMenos, vistaPrevia,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -680,6 +680,8 @@ export interface Ataque {
   tecnica?: Tecnica | null;
   /** Disparo o lanzamiento: qué arma a distancia de la ficha y su penalizador por recarga o cadencia. */
   proyectil?: { arma: number; pen: number };
+  /** Ataque natural: sin maniobras ni técnica (el que frena una retirada por Transporte, Dominus p.59). */
+  natural?: boolean;
 }
 
 const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
@@ -699,6 +701,10 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
 
   // Selene: dobla el bono del contraataque peleando sin armas (Dominus p.39).
   const bono = a.esContra && atk.cap.est.doblaBonoContra ? a.bono * 2 : a.bono;
+  // Transporte automático (Ki): con una técnica que lo lleva hasta el blanco aparece junto a él y lo
+  // golpea cuerpo a cuerpo (Dominus p.59).
+  const transporte = a.tecnica && !enAlcance(atk, def) ? vistaPrevia(atk, a.tecnica).transporte : 0;
+  if (transporte && distancia(atk, def) <= transporte + ALCANCE) aparecerJunto(ctx, atk, def);
   // Fuera del cuerpo a cuerpo sólo se ataca con una técnica a distancia (Dominus p.57) o un arma a
   // distancia (Core p.94): hace falta verlo, y la cobertura resta 40.
   const aDistancia = !enAlcance(atk, def);
@@ -710,7 +716,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const ranuraProyectil: Ranura | undefined = arma ? { pen: a.proyectil!.pen, sinArmas: false, proyectil: arma, lejos: tabla47!.lejos } : undefined;
   const bonoFinal = bono + (tabla47 ? tabla47.bono : vision === 'cobertura' ? -PEN_COBERTURA : 0);
   // Declaraciones antes de tirar: maniobra, cansancio, Samiel, y del lado del defensor lo mismo.
-  const plan = ia.elegirManiobra(ctx, atk, def, a.esContra, bonoFinal, a.tecnica, ranuraProyectil);
+  const plan = ia.elegirManiobra(ctx, atk, def, a.esContra, bonoFinal, a.tecnica, ranuraProyectil, a.natural);
   const m = plan.maniobra;
   atk.stats.maniobras[m] = (atk.stats.maniobras[m] ?? 0) + 1;
   // La presencian el blanco y los rivales activos que ven al atacante (interpretación de "presenciado").
@@ -770,6 +776,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const conTope = !!arma && !superaTope(atk.ficha);
   for (let g = 0; g < golpes; g++) {
     if (!activo(atk) || !activo(def) || (g > 0 && atk.aLaDefensiva)) break;
+    // Se le fue del alcance (se retiró con un Transporte, lo despidió un Impacto): la serie se corta.
+    if (g > 0 && !aDistancia && !enAlcance(atk, def)) break;
     const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque);
     if (tA.pifia && arma?.fuego) armaDeFuegoFalla(ctx, atk, a.proyectil!.arma, tA.nivelPifia);
     if (tA.pifia) {
@@ -1059,6 +1067,10 @@ function defensaGana(
     const c = caracteristicasControl('desarmar', quienDefiende, atk);
     // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
     if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
+  }
+  // Transporte automático atado a la defensa: con éxito puede retirarse del combate (Dominus p.59).
+  if (kiDef?.transporte && ia.valorRetirada(ctx, quienDefiende, kiDef.transporte) > 0 && retirarseConTransporte(ctx, quienDefiende, atk, kiDef.transporte)) {
+    return { defensor: quienDefiende, contra: null, impacto: false };
   }
   // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
   // Ataque indirecto (Ki): no se puede contraatacar (Dominus p.52).
@@ -1521,6 +1533,12 @@ function ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number
     : null;
   // Desde lejos sólo se contraataca con un arma a distancia, y sin el bono (Core p.95).
   if (!motivo && !enAlcance(def, atk)) {
+    // Con un Transporte automático aparece junto a quien lo atacó y conserva el bono (Dominus p.59).
+    const salto = ia.contraConTransporte(ctx, def, atk, bono);
+    if (salto) {
+      atacar(ctx, def, atk, { esContra: true, bono, tecnica: salto });
+      return;
+    }
     const arma = ia.contraADistancia(ctx, def, atk);
     // Una técnica de Ki a distancia también sirve, y sin bono (Dominus p.57: cuenta como proyectil).
     const ki = arma === null ? ia.contraKiADistancia(ctx, def, atk) : null;
@@ -1594,12 +1612,53 @@ function camuflar(ctx: Contexto, atk: Luchador, blanco: Luchador, dificultad: nu
   const conocido = atk.camuflajeConocido.get(blanco);
   if (conocido === 'superado') return;
   const dif = conocido === 'visto' ? nivelMenos(dificultad) : dificultad;
-  const advertir = (blanco.ficha.advertir ?? 0) + (blanco.bono?.advertir ?? 0) - penAccion(blanco);
-  const t = tirar(ctx, umbralPifia(blanco.ficha.advertir ?? 0, blanco.cap.ajustePifia));
-  const advierte = !t.pifia && advertir + t.valor >= dif;
+  const advierte = advertir(ctx, atk, blanco, dif, 'el ataque camuflado');
   atk.camuflajeConocido.set(blanco, advierte ? 'superado' : 'visto');
+}
+
+/** Control de Advertir contra un ataque inesperado; si no lo advierte, se defiende con Sorpresa. */
+function advertir(ctx: Contexto, atk: Luchador, blanco: Luchador, dif: number, que: string): boolean {
+  const hab = (blanco.ficha.advertir ?? 0) + (blanco.bono?.advertir ?? 0) - penAccion(blanco);
+  const t = tirar(ctx, umbralPifia(blanco.ficha.advertir ?? 0, blanco.cap.ajustePifia));
+  const advierte = !t.pifia && hab + t.valor >= dif;
   if (!advierte) atk.camufladoA.add(blanco);
-  log(ctx, () => `  ${blanco.ficha.nombre} ${advierte ? 'advierte' : 'no advierte'} el ataque camuflado (Advertir ${textoTirada(advertir, t)} contra ${dif}).`);
+  log(ctx, () => `  ${blanco.ficha.nombre} ${advierte ? 'advierte' : 'no advierte'} ${que} (Advertir ${textoTirada(hab, t)} contra ${dif}).`);
+  return advierte;
+}
+
+/** Transporte automático: Muy Difícil advertirlo, las dos primeras veces contra cada rival (Dominus p.59). */
+const ADVERTIR_TRANSPORTE = { dificultad: 140, veces: 2 } as const;
+
+/** Aparece junto al blanco (Transporte automático); sus primeras veces, quizá lo sorprende (Dominus p.59). */
+function aparecerJunto(ctx: Contexto, atk: Luchador, def: Luchador) {
+  const metros = distancia(atk, def);
+  const desde = { ...atk.pos };
+  moverHacia(MOTOR, ctx, atk, def, Infinity);
+  log(ctx, () => `${atk.ficha.nombre} se transporta ${metros.toFixed(0)} m hasta ${def.ficha.nombre}.`, () => ({ camino: { quien: nro(ctx, atk), celdas: [desde, { ...atk.pos }] } }));
+  const vistas = atk.transportesVistos.get(def) ?? 0;
+  if (vistas >= ADVERTIR_TRANSPORTE.veces) return;
+  atk.transportesVistos.set(def, vistas + 1);
+  advertir(ctx, atk, def, ADVERTIR_TRANSPORTE.dificultad, 'el transporte');
+}
+
+/**
+ * Retirada con un Transporte automático tras una defensa con éxito (Dominus p.59): los demás trabados
+ * con él que aún pueden atacar tiran un ataque natural cada uno contra su defensa plena; si alguno le
+ * hace daño, no se va (como al retirarse, Core p.94). Devuelve si se fue.
+ */
+function retirarseConTransporte(ctx: Contexto, l: Luchador, atk: Luchador, metros: number): boolean {
+  const antes = l.pv;
+  l.defensaPlena = true;
+  for (const e of ctx.luchadores) {
+    if (e === atk || e.equipo === l.equipo || !activo(e) || !activo(l) || !enAlcance(e, l) || e.aLaDefensiva || e.ataquesRestantes <= 0 || !puedeActuar(e)) continue;
+    log(ctx, () => `  ${e.ficha.nombre} intenta impedir que ${l.ficha.nombre} se retire.`);
+    atacar(ctx, e, l, { esContra: false, bono: 0, natural: true });
+  }
+  l.defensaPlena = false;
+  const sale = activo(l) && l.pv >= antes;
+  if (activo(l) && !sale) log(ctx, () => `  ${l.ficha.nombre} no logra retirarse.`);
+  if (sale) transportar(MOTOR, ctx, l, metros);
+  return sale;
 }
 
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */

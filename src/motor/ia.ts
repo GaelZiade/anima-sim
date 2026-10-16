@@ -825,10 +825,13 @@ export function blancosArea(ctx: Contexto, atk: Luchador, def: Luchador): Luchad
  */
 export function elegirManiobra(
   ctx: Contexto, atk: Luchador, def: Luchador, esContra: boolean, bono: number, tecnica?: Tecnica | null, ranura?: Ranura,
+  natural = false,
 ): PlanAtaque {
   nuevaDecision(ctx);
   const sin = ctx.opciones.sinManiobras;
   const soloNormal = perfil(atk) === 'bestia' || sin === true || sin === atk.equipo;
+  // Ataque natural: sin maniobras ni técnica nueva.
+  if (natural) return mejorManiobra(ctx, atk, def, esContra, bono, modDeAccion(atk, 'ataque', false), true).plan;
   // A distancia (o con un proyectil, aun a bocajarro): con la técnica que eligió al decidir atacar de
   // lejos, o con una a distancia activa; un arma a distancia no se combina con técnicas.
   if (!enAlcance(atk, def) || ranura?.proyectil) {
@@ -1759,6 +1762,45 @@ export function contraKiADistancia(ctx: Contexto, l: Luchador, atk: Luchador): {
   return mejor ? { tecnica: mejor.tecnica } : null;
 }
 
+/**
+ * Contraataque con un Transporte automático (Dominus p.59): aparece junto a quien lo atacó de lejos
+ * y conserva el bono. La técnica que más rinde, si rinde algo.
+ */
+export function contraConTransporte(ctx: Contexto, l: Luchador, atk: Luchador, bono: number): Tecnica | null {
+  if (!l.ki || perfil(l) === 'bestia') return null;
+  const d = distancia(l, atk);
+  const candidatas = tecnicasPara(l, 'ataque', true).filter((t) => efectosDe(t).accion.transporte + ALCANCE + 1e-6 >= d);
+  if (!candidatas.length || visionEntre(ctx.luchadores, l, atk) === 'bloqueada') return null;
+  nuevaDecision(ctx);
+  let mejor: Tecnica | null = null;
+  let mejorValor = 0;
+  for (const t of candidatas) {
+    const v = mejorManiobra(ctx, l, atk, true, bono, vistaPrevia(l, t), false).valor - costoTecnica(l, atk, t);
+    if (v > mejorValor) {
+      mejor = t;
+      mejorValor = v;
+    }
+  }
+  return mejor;
+}
+
+/**
+ * Lo que gana saliendo del cuerpo a cuerpo con un transporte de `metros` (Dominus p.59), como el
+ * Transporte Rápido: lo que le pegarían este asalto y el siguiente, si lo suyo es la distancia
+ * (magia, armas o técnicas a distancia). 0 si no le conviene.
+ */
+export function valorRetirada(ctx: Contexto, l: Luchador, metros: number): number {
+  if (!trabadoConAlguien(l) || !peleaDeLejos(l)) return 0;
+  let v = 0;
+  for (const x of enemigos(ctx, l)) if (enAlcance(l, x)) v += amenaza(x, l) * (metrosTotales(x) < metros ? 1.5 : 0.25);
+  return v;
+}
+
+/** Lo suyo es pelear de lejos: lanza conjuros, tiene armas a distancia o técnicas de Ki a distancia. */
+function peleaDeLejos(l: Luchador): boolean {
+  return !!l.magia || !!l.ficha.armasDistancia?.length || repertorio(l.ficha).some((t) => efectosDe(t).accion.distancia > 0);
+}
+
 /** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */
 export function contraADistancia(ctx: Contexto, l: Luchador, atk: Luchador): number | null {
   const armas = l.ficha.armasDistancia;
@@ -1789,7 +1831,7 @@ export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchad
   if (activo0?.distancia) opciones.push([null, activo0]);
   for (const t of tecnicasPara(l, 'ataque')) {
     const k = vistaPrevia(l, t);
-    if (k.distancia) opciones.push([t, k]);
+    if (k.distancia || k.transporte) opciones.push([t, k]);
   }
   if (!opciones.length) return null;
   nuevaDecision(ctx);
@@ -1803,8 +1845,10 @@ export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchad
     const bono = vision === 'cobertura' ? -PEN_COBERTURA : 0;
     const cuerpo = alcanzable(l, e) ? valorAtaque(l, e, {}) : 0;
     for (const [t, k] of opciones) {
-      if (k.distancia + 1e-6 < d) continue;
-      const v = mejorManiobra(ctx, l, e, false, bono, k, false, true).valor - (t ? costoTecnica(l, e, t) : 0);
+      // Con un Transporte automático aparece junto a él y le pega cuerpo a cuerpo (Dominus p.59).
+      const salta = k.transporte + ALCANCE + 1e-6 >= d;
+      if (!salta && k.distancia + 1e-6 < d) continue;
+      const v = mejorManiobra(ctx, l, e, false, salta ? 0 : bono, k, false, !salta).valor - (t ? costoTecnica(l, e, t) : 0);
       if (v > cuerpo && (!mejor || v > mejor.valor)) mejor = { objetivo: e, tecnica: t, valor: v };
     }
   }
@@ -1879,6 +1923,8 @@ export function elegirTecnicaDefensa(
     if (mod?.absorcionKi && g.costeTecnica) extra += p.pContra * Math.min(mod.absorcionKi, g.costeTecnica) * precioKi(def);
     // Acumulación: la pantalla se come el daño antes que sus PV.
     if (mod?.pantalla) extra += Math.min(mod.pantalla, p.dano);
+    // Transporte automático: si se defiende, puede retirarse del combate (Dominus p.59).
+    if (mod?.transporte) extra += (1 - p.pImpacto) * valorRetirada(ctx, def, mod.transporte);
     return valorGolpe(atk, def, p, 0) - contra - extra;
   };
   const sinTecnica = costo(modDeAccion(def, 'defensa', false));

@@ -314,3 +314,75 @@ describe('Parada en área (Dominus p.58)', () => {
     expect(textos.some((x) => x.includes('cubierto por la Parada en área'))).toBe(false);
   });
 });
+
+describe('Transporte automático (Dominus p.59)', () => {
+  const salto = tecnica('Salto', 'Transporte automatico (20 metros), Habilidad de ataque (+10)', { DES: 1 });
+  const huida = tecnica('Huida', 'Transporte automatico (50 metros), Habilidad de parada (+10)', { DES: 1 });
+  const rayo = tecnica('Rayo', 'Ataque a distancia (50 metros)', { DES: 1 });
+  const contexto = (luchadores: ReturnType<typeof crearLuchador>[], semilla = 1): Contexto => {
+    for (const l of luchadores) {
+      l.ataquesDeclarados = 1;
+      l.planAtaques = [{ pen: 0, sinArmas: false }];
+      l.ataquesRestantes = 1;
+      if (l.ki) l.ki.acumulado = { DES: 5 };
+    }
+    return {
+      opciones: {}, rng: crearRng(semilla), luchadores, asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+  };
+
+  it('lectura', () => {
+    expect(efectosDe(salto).accion.transporte).toBe(20);
+    expect(efectosDe(tecnica('X', 'Transporte automatico (1 kilometro)')).accion.transporte).toBe(1000);
+    expect(efectosDe(salto).desconocidos).toEqual([]);
+  });
+
+  it('atado a un ataque: aparece junto al blanco; Advertir Muy Difícil las dos primeras veces', () => {
+    const atk = crearLuchador(maestro([salto]), 'A', 0, 0);
+    const def = crearLuchador(rival({ advertir: 0 }), 'B', 15, 0);
+    const ctx = contexto([atk, def]);
+    atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: salto });
+    const t = ctx.registro!.map((e) => e.texto);
+    expect(t.some((x) => x.includes('se transporta 15 m hasta Rival'))).toBe(true);
+    expect(t.some((x) => x.includes('no advierte el transporte') && x.includes('contra 140'))).toBe(true);
+    expect(t.some((x) => x.includes('con Salto') && !x.includes('desde'))).toBe(true);
+    for (let i = 0; i < 2; i++) {
+      atk.pos = { x: 0, y: 0 };
+      def.pos = { x: 15, y: 0 };
+      atk.ataquesRestantes = 1;
+      atk.ki!.acumulado = { DES: 5 };
+      atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: salto });
+    }
+    expect(ctx.registro!.filter((e) => e.texto.includes('el transporte')).length).toBe(2);
+  });
+
+  it('atado a la defensa: con éxito se retira, si lo suyo es la distancia', () => {
+    const def = crearLuchador(maestro([huida, rayo], { defensa: 400 }), 'B', 1, 0);
+    const atk = crearLuchador(rival({ ataque: 100 }), 'A', 0, 0);
+    def.trabados.push(atk);
+    atk.trabados.push(def);
+    const ctx = contexto([atk, def]);
+    atacar(ctx, atk, def, { esContra: false, bono: 0 });
+    const t = ctx.registro!.map((e) => e.texto);
+    expect(t.some((x) => x.includes('con Huida'))).toBe(true);
+    expect(t.some((x) => x.includes('aparece a 50 m'))).toBe(true);
+    expect(def.trabados).toEqual([]);
+  });
+
+  it('atado a la contra: aparece junto a quien lo atacó de lejos, con el bono', () => {
+    let saltos = 0;
+    for (let s = 1; s <= 6; s++) {
+      const atk = crearLuchador(maestro([rayo], { id: 'a', nombre: 'Tirador', ataque: 120 }), 'A', 0, 0);
+      const def = crearLuchador(maestro([salto], { id: 'd', nombre: 'Saltador', defensa: 300 }), 'B', 18, 0);
+      const ctx = contexto([atk, def], s);
+      atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: rayo });
+      const t = ctx.registro!.map((e) => e.texto);
+      if (t.some((x) => x.includes('Saltador se transporta'))) {
+        saltos++;
+        expect(t.some((x) => /Saltador contraataca \(\+\d+\)/.test(x))).toBe(true);
+      }
+    }
+    expect(saltos).toBeGreaterThan(0);
+  });
+});

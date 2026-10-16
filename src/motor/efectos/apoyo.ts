@@ -56,7 +56,7 @@ export const curar: ManejadorEfecto = {
  * Transporte Rápido (Core p.187): lleva a alguien hasta esa distancia, lejos de quienes lo tienen
  * trabado (interpretación: al punto libre más alejado de ellos en esa dirección).
  */
-function transportar(m: Motor, ctx: Contexto, l: Luchador, metros: number) {
+export function transportar(m: Motor, ctx: Contexto, l: Luchador, metros: number) {
   const cerca = ctx.luchadores.filter((e) => e.equipo !== l.equipo && activo(e) && distancia(l, e) <= 10);
   let dx = 0, dy = 0;
   for (const e of cerca) {

@@ -465,10 +465,12 @@ export function defensaFinal(def: Luchador, atk: Luchador, o: OpcionesDefensa = 
     Math.max(ki?.defensasAdicionales ?? 0, def.ki?.defensasLibres ?? 0);
   // Un escudo de energía no sufre los penalizadores por defensas adicionales (Core p.100, Dominus p.66).
   const escudo = def.escudoKi > 0 || (ki?.escudo ?? 0) > 0;
-  const previas = escudo ? 0 : Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
+  // Al retirarse con un Transporte automático, defensa plena: sin defensas previas ni posición (Dominus p.59).
+  const plena = def.defensaPlena;
+  const previas = escudo || plena ? 0 : Math.max(0, (o.defensasPrevias ?? def.defensasHechas) - libres);
   const total = o.defensaTotal ?? def.defensaTotal;
   // Al retirarse, quien lo ataca lo tiene de flanco, salvo Uroboros (Core p.94, Dominus p.79).
-  const pos = def.huyendo && !e.retiradaSinFlanco ? 'flanco' : o.posicion ?? posicionDe(atk, def);
+  const pos = plena ? 'frente' : def.huyendo && !e.retiradaSinFlanco ? 'flanco' : o.posicion ?? posicionDe(atk, def);
   const factorPos = pos === 'flanco' ? e.factorFlanco : pos === 'espalda' ? e.factorEspalda : 1;
   const est = modEstados(def);
   const campo = (def.ficha.tipoDefensa ?? 'parada') === 'parada' ? 'parada' : 'esquiva';
