@@ -386,3 +386,40 @@ describe('Transporte automático (Dominus p.59)', () => {
     expect(saltos).toBeGreaterThan(0);
   });
 });
+
+describe('Proyección y Estela de destrucción (Dominus p.58)', () => {
+  const rayo = tecnica('Rayo', 'Ataque a distancia (100 metros, Proyeccion, Estela de destruccion)', { DES: 1 });
+
+  it('lectura', () => {
+    expect(efectosDe(rayo).accion).toMatchObject({ distancia: 100, proyeccion: true, estela: true });
+    expect(efectosDe(tecnica('X', 'Ataque a distancia (1 kilometro)')).accion).toMatchObject({ distancia: 1000, proyeccion: false, estela: false });
+    expect(efectosDe(rayo).desconocidos).toEqual([]);
+  });
+
+  it('la estela alcanza a los de la línea (aliados incluidos) y no a los de al lado; con Proyección llega al blanco', () => {
+    const atk = crearLuchador(maestro([rayo]), 'A', 0, 0);
+    const def = crearLuchador(rival({ id: 'b', nombre: 'Blanco' }), 'B', 10, 0);
+    const enLinea = crearLuchador(rival({ id: 'c', nombre: 'Medio' }), 'B', 5, 0);
+    const aliado = crearLuchador(rival({ id: 'd', nombre: 'Amigo' }), 'A', 3, 0);
+    const costado = crearLuchador(rival({ id: 'e', nombre: 'Costado' }), 'B', 5, 2);
+    const todos = [atk, def, enLinea, aliado, costado];
+    for (const l of todos) {
+      l.ataquesDeclarados = 1;
+      l.planAtaques = [{ pen: 0, sinArmas: false }];
+      l.ataquesRestantes = 0;
+    }
+    atk.ataquesRestantes = 1;
+    atk.ki!.acumulado = { DES: 5 };
+    const ctx: Contexto = {
+      opciones: {}, rng: crearRng(1), luchadores: todos, asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+    atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: rayo });
+    const t = ctx.registro!.map((e) => e.texto);
+    for (const n of ['Blanco', 'Medio', 'Amigo']) expect(t.some((x) => x.startsWith(`Maestro ataca a ${n} con Rayo`))).toBe(true);
+    expect(t.some((x) => x.includes('a Costado'))).toBe(false);
+    expect(t.some((x) => x.includes('viaja con su ataque 10 m hasta Blanco'))).toBe(true);
+    expect(t.some((x) => x.includes('desde 10 m'))).toBe(true);
+    expect(Math.hypot(atk.pos.x - def.pos.x, atk.pos.y - def.pos.y)).toBeLessThanOrEqual(2);
+  });
+});

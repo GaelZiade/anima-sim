@@ -31,6 +31,25 @@ export function distancia(a: Luchador, b: Luchador): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/**
+ * Quiénes están en la línea recta de `a` a `b` (sin contarlos): a medio metro o menos de ella, de más
+ * cerca a más lejos de `a`. Para la Estela de destrucción (Dominus p.58), sin alcances parciales.
+ */
+export function enLaLinea(luchadores: Luchador[], a: Luchador, b: Luchador): Luchador[] {
+  const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+  const largo2 = dx * dx + dy * dy;
+  if (!largo2) return [];
+  const en: { l: Luchador; t: number }[] = [];
+  for (const l of luchadores) {
+    if (l === a || l === b || !activo(l)) continue;
+    const t = ((l.pos.x - a.pos.x) * dx + (l.pos.y - a.pos.y) * dy) / largo2;
+    if (t <= 0 || t >= 1) continue;
+    const px = a.pos.x + t * dx - l.pos.x, py = a.pos.y + t * dy - l.pos.y;
+    if (px * px + py * py <= 0.25 + 1e-9) en.push({ l, t });
+  }
+  return en.sort((x, y) => x.t - y.t).map((x) => x.l);
+}
+
 /** Trabados cuerpo a cuerpo: en el mapa, en celdas vecinas (también en diagonal). */
 export function enAlcance(a: Luchador, b: Luchador): boolean {
   if (a.mapa) return adyacentes(a.mapa, a.pos, b.pos);

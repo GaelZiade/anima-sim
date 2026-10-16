@@ -4,7 +4,7 @@
 import { CARACTERISTICAS_KI, type Contexto, type Luchador, type Perfil, type Tecnica } from './modelo';
 import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } from './mapa';
 import {
-  activo, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
+  activo, enLaLinea, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
   perfilDe, proximaRanura,
   golpeAPuntoVulnerable,
@@ -1848,7 +1848,11 @@ export function ataqueADistancia(ctx: Contexto, l: Luchador): { objetivo: Luchad
       // Con un Transporte automático aparece junto a él y le pega cuerpo a cuerpo (Dominus p.59).
       const salta = k.transporte + ALCANCE + 1e-6 >= d;
       if (!salta && k.distancia + 1e-6 < d) continue;
-      const v = mejorManiobra(ctx, l, e, false, salta ? 0 : bono, k, false, !salta).valor - (t ? costoTecnica(l, e, t) : 0);
+      let v = mejorManiobra(ctx, l, e, false, salta ? 0 : bono, k, false, !salta).valor - (t ? costoTecnica(l, e, t) : 0);
+      // Estela de destrucción: también a los de la línea, aliados en contra (Dominus p.58).
+      if (!salta && k.estela) {
+        for (const x of enLaLinea(ctx.luchadores, l, e)) v += (x.equipo === l.equipo ? -1 : 1) * Math.max(0, mejorManiobra(ctx, l, x, false, 0, k, false, true).valor);
+      }
       if (v > cuerpo && (!mejor || v > mejor.valor)) mejor = { objetivo: e, tecnica: t, valor: v };
     }
   }

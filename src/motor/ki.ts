@@ -30,6 +30,10 @@ export interface ModKi {
   precision: number;
   /** Ataque a distancia: alcance en metros (0 si no hay, Dominus p.57). */
   distancia: number;
+  /** Proyección: el atacante viaja con su ataque hasta el blanco (Dominus p.58). */
+  proyeccion: boolean;
+  /** Estela de destrucción: alcanza también a quien esté en la línea hasta el blanco (Dominus p.58). */
+  estela: boolean;
   /** Ataque con área: radio en metros (0 si no hay) y si elige a quién alcanza. */
   area: number;
   eleccionBlanco: boolean;
@@ -131,7 +135,7 @@ export interface EstadoSobrenatural {
 
 export const SIN_KI: Readonly<ModKi> = Object.freeze({
   ataque: 0, contraataque: 0, parada: 0, esquiva: 0, sinContra: false, ataqueFijo: 0, defensaFija: 0,
-  dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, area: 0,
+  dano: 0, multDano: 1, danoFijo: 0, reduccionTA: 0, sinArmadura: false, precision: 0, distancia: 0, proyeccion: false, estela: false, area: 0,
   eleccionBlanco: false, ataquesAdicionales: 0, continuo: false, combo: false, cansancioAnadido: false, adicionalesLimitados: 0, camuflar: 0,
   accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, transporte: 0, turno: 0, ta: 0, rf: 0,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
@@ -250,8 +254,8 @@ const CATALOGO: Record<string, DefEfecto> = {
   'ningun dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = 1; } },
   'mitad de dano': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.danoReducido = Math.max(m.danoReducido, 0.5); } },
   'ataque especializado': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.soloContra = hay(o, /esquiva/) ? 'esquiva' : 'parada'; } },
-  'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('distancia') },
-  'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('distancia') },
+  'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => aDistancia(m, o) },
+  'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, _v, o) => aDistancia(m, o) },
 };
 
 /** Ventajas y desventajas de Ataque adicional (Dominus p.56). */
@@ -288,6 +292,13 @@ export function nivelMenos(dificultad: number): number {
 
 function hay(opciones: string[], re: RegExp): boolean {
   return opciones.some((x) => re.test(normalizarRasgo(x)));
+}
+
+/** Ataque a distancia: el alcance y las ventajas Proyección y Estela de destrucción (Dominus p.57-58). */
+function aDistancia(m: ModKi, o: string[]) {
+  m.distancia = Math.max(m.distancia, metrosDe(o));
+  if (hay(o, /proyeccion/)) m.proyeccion = true;
+  if (hay(o, /estela/)) m.estela = true;
 }
 
 /** Ataque elemental (Dominus p.63): Fuego CAL, Aire ELE, Agua FRI; Tierra elige FIL, CON o PEN; Luz y Oscuridad, ENE. */

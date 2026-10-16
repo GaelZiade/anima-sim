@@ -10,7 +10,7 @@ import {
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
-  defensaFinal, distancia, enAlcance, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
+  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
   golpeAPuntoVulnerable,
 } from './calculos';
@@ -761,7 +761,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   atk.godhandListo = false;
   atk.previenePendiente.delete(def);
 
-  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${arma && m === 'normal' ? (arma.clase === 'disparo' ? 'dispara' : 'lanza') : NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' || m === 'lineas' ? '' : ' a'} ${b.ficha.nombre}${arma ? ` con ${arma.nombre}` : ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${distancia(atk, b).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
+  const origen = { ...atk.pos };
+  const etiquetaPara = (b: Luchador) => `${atk.ficha.nombre}${a.esContra ? ` contraataca (+${bono}) y` : ''} ${arma && m === 'normal' ? (arma.clase === 'disparo' ? 'dispara' : 'lanza') : NOMBRE_MANIOBRA[m]}${m === 'cabeza' || m === 'corazon' || m === 'lineas' ? '' : ' a'} ${b.ficha.nombre}${arma ? ` con ${arma.nombre}` : ranura.sinArmas ? ' con una patada' : ranura.pen > 0 ? ' con la segunda arma' : ''}${godhand ? ' (Godhand)' : ''}${plan.especial ? ' (Maniobra Especial)' : ''}${plan.tecnica ? ` con ${plan.tecnica.nombre} [Ki ${textoKi(atk)}]` : ''}${aDistancia ? ` desde ${Math.hypot(origen.x - b.pos.x, origen.y - b.pos.y).toFixed(0)} m` : ''}${cAtk ? ` gastando ${cAtk} de cansancio` : ''}`;
 
   // Ataque adicional (Ki): más golpes con los mismos efectos y sin penalizador (Dominus p.55); los
   // limitados, sin los demás efectos de la técnica. Si una contra lo pone a la defensiva, no sigue. El
@@ -774,6 +775,10 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   const habSinCansancio = golpes > 1 && cAtk && !ki?.cansancioAnadido ? fijo || ataqueFinal(atk, def, { ...opcionesAtk, cansancio: 0 }) : habAtk;
   // Un proyectil no pasa de un resultado final de 280, salvo que extienda su Ki al arma (Core p.95).
   const conTope = !!arma && !superaTope(atk.ficha);
+  // Estela de destrucción: alcanza también a quien esté en la línea recta hasta el blanco; con
+  // Proyección, el atacante viaja con su ataque hasta él (Dominus p.58).
+  const estela = aDistancia && ki?.estela ? enLaLinea(ctx.luchadores, atk, def) : [];
+  if (aDistancia && ki?.proyeccion && !arma) llegarJunto(ctx, atk, def, 'viaja con su ataque');
   for (let g = 0; g < golpes; g++) {
     if (!activo(atk) || !activo(def) || (g > 0 && atk.aLaDefensiva)) break;
     // Se le fue del alcance (se retiró con un Transporte, lo despidió un Impacto): la serie se corta.
@@ -794,7 +799,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     const hab = conTope ? Math.min(habGolpe, TOPE_PROYECTIL - tA.valor) : habGolpe;
     // Un disparo tiene que llegar: su ataque final debe superar la dificultad por distancia (Tabla 48).
     if (aDistancia) {
-      const metros = distancia(atk, def);
+      const metros = Math.hypot(origen.x - def.pos.x, origen.y - def.pos.y);
       const dif = dificultadDisparo(metros);
       // Llega si el resultado final supera la dificultad (Core p.96).
       if (hab + tA.valor <= dif) {
@@ -805,7 +810,8 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
 
     // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92). Un
     // área de Ki alcanza a todos los del radio (Dominus p.58); sin Elección de blanco, aliados incluidos.
-    const alcanzados = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    const enArea = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    const alcanzados = estela.length ? [...estela.filter((b) => !enArea.includes(b)), ...enArea] : enArea;
     // Parada en área (Ki): quien cubre a sus aliados se defiende primero (Dominus p.58).
     const golpeG = limitado ? opcionesLimitado : opcionesAtk;
     const paradaArea = ia.elegirParadaArea(ctx, atk, alcanzados, hab, golpeG);
@@ -1629,12 +1635,17 @@ function advertir(ctx: Contexto, atk: Luchador, blanco: Luchador, dif: number, q
 /** Transporte automático: Muy Difícil advertirlo, las dos primeras veces contra cada rival (Dominus p.59). */
 const ADVERTIR_TRANSPORTE = { dificultad: 140, veces: 2 } as const;
 
-/** Aparece junto al blanco (Transporte automático); sus primeras veces, quizá lo sorprende (Dominus p.59). */
-function aparecerJunto(ctx: Contexto, atk: Luchador, def: Luchador) {
+/** Llega al instante junto al blanco, sin gastar movimiento (Transporte automático, Proyección). */
+function llegarJunto(ctx: Contexto, atk: Luchador, def: Luchador, como: string) {
   const metros = distancia(atk, def);
   const desde = { ...atk.pos };
   moverHacia(MOTOR, ctx, atk, def, Infinity);
-  log(ctx, () => `${atk.ficha.nombre} se transporta ${metros.toFixed(0)} m hasta ${def.ficha.nombre}.`, () => ({ camino: { quien: nro(ctx, atk), celdas: [desde, { ...atk.pos }] } }));
+  log(ctx, () => `${atk.ficha.nombre} ${como} ${metros.toFixed(0)} m hasta ${def.ficha.nombre}.`, () => ({ camino: { quien: nro(ctx, atk), celdas: [desde, { ...atk.pos }] } }));
+}
+
+/** Aparece junto al blanco (Transporte automático); sus primeras veces, quizá lo sorprende (Dominus p.59). */
+function aparecerJunto(ctx: Contexto, atk: Luchador, def: Luchador) {
+  llegarJunto(ctx, atk, def, 'se transporta');
   const vistas = atk.transportesVistos.get(def) ?? 0;
   if (vistas >= ADVERTIR_TRANSPORTE.veces) return;
   atk.transportesVistos.set(def, vistas + 1);
