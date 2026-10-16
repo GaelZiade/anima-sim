@@ -10,7 +10,7 @@ import {
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
-  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
+  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, posicionDe, cegueraContra, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
   golpeAPuntoVulnerable,
 } from './calculos';
@@ -44,7 +44,7 @@ import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
   alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, presenciaBase,
+  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, presenciaBase, efectosDe, cumpleCircunstancias, defensaSirve,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -340,6 +340,7 @@ function jugarAsalto(ctx: Contexto) {
         ejecutar(l, tecnica);
         l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
         log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre} [Ki ${textoKi(l)}].`);
+        trasLaTecnica(ctx, l);
         // Intangibilidad con Afectar a otros: también a los aliados que elija (Dominus p.69).
         const otros = l.ki!.activo.intangibleOtros;
         if (otros) for (const a of ia.aliadosIntangibles(ctx, l, otros * presenciaBase(l.ficha))) {
@@ -699,6 +700,29 @@ const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
 };
 
 export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
+  golpear(ctx, atk, def, a);
+  trasLaTecnica(ctx, atk);
+}
+
+/**
+ * Lo que una técnica le hace al terminar la acción (Dominus p.74-75): Pérdida del arma (se destroza;
+ * queda desarmado) y Técnica final (muere).
+ */
+function trasLaTecnica(ctx: Contexto, l: Luchador) {
+  const p = l.ki?.pendiente;
+  if (!p || (!p.arma && !p.final)) return;
+  if (p.arma) {
+    p.arma = false;
+    log(ctx, () => `  La energía destroza el arma de ${l.ficha.nombre}.`);
+    desarmar(ctx, l, l);
+  }
+  if (p.final) {
+    p.final = false;
+    if (l.estado === 'activo') caer(ctx, l, l, 'muerto');
+  }
+}
+
+function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   ctx.ataquesEnAsalto++;
   atk.stats.ataquesHechos++;
   if (a.esContra) atk.stats.contrasHechas++;
@@ -738,6 +762,11 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   } else ki = modDeAccion(atk, 'ataque', true);
   // Ataque especializado: contra otra clase de defensa la técnica no tiene ningún efecto (Dominus p.72).
   if (ki?.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) ki = atk.ki?.activo;
+  // Circunstancia de combate: fuera de ella, tampoco (Dominus p.72).
+  const circunstancias = plan.tecnica ? efectosDe(plan.tecnica).desventajas.circunstanciasCombate : [];
+  if (circunstancias.length && !cumpleCircunstancias(circunstancias, atk, def, posicionDe(atk, def) === 'espalda', cegueraContra(def, atk).nivel > 0)) ki = atk.ki?.activo;
+  // Compleja: +2 al índice de pifia (Dominus p.72).
+  const compleja = plan.tecnica && efectosDe(plan.tecnica).desventajas.compleja ? 2 : 0;
   // Sacrificio vital (Aumento de daño): PV a cambio de daño base (Dominus p.54).
   const sacrificio = ki?.sacrificioVital ? ia.sacrificioDeDano(ctx, atk, def, ki, { maniobra: m, tipo: plan.tipo, esContra: a.esContra }) : 0;
   if (ki && sacrificio) {
@@ -796,7 +825,7 @@ export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     if (!activo(atk) || !activo(def) || (g > 0 && atk.aLaDefensiva)) break;
     // Se le fue del alcance (se retiró con un Transporte, lo despidió un Impacto): la serie se corta.
     if (g > 0 && !aDistancia && !enAlcance(atk, def)) break;
-    const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque);
+    const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque + compleja);
     if (tA.pifia && arma?.fuego) armaDeFuegoFalla(ctx, atk, a.proyectil!.arma, tA.nivelPifia);
     if (tA.pifia) {
       atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
@@ -1202,6 +1231,14 @@ function golpeQueEntra(
 function resolverDefensa(
   ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
+  const r = defenderse(ctx, atk, def, habAtk, tA, o, etiqueta);
+  trasLaTecnica(ctx, r.defensor);
+  return r;
+}
+
+function defenderse(
+  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
+): ResultadoDefensa {
   // Parada en área (Ki): lo cubre la de un aliado, que ya se defendió (Dominus p.58).
   const pa = o.paradaArea;
   if (pa && pa.quien !== def && pa.resultado !== undefined && def.equipo === pa.quien.equipo && distancia(def, pa.quien) <= pa.radio) {
@@ -1250,7 +1287,9 @@ function resolverDefensa(
   // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
   if (!conEscudo) hacerOtraAccion(quienDefiende);
   // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
-  const tecnica = cubre ? cubre.tecnica : quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
+  const elegida = cubre ? cubre.tecnica : quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
+  // Defensa especializada: contra otra clase de ataque no da nada (Dominus p.73).
+  const tecnica = elegida && defensaSirve(efectosDe(elegida).desventajas.defensaContra, o) ? elegida : null;
   let kiDef: ModKi | undefined;
   if (tecnica) {
     kiDef = ejecutar(quienDefiende, tecnica);
@@ -1267,6 +1306,11 @@ function resolverDefensa(
     resultado = habAtk + tA.valor;
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
+  } else if (quienDefiende.ki && quienDefiende.ki.sinDefensa === quienDefiende.ki.asalto) {
+    // Sin defensa: ejecutó una técnica que le baja la guardia todo el asalto (Dominus p.75).
+    resultado = habAtk + tA.valor;
+    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)}; ${quienDefiende.ficha.nombre} no puede defenderse (Sin defensa) → ${resultado}.`,
+      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
   } else {
     // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53). Con el escudo mágico,
     // la Proyección Mágica Determinada hace lo mismo pagando zeon (Arcana p.26).
@@ -1277,7 +1321,8 @@ function resolverDefensa(
     }
     const fija = det?.valor ?? kiDef?.defensaFija ?? 0;
     // Con un escudo mágico tira su Proyección: la maestría es la de ella (Core p.10, p.17).
-    const umbralDef = conEscudo ? umbralPifia(quienDefiende.ficha.magia!.proyeccionDefensa ?? quienDefiende.ficha.magia!.proyeccion, quienDefiende.cap.ajustePifia) : quienDefiende.cap.umbralDefensa;
+    const umbralDef = (conEscudo ? umbralPifia(quienDefiende.ficha.magia!.proyeccionDefensa ?? quienDefiende.ficha.magia!.proyeccion, quienDefiende.cap.ajustePifia) : quienDefiende.cap.umbralDefensa) +
+      (tecnica && efectosDe(tecnica).desventajas.compleja ? 2 : 0);
     const tD = fija ? DADO_FIJO : tirar(ctx, umbralDef);
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;

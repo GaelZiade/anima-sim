@@ -548,9 +548,51 @@ export interface Desventajas {
   penalizador: number;
   /** Circunstancia límite: sólo con la mitad de PV, un cuarto, PV negativos o tras recibir daño. */
   circunstancia: '' | 'mitad' | 'cuarto' | 'negativos' | 'dano';
+  /** Circunstancia de combate: el blanco tiene que estar así (todas las elegidas), o la técnica no hace nada. */
+  circunstanciasCombate: readonly CircunstanciaCombate[];
+  /** Atada a un arma: sin ella empuñada no la puede usar. */
+  atadaArma: boolean;
+  /** Compleja: +2 al índice de pifia de la acción. */
+  compleja: boolean;
+  /** Condiciones que el simulador puede ver: Desenvainar (el arma envainada) y En carga. */
+  desenvainar: boolean;
+  enCarga: boolean;
+  /** Defensa especializada: sólo da sus efectos contra esa clase de ataque. */
+  defensaContra: '' | 'fisico' | 'proyectil' | 'ki' | 'conjuro' | 'psiquico';
+  /** Pérdida del arma: al ejecutarla se destroza el arma. */
+  perdidaArma: boolean;
+  /** Predeterminación: hay que declararla al empezar a acumular, un asalto antes, y usarla en cuanto se pueda. */
+  predeterminada: boolean;
+  /** Sacrificio: PV que pierde al ejecutarla (Infinity: Completo, hasta 0). */
+  sacrificioPv: number;
+  /** Sacrificio de Características: pierde un punto de esa característica cada vez. */
+  sacrificioAtributo: Atributo | '';
+  /** Sin defensa: no puede defenderse en el asalto en que la ejecuta (ni ejecutarla si ya se defendió). */
+  sinDefensa: boolean;
+  /** Sobrecarga: asaltos que tiene que esperar para ejecutar otras técnicas. */
+  sobrecarga: number;
+  /** Técnica final: muere al terminar de usarla. */
+  final: boolean;
+  /** Técnica mantenida: necesita tener mantenida la técnica de ese nombre. */
+  requiereMantenida: string;
+  /** Usos limitados: cuántas veces se puede usar (en el combate, el simulador no sabe las de antes). */
+  usos: number;
 }
 
-const SIN_DESVENTAJAS: Desventajas = Object.freeze({ agotamiento: 0, exceso: false, penalizador: 0, circunstancia: '' });
+export type CircunstanciaCombate = 'derribado' | 'apresado' | 'espalda' | 'sorprendido' | 'cegado';
+
+const SIN_DESVENTAJAS: Desventajas = Object.freeze({
+  agotamiento: 0, exceso: false, penalizador: 0, circunstancia: '', circunstanciasCombate: Object.freeze([]) as readonly CircunstanciaCombate[],
+  atadaArma: false, compleja: false, desenvainar: false, enCarga: false, defensaContra: '', perdidaArma: false, predeterminada: false,
+  sacrificioPv: 0, sacrificioAtributo: '', sinDefensa: false, sobrecarga: 0, final: false, requiereMantenida: '', usos: 0,
+} as Desventajas);
+
+/**
+ * Desventajas que no cambian nada en el simulador: de creación (Atadura elemental) o de lo que no
+ * modela (el día y la noche, el terreno, volar, ir montado, prepararse antes, las Intensidades
+ * cercanas, contra qué clase de ser). Se dan por cumplidas.
+ */
+const DESVENTAJAS_SIN_EFECTO = /^(atadura elemental|hacia (un elemento|dos afines)|exterminador|contra (seres humanoides|una clase|un ser)|preparacion previa|requerimientos? elementales?|intensidad (simple|mayor)|condiciones|en vuelo|montado|diurno|nocturno|terreno determinado|en un momento concreto)/;
 
 /** Lee una desventaja de combate, o false si el nombre no es una. */
 function leerDesventaja(d: Desventajas, nombre: string, opciones: string[]): boolean {
@@ -560,7 +602,27 @@ function leerDesventaja(d: Desventajas, nombre: string, opciones: string[]): boo
   else if (nombre.startsWith('penalizador a toda accion')) d.penalizador = valorDe(opciones) || valorDe([nombre]);
   else if (/circunstancia limite|mitad de pv|cuarta parte de pv|pv negativos|recibir dano/.test(nombre)) {
     d.circunstancia = /cuarta/.test(todo) ? 'cuarto' : /negativos/.test(todo) ? 'negativos' : /recibir/.test(todo) ? 'dano' : 'mitad';
-  } else return false;
+  } else if (nombre.startsWith('circunstancia de combate')) {
+    const c = (['derribado', 'apresado', 'espalda', 'sorprendido', 'cegado'] as const).filter((x) => todo.includes(x === 'sorprendido' ? 'sorpre' : x === 'espalda' ? 'espalda' : x));
+    d.circunstanciasCombate = [...d.circunstanciasCombate, ...c];
+  } else if (nombre.startsWith('atada a un arma')) d.atadaArma = true;
+  else if (nombre.startsWith('compleja')) d.compleja = true;
+  else if (/^(condiciones.*)?desenvainar/.test(todo)) d.desenvainar = true;
+  else if (/^(condiciones.*)?en carga/.test(todo)) d.enCarga = true;
+  else if (nombre.startsWith('defensa especializada') || nombre.startsWith('solo contra ataques fisicos') || nombre.startsWith('solo contra proyectiles') ||
+    nombre.startsWith('solo contra tecnicas') || nombre.startsWith('solo contra conjuros') || nombre.startsWith('solo contra disciplinas')) {
+    d.defensaContra = /fisico/.test(todo) ? 'fisico' : /proyectil/.test(todo) ? 'proyectil' : /tecnica|ki\b/.test(todo) ? 'ki' : /conjuro/.test(todo) ? 'conjuro' : 'psiquico';
+  } else if (nombre.startsWith('perdida del arma')) d.perdidaArma = true;
+  else if (nombre.startsWith('predeterminacion')) d.predeterminada = true;
+  else if (nombre.startsWith('sacrificio de caracteristica')) d.sacrificioAtributo = NOMBRE_ATRIBUTO.find(([re]) => re.test(todo))?.[1] ?? '';
+  else if (nombre.startsWith('sacrificio')) d.sacrificioPv = /completo/.test(todo) ? Infinity : valorDe(opciones) || valorDe([nombre]);
+  else if (nombre.startsWith('sin defensa')) d.sinDefensa = true;
+  else if (nombre.startsWith('sobrecarga')) d.sobrecarga = valorDe(opciones) || valorDe([nombre]) || 1;
+  else if (nombre.startsWith('tecnica final')) d.final = true;
+  else if (nombre.startsWith('tecnica mantenida')) d.requiereMantenida = normalizarRasgo(opciones.find((o) => !/^\d|nivel/.test(normalizarRasgo(o))) ?? '');
+  else if (nombre.startsWith('usos limitados')) d.usos = valorDe(opciones) || valorDe([nombre]) || 1;
+  else if (DESVENTAJAS_SIN_EFECTO.test(nombre)) return true;
+  else return false;
   return true;
 }
 
@@ -892,6 +954,16 @@ export interface EstadoKi {
   danoPrevio: number;
   /** Aumento de características activo: qué característica, desde y hasta qué valor, y asaltos sin pagar. */
   aumento: { atributo: AtributoAumento; desde: number; hasta: number; asaltos: number } | null;
+  /** Asalto en que declaró el objetivo (Predeterminación: un asalto antes, Dominus p.74). */
+  objetivoDesde: number;
+  /** Usos limitados: veces que usó cada técnica en el combate (Dominus p.75). */
+  usos: Map<Tecnica, number>;
+  /** Sobrecarga: hasta qué asalto no puede ejecutar técnicas (Dominus p.75). */
+  sobrecargaHasta: number;
+  /** Sin defensa: asalto en que ejecutó una técnica que lo deja sin defenderse (Dominus p.75). */
+  sinDefensa: number;
+  /** Lo que la técnica le hace al terminar la acción: Técnica final, Pérdida del arma (Dominus p.74-75). */
+  pendiente: { final: boolean; arma: boolean };
 }
 
 export function crearEstadoKi(l: Luchador): EstadoKi | null {
@@ -902,7 +974,8 @@ export function crearEstadoKi(l: Luchador): EstadoKi | null {
     activo: { ...SIN_KI }, mantenidas: new Map(), enEspera: new Map(), defensasLibres: 0, asalto: 0, objetivo: null,
     reservaMax: ki.reserva, limitesUsados: new Set(), danoCenobus: 0, recuperadoCenobus: 0, matadosAsalto: 0,
     armaduraActiva: false, asaltosArmadura: 0, auraActiva: false, asaltosAura: 0, aumento: null,
-    danoAsalto: 0, danoPrevio: 0, pantallaConvirtio: false,
+    danoAsalto: 0, danoPrevio: 0, pantallaConvirtio: false, objetivoDesde: 0, usos: new Map(), sobrecargaHasta: 0, sinDefensa: -1,
+    pendiente: { final: false, arma: false },
   };
 }
 
@@ -1018,7 +1091,10 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
     return;
   }
   // Empieza a acumular de cero: es cuando puede declarar la técnica que piensa dejar en espera.
-  if (!CARACTERISTICAS_KI.some((c) => e.acumulado[c])) e.objetivo = d.objetivo;
+  if (!CARACTERISTICAS_KI.some((c) => e.acumulado[c]) && e.objetivo !== d.objetivo) {
+    e.objetivo = d.objetivo;
+    e.objetivoDesde = asalto;
+  }
   const baja = Math.max(0, Math.floor(negativo / 20));
   let libre = e.reserva - totalConcentrado(e);
   for (const c of CARACTERISTICAS_KI) {
@@ -1039,6 +1115,13 @@ export function empezarAsalto(l: Luchador, d: DecisionKi, negativo: number, asal
 export function terminarAsalto(l: Luchador, hizoOtraCosa: boolean) {
   const e = l.ki;
   if (!e) return;
+  // Predeterminación: si pudiendo usarla no la usó, pierde todo lo acumulado (Dominus p.74).
+  const t = e.objetivo;
+  if (t && !e.ejecuto && efectosDe(t).desventajas.predeterminada && e.objetivoDesde < e.asalto && alcanzaLoAcumulado(e, t)) {
+    e.acumulado = {};
+    e.objetivo = null;
+    return;
+  }
   if (e.ejecuto) {
     e.acumulado = {};
     return;
@@ -1055,6 +1138,8 @@ export function terminarAsalto(l: Luchador, hizoOtraCosa: boolean) {
 export function puedeEjecutar(l: Luchador, t: Tecnica): boolean {
   const e = l.ki;
   if (!e) return false;
+  // Sobrecarga: no puede ejecutar ninguna técnica hasta que pase (Dominus p.75).
+  if (e.sobrecargaHasta >= e.asalto && e.sobrecargaHasta > 0) return false;
   if (!cumpleDesventajas(l, t)) return false;
   if (e.enEspera.has(t)) return costeKi(t) <= e.reserva;
   return alcanzaLoAcumulado(e, t) && costeKi(t) <= e.reserva;
@@ -1084,7 +1169,38 @@ function cumpleDesventajas(l: Luchador, t: Tecnica): boolean {
   }
   if (d.agotamiento && l.cansancio < d.agotamiento) return false;
   if (d.exceso && (l.ki?.reserva ?? 0) < 2 * costeKi(t)) return false;
+  const e = l.ki!;
+  if (d.atadaArma && (l.cap.desarmado || l.desarmado)) return false;
+  if (d.desenvainar && !l.enfundada) return false;
+  if (d.enCarga && (!l.cargando || l.trabados.length > 0)) return false;
+  if (d.sinDefensa && (l.defensasHechas > 0 || l.ficha.acumulacion)) return false;
+  if (d.sacrificioPv === Infinity && l.pv <= 0) return false;
+  if (d.usos && (e.usos.get(t) ?? 0) >= d.usos) return false;
+  if (d.predeterminada && !(e.objetivo === t && e.objetivoDesde < e.asalto)) return false;
+  if (d.requiereMantenida && ![...e.mantenidas.keys()].some((m) => normalizarRasgo(m.nombre) === d.requiereMantenida)) return false;
   return true;
+}
+
+/** Circunstancia de combate: el blanco está en todas las que pide la técnica (Dominus p.72). */
+export function cumpleCircunstancias(cs: readonly CircunstanciaCombate[], atk: Luchador, def: Luchador, espalda: boolean, cegado: boolean): boolean {
+  for (const c of cs) {
+    const ok = c === 'derribado' ? def.derribado : c === 'apresado' ? def.apresadoPor === atk : c === 'espalda' ? espalda :
+      c === 'sorprendido' ? atk.sorprendeA.has(def) : cegado;
+    if (!ok) return false;
+  }
+  return true;
+}
+
+/** Defensa especializada: el golpe es de la clase contra la que sirve la técnica (Dominus p.73). */
+export function defensaSirve(contra: Desventajas['defensaContra'], g: { aDistancia?: boolean; ki?: ModKi; costeTecnica?: number }): boolean {
+  switch (contra) {
+    case '': return true;
+    case 'fisico': return !g.aDistancia && !g.ki?.conjuro;
+    case 'proyectil': return !!g.aDistancia;
+    case 'ki': return !!g.costeTecnica;
+    case 'conjuro': return !!g.ki?.conjuro;
+    default: return false;
+  }
 }
 
 function alcanzaLoAcumulado(e: EstadoKi, t: Tecnica): boolean {
@@ -1138,6 +1254,21 @@ export function ejecutar(l: Luchador, t: Tecnica): ModKi {
   if (d.exceso) e.reserva = Math.max(0, e.reserva - costeKi(t));
   if (d.agotamiento) l.cansancio = Math.max(0, l.cansancio - d.agotamiento);
   if (d.penalizador) l.penTecnica += d.penalizador;
+  if (d !== SIN_DESVENTAJAS) {
+    // Sacrificio, de Características, Sin defensa, Sobrecarga, Usos limitados, y lo que pasa al
+    // terminar la acción (Técnica final, Pérdida del arma) (Dominus p.74-75).
+    if (d.sacrificioPv) l.pv = d.sacrificioPv === Infinity ? 0 : l.pv - d.sacrificioPv;
+    if (d.sacrificioAtributo) {
+      const a = d.sacrificioAtributo;
+      l.ficha = { ...l.ficha, atributos: { ...l.ficha.atributos, [a]: (l.ficha.atributos?.[a] ?? 5) - 1 } };
+      l.cap = capacidades(l.ficha);
+    }
+    if (d.sinDefensa) e.sinDefensa = e.asalto;
+    if (d.sobrecarga) e.sobrecargaHasta = e.asalto + d.sobrecarga;
+    if (d.usos) e.usos.set(t, (e.usos.get(t) ?? 0) + 1);
+    if (d.final) e.pendiente.final = true;
+    if (d.perdidaArma && !l.cap.desarmado) e.pendiente.arma = true;
+  }
   // Escudo de energía y Acumulación: se levantan al ejecutarla (Dominus p.65-66).
   if (ef.asalto.escudo && !l.escudoKi) l.escudoKi = ef.asalto.escudo;
   if (ef.asalto.pantalla && !l.pantallaKi) {

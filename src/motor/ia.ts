@@ -6,7 +6,7 @@ import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } 
 import {
   activo, enLaLinea, bonoCriticoDe, frialdadDe, rfCritico, rfDe, ALCANCE, alcanceMaximo, modProyectil, visionEntre, PEN_COBERTURA, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoBase, danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
-  perfilDe, proximaRanura,
+  perfilDe, proximaRanura, posicionDe, cegueraContra,
   golpeAPuntoVulnerable,
 } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
@@ -19,7 +19,7 @@ import { nivelCondicion } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
   asaltosParaJuntar, combinar, nivelMenos, costeKi, curable, dificultadDestruccion, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
-  enUso, repertorio, vistaPrevia, type DecisionKi, type EstadoSobrenatural, type ModKi,
+  enUso, repertorio, vistaPrevia, cumpleCircunstancias, defensaSirve, type DecisionKi, type EstadoSobrenatural, type ModKi,
 } from './ki';
 import type { Localizacion } from './reglas';
 import {
@@ -850,7 +850,7 @@ export function elegirManiobra(
   let elegida: Tecnica | undefined;
   for (const tec of tecnicasPara(atk, 'ataque', esContra)) {
     const ki = vistaPrevia(atk, tec);
-    if (!sirveContra(ki, def)) continue;
+    if (!sirveContra(ki, def) || !enCircunstancia(tec, atk, def)) continue;
     const r = mejorManiobra(ctx, atk, def, esContra, bono, ki, soloNormal);
     const neto = r.valor - costoTecnica(atk, def, tec);
     if (neto > mejorNeto) {
@@ -1492,6 +1492,17 @@ function costoDesventajas(l: Luchador, rival: Luchador | null, t: Tecnica): numb
   if (d.exceso) c += precioKi(l) * costeKi(t);
   if (d.agotamiento) c += 5 * d.agotamiento;
   if (d.penalizador && rival) c += valorNegativo(rival, l, d.penalizador, 0, 0) * Math.max(1, d.penalizador / 20);
+  // Sacrificio: los PV, como daño recibido; Completo, todos (Dominus p.75).
+  if (d.sacrificioPv) c += lambda(l) * (d.sacrificioPv === Infinity ? Math.max(0, l.pv) : d.sacrificioPv);
+  // Lo que pierde: un punto de característica, el arma, la vida, defenderse este asalto, las demás
+  // técnicas mientras dura la Sobrecarga.
+  if (rival) {
+    if (d.sacrificioAtributo) c += 0.1 * amenaza(l, rival);
+    if (d.perdidaArma && !l.cap.desarmado) c += amenaza(l, rival);
+    if (d.final) c += valorDejarFuera(rival, l);
+    if (d.sinDefensa) c += lambda(l) * amenaza(rival, l);
+    if (d.sobrecarga) c += d.sobrecarga * precioKi(l) * costeKi(t) / 2;
+  }
   return c;
 }
 
@@ -1503,6 +1514,12 @@ function costoTecnica(l: Luchador, rival: Luchador | null, t: Tecnica): number {
 /** Un ataque especializado contra otra defensa no tiene ningún efecto (Dominus p.72). */
 function sirveContra(ki: ModKi, def: Luchador): boolean {
   return !ki.soloContra || (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') === ki.soloContra;
+}
+
+/** Circunstancia de combate: fuera de ella la técnica no hace nada (Dominus p.72). */
+function enCircunstancia(t: Tecnica, atk: Luchador, def: Luchador): boolean {
+  const cs = efectosDe(t).desventajas.circunstanciasCombate;
+  return !cs.length || cumpleCircunstancias(cs, atk, def, posicionDe(atk, def) === 'espalda', cegueraContra(def, atk).nivel > 0);
 }
 
 /** Su ataque común contra `e` sin técnica: la referencia con que se compara cada técnica en la decisión. */
@@ -2037,6 +2054,7 @@ export function elegirTecnicaDefensa(
   let mejorNeto = 0;
   for (const t of candidatas) {
     const ef = efectosDe(t);
+    if (!defensaSirve(ef.desventajas.defensaContra, g)) continue;
     const ganancia = sinTecnica - costo(vistaPrevia(def, t));
     const deAsalto = ef.asalto.ta || ef.asalto.parada || ef.asalto.esquiva || ef.asalto.escudo || ef.asalto.pantalla ? otros : 0;
     const neto = ganancia * (1 + deAsalto) - costoTecnica(def, atk, t);
@@ -2066,7 +2084,7 @@ export function elegirParadaArea(
     if (sobrenatural && !b.cap.est.paraEnergia) continue;
     for (const t of tecnicasPara(b, 'defensa')) {
       const radio = efectosDe(t).accion.paradaArea;
-      if (radio) candidatos.push({ b, t, radio });
+      if (radio && defensaSirve(efectosDe(t).desventajas.defensaContra, { ...g, aDistancia: false })) candidatos.push({ b, t, radio });
     }
   }
   if (!candidatos.length) return null;
@@ -2307,11 +2325,13 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
   if (acumula && rival && !CARACTERISTICAS_KI.some((c) => e.acumulado[c])) {
     let mejorRitmo = 0;
     // Sólo vale declarar las que tardan más de un asalto en juntarse: las demás se usan en el asalto.
+    // Las predeterminadas se declaran siempre, aunque se junten en un asalto: se usan al siguiente.
+    const predeterminada = (t: Tecnica) => efectosDe(t).desventajas.predeterminada;
     const candidatas = repertorio(l.ficha).filter(
-      (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && asaltosParaJuntar(l, t, penAccion(l), true) >= 2,
+      (t) => efectosDe(t).clase === 'ataque' && !e.enEspera.has(t) && costeKi(t) <= e.reserva && (predeterminada(t) || asaltosParaJuntar(l, t, penAccion(l), true) >= 2),
     );
     for (const t of candidatas) {
-      const ritmo = netoTecnica(ctx, l, rival, t) / asaltosParaJuntar(l, t, penAccion(l), true);
+      const ritmo = netoTecnica(ctx, l, rival, t) / Math.max(predeterminada(t) ? 2 : 1, asaltosParaJuntar(l, t, penAccion(l), true));
       if (ritmo > mejorRitmo) {
         mejorRitmo = ritmo;
         objetivo = t;
@@ -2328,6 +2348,7 @@ export function decisionKi(ctx: Contexto, l: Luchador, acumula: boolean): Decisi
  */
 export function tecnicaParaEspera(_ctx: Contexto, l: Luchador): Tecnica | null {
   const t = l.ki?.objetivo;
-  if (!t || !puedePonerEnEspera(l, t)) return null;
+  // Una predeterminada no espera: se usa en cuanto se puede (Dominus p.74).
+  if (!t || !puedePonerEnEspera(l, t) || efectosDe(t).desventajas.predeterminada) return null;
   return t;
 }

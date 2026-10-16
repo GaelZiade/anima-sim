@@ -625,3 +625,83 @@ describe('Reflectar con Elección del blanco, Afectar a otros y Fusión (Dominus
     expect(atk.ki!.mantenidas.size).toBe(0);
   });
 });
+
+describe('desventajas que faltaban (Dominus p.71-75)', () => {
+  it('lectura: todas se reconocen; las de ambientación no hacen nada', () => {
+    const ef = efectosDe(tecnica('X', 'Habilidad de ataque (+50), Circunstancia de combate (Derribado, Espalda), Atada a un arma, Compleja, Perdida del arma, Sacrificio (-50 PV), Sin defensa, Sobrecarga (2), Usos limitados (3), Atadura elemental (Hacia un elemento), Exterminador (Contra seres humanoides), Condiciones (Nocturno)'));
+    expect(ef.desconocidos).toEqual([]);
+    expect(ef.desventajas).toMatchObject({ circunstanciasCombate: ['derribado', 'espalda'], atadaArma: true, compleja: true, perdidaArma: true, sacrificioPv: 50, sinDefensa: true, sobrecarga: 2, usos: 3 });
+    const d = efectosDe(tecnica('D', 'Habilidad de parada (+50), Defensa especializada (Solo contra proyectiles), Predeterminacion, Tecnica final, Sacrificio de Caracteristicas (Fuerza), Tecnica mantenida (Coraza)')).desventajas;
+    expect(d).toMatchObject({ defensaContra: 'proyectil', predeterminada: true, final: true, sacrificioAtributo: 'FUE', requiereMantenida: 'coraza' });
+    expect(efectosDe(tecnica('S', 'Habilidad de ataque (+10), Sacrificio (Completo)')).desventajas.sacrificioPv).toBe(Infinity);
+  });
+
+  it('Usos limitados, Sobrecarga, Atada a un arma, Sin defensa y Técnica mantenida limitan cuándo se puede', () => {
+    const usos = tecnica('U', 'Habilidad de ataque (+10), Usos limitados (1)', { DES: 1 });
+    const l = crearLuchador(maestro([usos]), 'A', 0, 0);
+    l.ki!.acumulado = { DES: 5 };
+    expect(puedeEjecutar(l, usos)).toBe(true);
+    ejecutar(l, usos);
+    expect(puedeEjecutar(l, usos)).toBe(false);
+
+    const carga = tecnica('C', 'Habilidad de ataque (+10), Sobrecarga (1)', { DES: 1 });
+    const otra = tecnica('O', 'Habilidad de ataque (+10)', { DES: 1 });
+    const s = crearLuchador(maestro([carga, otra]), 'A', 0, 0);
+    s.ki!.acumulado = { DES: 5 };
+    s.ki!.asalto = 1;
+    ejecutar(s, carga);
+    s.ki!.acumulado = { DES: 5 };
+    expect(puedeEjecutar(s, otra)).toBe(false);
+    s.ki!.asalto = 3;
+    expect(puedeEjecutar(s, otra)).toBe(true);
+
+    const arma = tecnica('A', 'Habilidad de ataque (+10), Atada a un arma', { DES: 1 });
+    const a = crearLuchador(maestro([arma]), 'A', 0, 0);
+    a.ki!.acumulado = { DES: 5 };
+    expect(puedeEjecutar(a, arma)).toBe(true);
+    a.desarmado = true;
+    expect(puedeEjecutar(a, arma)).toBe(false);
+
+    const guardia = tecnica('G', 'Habilidad de ataque (+10), Sin defensa', { DES: 1 });
+    const g = crearLuchador(maestro([guardia]), 'A', 0, 0);
+    g.ki!.acumulado = { DES: 5 };
+    g.defensasHechas = 1;
+    expect(puedeEjecutar(g, guardia)).toBe(false);
+
+    const coraza = tecnica('Coraza', 'Armadura (4)', { CON: 1 }, { mantenimiento: 1 });
+    const golpe = tecnica('G2', 'Habilidad de ataque (+10), Tecnica mantenida (Coraza)', { DES: 1 });
+    const m = crearLuchador(maestro([coraza, golpe]), 'A', 0, 0);
+    m.ki!.acumulado = { DES: 5, CON: 5 };
+    expect(puedeEjecutar(m, golpe)).toBe(false);
+    ejecutar(m, coraza);
+    expect(puedeEjecutar(m, golpe)).toBe(true);
+  });
+
+  it('Sacrificio y Sacrificio de Características se pagan al ejecutarla', () => {
+    const t = tecnica('S', 'Habilidad de ataque (+10), Sacrificio (-30 PV), Sacrificio de Caracteristicas (Fuerza)', { DES: 1 });
+    const l = crearLuchador(maestro([t]), 'A', 0, 0);
+    l.ki!.acumulado = { DES: 5 };
+    ejecutar(l, t);
+    expect(l.pv).toBe(170);
+    expect(l.ficha.atributos!.FUE).toBe(8);
+  });
+
+  it('Técnica final: muere al terminar el ataque; Sin defensa: no se defiende ese asalto', () => {
+    const fin = tecnica('Fin', 'Habilidad de ataque (+100), Tecnica final, Sin defensa', { DES: 1 });
+    const atk = crearLuchador(maestro([fin]), 'A', 0, 0);
+    const def = crearLuchador(rival(), 'B', 1, 0);
+    for (const l of [atk, def]) {
+      l.ataquesDeclarados = 1;
+      l.planAtaques = [{ pen: 0, sinArmas: false }];
+      l.ataquesRestantes = 1;
+    }
+    atk.ki!.acumulado = { DES: 5 };
+    atk.ki!.asalto = 1;
+    const ctx: Contexto = {
+      opciones: {}, rng: crearRng(1), luchadores: [atk, def], asalto: 1, registro: [],
+      ataquesEnAsalto: 0, ataquesAsaltoAnterior: 0, movimientosEnAsalto: 0, ventaja: { A: 1, B: 1 },
+    };
+    atacar(ctx, atk, def, { esContra: false, bono: 0, tecnica: fin });
+    expect(atk.estado).toBe('muerto');
+  });
+});
