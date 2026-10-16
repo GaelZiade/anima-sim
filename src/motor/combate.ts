@@ -1366,7 +1366,9 @@ function defenderse(
     const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
     const sobrenatural = atk.cap.danaEnergia || !!o.ki?.danaEnergia || !!o.ki?.sobrenatural || tipoG === 'ENE';
     if (!esc.conjuro.escudoSoloSobrenatural || sobrenatural) {
-      baseTrasEscudo = escudoRecibe(ctx, danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo), habAtk + tA.valor, {
+      // Escudo de Luz: lo de oscuridad le hace el doble (Core p.126).
+      const doble = !!esc.conjuro.escudoDobleContra && o.ki?.naturaleza === esc.conjuro.escudoDobleContra ? 2 : 1;
+      baseTrasEscudo = escudoRecibe(ctx, doble * danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo), habAtk + tA.valor, {
         nombre: `${esc.conjuro.nombre} de ${def.ficha.nombre}`, resistencia: esc.resistencia,
         quedan: (r) => { esc.resistencia = r; }, romper: () => romperEscudo(def),
       });

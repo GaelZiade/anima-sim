@@ -105,6 +105,8 @@ export interface ModKi {
   sobrenatural: boolean;
   /** Ataque elemental: TA en la que ataca ('' si no la cambia, Dominus p.63). */
   elemento: TipoAtaque | '';
+  /** De qué está hecho el ataque ("luz", "oscuridad"…): el Escudo de Luz recibe doble de la oscuridad. */
+  naturaleza: string;
   /** Marca: bono a todo ataque contra quien dañe (Dominus p.70). */
   marca: number;
   /** Impacto: Fuerza del control que lanza lejos al blanco, o lo atrae (Dominus p.68). */
@@ -193,7 +195,7 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   accionesAdicionales: 0, recuperaAccion: false, prevision: 0, defensasAdicionales: 0, paradaArea: 0, transporte: 0, turno: 0, ta: 0, taInmodificable: false, taFisica: false, lentitud: 0, rotura: 0, entereza: 0, movimiento: 0, acrobacias: 0,
   frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
   visionNocturna: false, veEnergia: false,
-  danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', marca: 0, impacto: 0,
+  danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', naturaleza: '', marca: 0, impacto: 0,
   atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, espejismos: 0, espejismoIndeteccion: 0, espejismoFantasmal: 0, armaKi: -1, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
   interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, intangibleOtros: 0, fusion: false, reflectar: false, reflectarEligeBlanco: false, reflectarEsoterico: false, absorcionKi: 0, indirecto: false,
   danoReducido: 0, soloContra: '',
@@ -301,7 +303,7 @@ const CATALOGO: Record<string, DefEfecto> = {
   'potenciar critico': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.critico = Math.max(m.critico, v); if (hay(o, /automatico/)) m.criticoAuto = true; } },
   'potenciar critico real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, v, o) => { m.critico = Math.max(m.critico, v); if (hay(o, /automatico/)) m.criticoAuto = true; } },
   'ataque sobrenatural': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.sobrenatural = true; m.elemento = 'ENE'; } },
-  'ataque elemental': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.elemento = elementoDe(o) || m.elemento; } },
+  'ataque elemental': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.elemento = elementoDe(o) || m.elemento; if (hay(o, /oscuridad/)) m.naturaleza = 'oscuridad'; else if (hay(o, /luz/)) m.naturaleza = 'luz'; } },
   'marca': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.marca = Math.max(m.marca, v || (hay(o, /mayor/) ? 50 : 20)); } },
   'marca menor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 20); } },
   'marca mayor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 50); } },

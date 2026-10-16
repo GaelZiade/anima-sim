@@ -9,7 +9,7 @@ import { atributo, bonoCaracteristica } from './maniobras';
 import { penAccion } from './calculos';
 import { umbralPifia, type TipoAtaque } from './reglas';
 import { conIncremento, SIN_KI, type ModKi } from './ki';
-import type { Ranura } from './rasgos';
+import { normalizarRasgo, type Ranura } from './rasgos';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
 export interface Mantenido {
@@ -110,7 +110,7 @@ export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
 }
 
 /**
- * Un conjuro de ataque o anímico como un golpe sobrenatural: daña energía, en su TA y con su daño.
+ * Un conjuro de ataque o anímico como un golpe sobrenatural, en su TA y con su daño.
  * Los anímicos no tienen daño y son invisibles para quien no ve la magia (Core p.122).
  */
 export function golpeDeConjuro(c: Conjuro, g: Grado): ModKi {
@@ -118,8 +118,11 @@ export function golpeDeConjuro(c: Conjuro, g: Grado): ModKi {
   let ki = golpesDeConjuro.get(g);
   if (!ki) {
     const animico = c.tipos.includes('animico');
+    const ta = animico ? 'ENE' : c.ta ?? 'ENE';
+    // Sólo los que atacan en Energía dañan energía (inmateriales, intangibles, barreras): una bola de
+    // fuego no daña a un espectro (Core p.122).
     ki = Object.freeze({
-      ...SIN_KI, sobrenatural: true, danaEnergia: true, elemento: animico ? 'ENE' : c.ta ?? 'ENE', danoFijo: g.dano ?? 0, conjuro: true,
+      ...SIN_KI, sobrenatural: true, danaEnergia: ta === 'ENE', elemento: ta, danoFijo: g.dano ?? 0, conjuro: true, naturaleza: normalizarRasgo(c.via),
       invisible: animico && !c.tipos.includes('ataque'),
     });
     golpesDeConjuro.set(g, ki);
@@ -166,7 +169,14 @@ export function maximoInnato(act: number): number {
  */
 export function actDe(l: Luchador): number {
   const pen = Math.ceil(Math.max(0, penAccion(l)) / 10) * 5;
-  return Math.max(0, l.ficha.magia!.act - pen);
+  // Sin poder gesticular ni hablar (apresado, atado, inmovilizado) acumula la mitad (Core p.117).
+  const base = sinGestos(l) ? Math.floor(l.ficha.magia!.act / 2) : l.ficha.magia!.act;
+  return Math.max(0, base - pen);
+}
+
+/** No puede mover los brazos: apresado, atado, con Lazos de Luz o con parálisis parcial o completa. */
+function sinGestos(l: Luchador): boolean {
+  return !!l.apresadoPor || l.atadura > 0 || !!l.lazos || l.paralisis >= 2;
 }
 
 /** Su ACT este asalto preparando ese conjuro: +10 si es su Conjuro Especialista (Arcana p.30). */

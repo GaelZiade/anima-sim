@@ -89,7 +89,8 @@ export function lanzarConjuro(motor: Motor, ctx: Contexto, l: Luchador, x: Lanza
   const contras: { quien: Luchador; bono: number }[] = [];
   // Choque de descargas (Core p.117): el blanco puede interceptar un conjuro de ataque con el suyo.
   let factor = 1;
-  if (!animico && c.tipos.includes('ataque')) {
+  // Sólo chocan los conjuros de ataque con daño directo (Core p.119).
+  if (!animico && c.tipos.includes('ataque') && (g.dano ?? 0) > 0) {
     const choque = interceptar(motor, ctx, l, obj, habPara(obj) + t.valor, g.dano ?? 0, true);
     if (choque === 'anulado' || choque === 'pierde') return;
     if (choque !== null) factor = choque;

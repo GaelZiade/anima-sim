@@ -349,3 +349,22 @@ describe('registro de efectos', () => {
     }
   });
 });
+
+describe('auditoría de magia (16/10/2026)', () => {
+  it('sólo los conjuros en Energía dañan energía (Core p.122); la oscuridad lleva su naturaleza', () => {
+    const fuego = conjuro('Bola de Fuego');
+    const luz = conjuro('Descarga de Luz');
+    expect(golpeDeConjuro(fuego, fuego.grados[0]).danaEnergia).toBe(false);
+    expect(golpeDeConjuro(luz, luz.grados[0]).danaEnergia).toBe(true);
+    expect(golpeDeConjuro(luz, luz.grados[0]).naturaleza).toBe('luz');
+  });
+
+  it('apresado acumula la mitad del ACT (Core p.117)', async () => {
+    const { actDe } = await import('../src/motor/magia');
+    const m = crearLuchador(mago({ libres: ['Arma Ígnea'] }), 'A', 0, 0);
+    const k = crearLuchador(soldado, 'B', 1, 0);
+    const act = actDe(m);
+    m.apresadoPor = k;
+    expect(actDe(m)).toBe(Math.floor(act / 2));
+  });
+});
