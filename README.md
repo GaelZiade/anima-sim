@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 300 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 354 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
@@ -141,8 +141,8 @@ fichas/         planillas reales de la mesa
 
 **Hecho:** combate cuerpo a cuerpo completo (maniobras, estilos, Ars Magnus, ventajas de combate,
 Tabla 43 entera con la Tabla 1 del Dominus), combate con proyectiles (arcos, ballestas, armas de
-fuego, arrojadizas) y línea de visión, Ki completo (técnicas con sus efectos sobrenaturales,
-Combinables, Forzar, desventajas, técnicas a distancia, habilidades activas del Ki, Límites, Leo),
+fuego, arrojadizas) y línea de visión, Ki completo (todos los efectos del Dominus cap. 5 con sus
+ventajas y desventajas, Combinables, Forzar, habilidades activas del Ki y su Detección, Límites, Leo),
 auditoría contra los manuales (tres tandas: reglas, estructura, y la IA valorando con las mismas reglas que el motor), mapa en grilla con paredes y terreno infranqueable, página con compendio, editor de mapa,
 Monte Carlo en paralelo y combate en vivo animado.
 
@@ -158,11 +158,15 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
    (`sinSimular` dice qué falta).
 2. **IA:** moverse con acción activa sólo cuando conviene. (La amenaza ya cuenta magia y Ki; la escala
    unificada del puntaje se probó y se descartó: DISENO.md, "La moneda del puntaje".)
-3. Detalles abiertos: Erudición del Ki (localizar sin ver)
-   supone la tirada; lo que no se simula del Ki y de los proyectiles (DISENO.md). Las reglas que
-   faltaban de AUDITORIA.md sección 3 están todas.
+3. Confirmar las interpretaciones propias del Ki (DISENO.md, "Interpretaciones propias"): frenar la
+   retirada por Transporte, el arma que crea un Arma física de Ki, cómo reparte los ataques el
+   Espejismo y las desventajas de ambientación dadas por cumplidas.
+4. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
+   Ki"). Las reglas que faltaban de AUDITORIA.md sección 3 están todas.
 
 **Decisiones del usuario que conviene no reabrir:** la Tabla 25 se corre a tope desde parado; el combate desarmado es Precisa y apunta a la
 cabeza con −30 (Core p.76-77); Defensa adicional de Ki = +N defensas libres; técnicas en espera se
 pagan por asalto; el Ki sobrante vale en el mismo asalto y vuelve al terminarlo; un área de Ki no se
-intercepta. El resto, en DISENO.md y AUDITORIA.md.
+intercepta; la Detección del Ki se tira una vez por asalto; Parada en área sin el −120, con parar
+energía contra lo sobrenatural y una sola tirada para todos; Transporte con Advertir 140 las dos
+primeras veces; Estela sólo la línea. El resto, en DISENO.md y AUDITORIA.md.

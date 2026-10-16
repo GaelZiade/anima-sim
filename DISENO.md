@@ -847,6 +847,7 @@ Forzar Técnicas, la versión forzada de cada una. La IA elige entre todas con l
 | Aumento de características (Incremento superior) | Sube AGI, CON, DES o FUE hasta +3 (+4) pagando el valor alcanzado y 1 de Ki por asalto (cada 10); recalcula los bonos de la Tabla 3 | Core p.105, Dominus p.21 |
 | Destrucción por Ki | Toque sin penalizador; RF contra la Presencia base (+5 por punto extra, hasta el doble); el fracaso es daño sin armadura | Core p.104 |
 | Forzar Técnicas | Ver arriba | Dominus p.21 |
+| Detección del Ki | Si algún rival lo deja ciego, una tirada por asalto con (CM + Advertir)/2: localiza hasta el radio que da (ceguera parcial en vez de absoluta y la mitad de flanco y espalda); también descubre los Espejismos sin Indetección | Dominus p.11, p.17 |
 
 ### Efectos sobrenaturales (Dominus cap. 5)
 
@@ -868,12 +869,40 @@ Forzar Técnicas, la versión forzada de cada una. La IA elige entre todas con l
 | Ataque elemental | Ataca en CAL (fuego), ELE (aire), FRI (agua), FIL/CON/PEN (tierra) o ENE (luz, oscuridad), sin el −10 del crítico secundario | p.63 |
 | Ataque indirecto | No se le puede contraatacar | p.52 |
 | Ataque a distancia | Alcance en metros; daño del arma o 2×Presencia base + bono de POD. Proyectil disparado: el defensor sufre la Tabla 49 (parada −80, maestro −20; esquiva −30, maestro 0); el ataque final tiene que superar la dificultad de la Tabla 48. A distancia sólo se apunta, y no hay contra si no lo alcanza | p.57; Core p.96 |
+| Proyección | El atacante viaja con su ataque y termina junto al blanco (el ataque sigue siendo a distancia para la defensa y la Tabla 48) | p.58 |
+| Estela de destrucción | Alcanza también a quien esté en la línea recta hasta el blanco (a medio metro o menos), aliados incluidos; sin alcances parciales | p.58 |
+| Camuflar ataque | Advertir contra su dificultad; si falla, Sorpresa. Visto una vez, un nivel menos; superado, ya no | p.52 |
+| Ataque adicional (continuo, combo, cansancio) y limitado | Más golpes con los mismos efectos; continuo, sin contras hasta el último; combo, se corta si se defiende | p.55-56 |
+| Acción adicional, Recuperar acción, Previsión | Acciones activas sin el −25; recupera la acción tras quedar a la defensiva; −45 o nada de la Sorpresa | p.56-57 |
+| Parada en área | Un blanco de un ataque en área se defiende primero y su resultado vale para los aliados de su radio, que no se defienden; contra un área sobrenatural hace falta parar energía | p.58 |
+| Transporte automático | Ataque: aparece junto al blanco (Advertir 140 las dos primeras veces contra cada rival, o Sorpresa). Contra: junto a quien lo atacó de lejos, con el bono. Defensa con éxito: se retira (los demás trabados, un ataque natural cada uno contra su defensa plena; si alguno daña, no se va) | p.59 |
+| Aumentar rotura y entereza | A la rotura del golpe; a la entereza del arma y la armadura | p.60 |
+| Armadura | Capa de TA contra todo; Inmodificable (no baja; Sin armadura la deja a la mitad), Armadura física (no vale contra energía), Lentitud (−1 TM y −5 turno por punto) | p.60-61 |
+| Incrementos | Movimiento (+1 hasta 13, +½ más arriba, sin tope de Inhumanidad), Acrobacias/Frialdad/Resistir el dolor (por encima de 200 a la mitad), Capacidad incrementada (sólo en controles), RF, RM, RP | p.61-62 |
+| Habilidades perceptivas | Visión nocturna como la completa; Ver lo sobrenatural y Ver realmente ven la energía | p.62 |
+| Dañar energía / Ataque elemental en quien ya lo hace | +10 al daño base | p.63 |
+| Armas físicas de Ki | Empuña su arma (aunque lo hayan desarmado) con la calidad de la técnica; al terminar, vuelve a como estaba | p.63 |
+| Presa existencial | El apresado controla con su Poder y no se libra con transportes (una presa común sí) | p.64 |
+| Apresamiento mantenido | Sostiene la presa con el valor de la técnica | p.65 |
+| Choque físico | Con disparos paralelos intercepta una descarga (Tabla 57); si gana, sigue sólo si lo alcanza | p.65 |
+| Espejismo | Cada ataque de quien no las descubre va al azar entre él y sus ilusiones (una ilusión golpeada se deshace); las ilusiones atacan sin dañar, salvo las fantasmales a quien falle la RP. Las descubre quien ve la energía o detecta el Ki y supera la Indetección | p.65-66 |
+| Regeneración | El Escudo o la Acumulación mantenidos recuperan ese valor al empezar el asalto | p.65-66 |
+| Aumento de daño: Sacrificio, Daño límite | +1 (o +2) por PV sacrificado (la IA prueba de a un 5%); + los PV ya perdidos | p.54 |
+| Interrupción: tipos | Ki y Magia (los conjuros mantenidos); sin tipo, Ki | p.69 |
+| Intangibilidad: Afectar a otros, Fusión | Aliados amenazados hasta su Presencia (×5 extendida); Fusión: se materializa dentro (1d100 + Presencia, él +20), el que saca menos recibe la diferencia con crítico | p.69-70 |
+| Reflectar: Elección del blanco, esotérico | Contra el enemigo que más rinde; conserva los efectos del ataque | p.71 |
 
-Desventajas: Agotamiento (cansancio al ejecutarla, sin bono), Exceso de energía (paga otra vez su
-coste), Penalizador a toda Acción (baja 10 por asalto, nada lo quita), Circunstancia límite (mitad
-de PV, un cuarto, PV negativos, o haber recibido más de 10 de daño el asalto anterior), Daño reducido
-(mitad o nada, los efectos siguen) y Ataque especializado (contra otra defensa no tiene efectos).
-Las demás (elementales, condiciones de ambiente, Predeterminación…) no cambian el combate simulado.
+Desventajas (Dominus p.71-75): Agotamiento (cansancio al ejecutarla, sin bono), Exceso de energía
+(paga otra vez su coste), Penalizador a toda Acción (baja 10 por asalto, nada lo quita),
+Circunstancia límite (mitad de PV, un cuarto, PV negativos, o haber recibido más de 10 de daño el
+asalto anterior), Daño reducido (mitad o nada, los efectos siguen), Ataque especializado y
+Circunstancia de combate (fuera de ellas la técnica no hace nada), Atada a un arma, Desenvainar, En
+carga, Sin defensa (y no se defiende ese asalto), Usos limitados (en el combate), Técnica mantenida,
+Predeterminación (declararla un asalto antes; si pudiéndola usar no la usa, pierde lo acumulado),
+Sobrecarga (ninguna técnica por esos asaltos), Compleja (+2 a la pifia), Defensa especializada,
+Sacrificio de PV y de Características, Pérdida del arma y Técnica final. Las de ambientación que el
+simulador no modela (Atadura elemental, Exterminador, día y noche, terreno, vuelo, montura,
+Preparación previa, Requerimientos elementales) se dan por cumplidas.
 
 **Interpretaciones confirmadas** (14/10/2026):
 
@@ -965,15 +994,32 @@ penalizadores contra disparos (Core p.96). La bala no suma la Fuerza del usuario
   costo. Armadura mayor si algún rival ataca con energía; Aura si algún rival es sensible;
   Recuperación si le sobra el Ki. Curación cuando un aliado (o él) está por debajo del 70%.
 
+**Interpretaciones confirmadas** (16/10/2026):
+
+1. Parada en área: elimina el −120; contra un área mágica o sobrenatural necesita parar energía (sin
+   ella no intercepta). Una sola Parada con los bonos de la técnica: si gana, él y los aliados de su
+   radio no reciben nada; si pierde, todos reciben el daño de esa diferencia.
+2. Transporte automático: Advertir Muy Difícil (140) las dos primeras veces contra cada rival.
+3. Estela de destrucción: sólo la línea; sin el +40 de alcance parcial.
+
+**Interpretaciones propias** (a confirmar):
+
+1. Al retirarse con un Transporte, los otros trabados lo frenan si le hacen daño (como al
+   retirarse, Core p.94).
+2. Armas físicas de Ki: el arma que crea es la de su planilla, con la calidad de la técnica.
+3. Espejismo: un ataque va al azar entre él y sus ilusiones; una ilusión golpeada se deshace.
+4. Las desventajas de ambientación se dan por cumplidas (el escenario no sabe de día, terreno,
+   vuelo ni monturas).
+
 ### Pendiente del Ki
 
-No se simulan (no cambian el combate de la mesa o piden reglas que todavía no están): Camuflar
-ataque (Advertir), Acción adicional, Recuperar acción, Previsión, Transporte automático, Parada en
-área, Aumentar rotura y entereza, Incremento de movimiento y de habilidad, Capacidad incrementada,
-Armas físicas de Ki, Espejismo, Choque físico (descargas), las Ilusiones, Regeneración de escudos y
-pantallas, Ataque continuo y Combo, Proyección y Estela de destrucción, y la Transmisión del Ki.
-Ninguna técnica de las planillas de la mesa usa alguno (verificado el 15/10/2026: `efectosDe` no
-deja efectos desconocidos). Las técnicas a distancia miran la línea de visión y la cobertura, como
+Lo que todavía no se simula: el Sacrificio de Características del Aumento de daño (la planilla trae
+los valores finales y no se recalculan al perder atributos), las Habilidades psíquicas (Interrupción
+y RP sólo cuentan para lo que existe), Armas adicionales y Proyectiles de las Armas físicas de Ki,
+Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices, Custodium y la
+Transmisión del Ki (marionetas). La IA no valora la rotura (ni la del arma ni Aumentar rotura).
+De las 132 técnicas de ejemplo del Dominus sólo queda sin leer "Drenaje de Ki 160 RF" (un Estado
+escrito fuera de su efecto). Las técnicas a distancia miran la línea de visión y la cobertura, como
 los proyectiles.
 
 Velocidad: con Ki la IA evalúa cada técnica con cada maniobra. Tras las optimizaciones exactas (huella

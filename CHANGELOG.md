@@ -3,6 +3,25 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 16/10/2026: Ki completo (todos los efectos del Dominus)
+
+- **Detección del Ki:** una tirada por asalto; localiza hasta el radio que da.
+- **Efectos que faltaban** (AUDITORIA.md 9, 57 a 70): Camuflar ataque, Ataque adicional (continuo,
+  combo, cansancio) y limitado, Acción adicional, Recuperar acción, Previsión, Parada en área,
+  Transporte automático, Proyección, Estela de destrucción, Aumentar rotura y entereza, ventajas de
+  Armadura, Incrementos (movimiento, habilidad, Capacidad incrementada, RM, RP), Habilidades
+  perceptivas, +10 de Dañar energía y Ataque elemental, Regeneración, Presa existencial,
+  Apresamiento mantenido, Choque físico, Espejismo, Armas físicas de Ki, las ventajas de Aumento de
+  daño, Interrupción, Reflectar e Intangibilidad, y todas las desventajas que cambian el combate.
+- **Lectura:** los efectos escritos como en el libro ("Armadura 4", "Turno +50", "Ataque
+  Predeterminado Zen") se leen igual que los de la planilla.
+- **IA:** valora cada efecto nuevo con las mismas reglas que el motor (los de Asalto genéricos, por
+  el intercambio con y sin ellos; las desventajas, en el costo de la técnica).
+- **Estructura:** `combinar` va por tipo de valor; `intercambio` vive en `ia.ts` (lo usan conjuros y
+  técnicas); la calidad de un arma se cuenta en un lugar (`fichaConCalidad`).
+- **Huella idéntica** en todo el bloque (ninguna planilla de la mesa usa los efectos nuevos);
+  velocidad igual (bench A/B contra el commit anterior, dentro del ruido).
+
 ## 15/10/2026: auditoría, tercera tanda (la IA como el motor, la página)
 
 - **IA** (AUDITORIA.md 8, correcciones 36 a 47): efectos de Ki, tempo, ataques adicionales, cuándo

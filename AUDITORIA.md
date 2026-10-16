@@ -271,3 +271,28 @@ se valoraba en `valorEstado` como si sacara al rival del combate (caía en el ca
 vale el negativo que deja. "Dejarlo fuera de combate" se cuenta en un solo lugar (`valorDejarFuera`),
 que antes estaba copiado en cinco archivos.
 
+## 9. Efectos de Ki que faltaban (16/10/2026)
+
+Comparando los títulos del Dominus cap. 5 (p.51-75) con el catálogo de efectos (`ki.ts`, `CATALOGO`)
+faltaban efectos, ventajas y desventajas. Ninguna planilla de la mesa los usaba, así que la huella no
+cambia; todos tienen tests en `test/ki-efectos.test.ts`.
+
+| # | Qué faltaba | Cómo quedó | Dónde |
+|---|---|---|---|
+| 57 | **Detección del Ki** se suponía siempre lograda | Una tirada por asalto ((CM + Advertir)/2); localiza hasta el radio que da (Dominus p.11, p.17) | `combate-ki.ts`, `calculos.ts` |
+| 58 | **Camuflar ataque, Ataque adicional** (continuo, combo, cansancio) **y limitado** | Advertir contra la dificultad o Sorpresa; más golpes con o sin los efectos (Dominus p.52, p.55-56) | `combate.ts`, `ia.ts` |
+| 59 | **Acción adicional, Recuperar acción, Previsión** | Sin el −25; recupera la acción; −45 o nada de la Sorpresa (Dominus p.56-57) | `calculos.ts`, `combate.ts`, `ia.ts` |
+| 60 | **Parada en área** | Una sola Parada que cubre a los aliados del radio; contra lo sobrenatural, parar energía (Dominus p.58) | `combate.ts`, `combate-magia.ts`, `ia.ts` |
+| 61 | **Transporte automático** | Ataque (Advertir 140 dos veces), contra con bono, retirada al defenderse (Dominus p.59) | `combate.ts`, `ia.ts` |
+| 62 | **Proyección y Estela de destrucción** | Viaja con el ataque; alcanza la línea recta (Dominus p.58) | `combate.ts`, `calculos.ts` |
+| 63 | **Aumentar rotura y entereza, ventajas de Armadura** | Inmodificable, Armadura física, Lentitud (Dominus p.60-61) | `rotura.ts`, `calculos.ts` |
+| 64 | **Incrementos y Habilidades perceptivas** | Movimiento, habilidad, Capacidad incrementada, RM/RP, Visión nocturna, Ver lo sobrenatural (Dominus p.61-62) | `calculos.ts`, `maniobras.ts`, `magia.ts` |
+| 65 | **Dañar energía y Ataque elemental** en quien ya lo hace | +10 al daño base (Dominus p.63) | `calculos.ts` |
+| 66 | **Regeneración, Presa existencial, Apresamiento mantenido, Choque físico** | (Dominus p.64-66, Core p.117) | `ki.ts`, `combate.ts`, `combate-magia.ts` |
+| 67 | **Ventajas** de Aumento de daño, Interrupción, Reflectar e Intangibilidad | Sacrificio y Daño límite; Ki y Magia; Elección del blanco y esotérico; Afectar a otros y Fusión (Dominus p.54, p.69-71) | `combate.ts`, `combate-ki.ts`, `ia.ts` |
+| 68 | **Desventajas** que no se leían | Circunstancia de combate, Atada a un arma, Compleja, Condiciones, Defensa especializada, Pérdida del arma, Predeterminación, Sacrificios, Sin defensa, Sobrecarga, Técnica final, Técnica mantenida, Usos limitados (Dominus p.71-75) | `ki.ts`, `combate.ts`, `ia.ts` |
+| 69 | **Espejismo y Armas físicas de Ki** | Ilusiones que reciben ataques y atacan (fantasmales con RP); el arma de su planilla con la calidad de la técnica (Dominus p.63-66) | `combate-ki.ts`, `rotura.ts` |
+| 70 | Efectos escritos **como en el libro** ("Armadura 4", "Turno +50") no se leían | Valor en el nombre, alias y propiedades; de 132 técnicas de ejemplo queda una sin leer | `ki.ts` |
+
+Interpretaciones nuevas y lo que sigue sin simular: DISENO.md, "Ki", "Interpretaciones" y
+"Pendiente del Ki".
