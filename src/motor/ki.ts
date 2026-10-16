@@ -252,7 +252,7 @@ const SUMAR = (campo: keyof ModKi) => (m: ModKi, v: number) => { (m[campo] as nu
 const CATALOGO: Record<string, DefEfecto> = {
   'habilidad de ataque': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('ataque') },
   'habilidad de ataque completa': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('ataque') },
-  'ataque predeterminado': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('ataqueFijo') },
+  'ataque predeterminado': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.ataqueFijo = Math.max(m.ataqueFijo, v || dificultadDeTexto(o)); } },
   'habilidad de contraataque': { tipo: 'accion', clase: 'contra', aplicar: SUMAR('contraataque') },
   'maniobras de combate y apuntar': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('precision') },
   'maniobras de combate y apuntar reales': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('precision') },
@@ -262,7 +262,7 @@ const CATALOGO: Record<string, DefEfecto> = {
   'habilidad de esquiva': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('esquiva') },
   'habilidad de esquiva completa': { tipo: 'asalto', clase: 'defensa', aplicar: SUMAR('esquiva') },
   'habilidad de esquiva limitada': { tipo: 'accion', clase: 'defensa', aplicar: (m, v) => { m.esquiva = Math.max(m.esquiva, v); m.sinContra = true; } },
-  'defensa predeterminada': { tipo: 'accion', clase: 'defensa', aplicar: SUMAR('defensaFija') },
+  'defensa predeterminada': { tipo: 'accion', clase: 'defensa', aplicar: (m, v, o) => { m.defensaFija = Math.max(m.defensaFija, v || dificultadDeTexto(o)); } },
   'aumento de dano': { tipo: 'accion', clase: 'ataque', aplicar: aumentoDeDano },
   'aumento de dano real': { tipo: 'asalto', clase: 'ataque', aplicar: SUMAR('dano') },
   'multiplicador al dano': { tipo: 'accion', clase: 'ataque', aplicar: SUMAR('multDano') },
@@ -326,6 +326,35 @@ const CATALOGO: Record<string, DefEfecto> = {
   'ataque a distancia': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => aDistancia(m, o) },
   'ataque a distancia real': { tipo: 'asalto', clase: 'ataque', aplicar: (m, _v, o) => aDistancia(m, o) },
 };
+
+/** Otros nombres con que el libro escribe algunos efectos ("Turno +50", "Apuntar -50", "Estado sobrenatural"). */
+const ALIAS: Record<string, string> = {
+  'estado sobrenatural': 'estados sobrenaturales', 'estados sobrenatural': 'estados sobrenaturales',
+  'apuntar': 'maniobras de combate y apuntar', 'maniobras de combate': 'maniobras de combate y apuntar',
+  'turno': 'incrementar turno', 'bono al turno': 'incrementar turno',
+  'bono a la esquiva': 'habilidad de esquiva', 'bono a la parada': 'habilidad de parada', 'bono al ataque': 'habilidad de ataque',
+  'critico': 'potenciar critico', 'ataque en area': 'ataque con area', 'interrupcion rf dano': 'interrupcion',
+  'apresamiento presa': 'apresamiento', 'ataque': 'habilidad de ataque', 'multiplicacion de dano': 'multiplicador al dano', 'ataque camuflado': 'camuflar ataque',
+  'ataques adicionales': 'ataque adicional', 'ataques adicionales limitados': 'ataque adicional limitado',
+};
+for (const [a, b] of Object.entries(ALIAS)) CATALOGO[a] = CATALOGO[b];
+Object.assign(CATALOGO, {
+  // Ventajas sueltas de otro efecto de la misma técnica.
+  'ataque continuo': { tipo: 'accion', clase: 'ataque', aplicar: (m: ModKi) => { m.continuo = true; } },
+  'sin armadura': { tipo: 'accion', clase: 'ataque', aplicar: (m: ModKi) => { m.sinArmadura = true; } },
+  // "Daño x3" multiplica; "Daño +50" suma.
+  'dano': { tipo: 'accion', clase: 'ataque', aplicar: (m: ModKi, v: number, o: string[]) => { if (o.some((x) => /^x/i.test(x.trim()))) m.multDano = Math.max(m.multDano, v); else m.dano = Math.max(m.dano, v); } },
+  'eleccion de blanco': { tipo: 'accion', clase: 'ataque', aplicar: (m: ModKi) => { m.eleccionBlanco = true; } },
+  'prevision completa': { tipo: 'asalto', clase: 'variable', aplicar: (m: ModKi) => { m.prevision = 90; } },
+  'ilusion fantasmal': { tipo: 'asalto', clase: 'variable', aplicar: (m: ModKi, v: number) => { m.espejismoFantasmal = Math.max(m.espejismoFantasmal, v); } },
+  'ilusiones fantasmales': { tipo: 'asalto', clase: 'variable', aplicar: (m: ModKi, v: number) => { m.espejismoFantasmal = Math.max(m.espejismoFantasmal, v); } },
+} satisfies Record<string, DefEfecto>);
+
+/**
+ * Lo que la planilla o el libro anotan junto a los efectos y no es uno: cómo se mantiene o combina, y
+ * las ventajas que sólo bajan el coste (el coste ya viene en la planilla).
+ */
+const PROPIEDADES = /^(mantenida|mantenido|combinable|sostenimiento( menor| mayor)?|reduccion de ki|ninguna|afinidad elemental|requerimiento)/;
 
 /** Ventajas y desventajas de Ataque adicional (Dominus p.56). */
 function opcionesDeAdicionales(m: ModKi, o: string[]) {
@@ -633,7 +662,7 @@ function leerDesventaja(d: Desventajas, nombre: string, opciones: string[]): boo
     nombre.startsWith('solo contra tecnicas') || nombre.startsWith('solo contra conjuros') || nombre.startsWith('solo contra disciplinas')) {
     d.defensaContra = /fisico/.test(todo) ? 'fisico' : /proyectil/.test(todo) ? 'proyectil' : /tecnica|ki\b/.test(todo) ? 'ki' : /conjuro/.test(todo) ? 'conjuro' : 'psiquico';
   } else if (nombre.startsWith('perdida del arma')) d.perdidaArma = true;
-  else if (nombre.startsWith('predeterminacion')) d.predeterminada = true;
+  else if (/^predetermina(cion|da|do)/.test(nombre)) d.predeterminada = true;
   else if (nombre.startsWith('sacrificio de caracteristica')) d.sacrificioAtributo = NOMBRE_ATRIBUTO.find(([re]) => re.test(todo))?.[1] ?? '';
   else if (nombre.startsWith('sacrificio')) d.sacrificioPv = /completo/.test(todo) ? Infinity : valorDe(opciones) || valorDe([nombre]);
   else if (nombre.startsWith('sin defensa')) d.sinDefensa = true;
@@ -652,10 +681,16 @@ const efectosCache = new WeakMap<Tecnica, EfectosTecnica>();
  * Un efecto escrito como en el libro, con el valor en el nombre ("Armadura 4", "1 Espejismo",
  * "Ataque a distancia 100 metros", "Armas físicas de Ki calidad +10"): el valor pasa a las opciones.
  */
-function conValorAparte(e: EfectoTecnica): EfectoTecnica {
+function conValorAparte(e0: EfectoTecnica): EfectoTecnica {
+  if (CATALOGO[normalizarRasgo(e0.nombre)]) return e0;
+  // El nivel de la técnica ("Nv 3", "Nº 2") no es parte del efecto.
+  const e = { ...e0, nombre: e0.nombre.replace(/\s+n(v|º)\s*º?\s*\d+$/i, '') };
   if (CATALOGO[normalizarRasgo(e.nombre)]) return e;
-  const delante = /^(\d+)\s+(.+)$/.exec(e.nombre);
-  const detras = /^(.+?)\s+((?:calidad\s+)?[+\-x]?\d[\d.]*(?:\s*(?:metros?|kil[oó]metros?|km))?)$/i.exec(e.nombre);
+  // Una dificultad al final ("Camuflar ataque Inhumano", "Ataque Predeterminado Zen").
+  const dif = /^(.+?)\s+(rutinari[oa]|f[aá]cil|media|dif[ií]cil|muy dif[ií]cil|absurdo|casi imposible|imposible|inhumano|zen)$/i.exec(e.nombre);
+  if (dif && CATALOGO[normalizarRasgo(dif[1])]) return { ...e, nombre: dif[1], opciones: [dif[2], ...e.opciones] };
+  const delante = /^([+\-]?\d+)\s+(.+)$/.exec(e.nombre);
+  const detras = /^(.+?)\s+((?:calidad\s+|rf\s+|presa\s+)?[+\-x]?\s?\d[\d.]*(?:\s*(?:metros?|kil[oó]metros?|km|pv|rf|ta))?)$/i.exec(e.nombre);
   const [nombre, valor] = delante ? [delante[2], delante[1]] : detras ? [detras[1], detras[2]] : [e.nombre, ''];
   return valor && CATALOGO[normalizarRasgo(nombre)] ? { ...e, nombre, opciones: [valor, ...e.opciones] } : e;
 }
@@ -674,6 +709,7 @@ export function efectosDe(t: Tecnica): EfectosTecnica {
     const nombre = normalizarRasgo(e.nombre);
     const def = CATALOGO[nombre];
     if (!def) {
+      if (PROPIEDADES.test(nombre)) continue;
       const d = { ...desventajas };
       if (leerDesventaja(d, nombre, e.opciones)) desventajas = d;
       else desconocidos.push(e.nombre);

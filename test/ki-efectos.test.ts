@@ -743,3 +743,16 @@ describe('Espejismo y Armas físicas de Ki (Dominus p.63-66)', () => {
     expect([f.ataque, f.danoBase, f.arma!.calidad]).toEqual([armado.ataque + 10, armado.danoBase + 20, 10]);
   });
 });
+
+describe('efectos escritos como en el libro', () => {
+  const leer = (s: string) => efectosDe({ nombre: 'x', nivel: 1, cm: 0, coste: {}, mantenimiento: 0, combinable: false, efectos: leerEfectosTecnica(s) });
+  it('valor en el nombre, alias, dificultades, nivel y propiedades', () => {
+    const a = leer('Habilidad de Ataque +50, Apuntar -50, Turno +50, Critico +75, Camuflar ataque Inhumano, Ataque indirecto Nv 3, Daño x3, Destruir armadura -3 TA, Mantenida, Combinable');
+    expect(a.desconocidos).toEqual([]);
+    expect(a.accion).toMatchObject({ ataque: 50, precision: 50, critico: 75, camuflar: 320, indirecto: true, multDano: 3, reduccionTA: 3 });
+    expect(a.asalto.turno).toBe(50);
+    const d = leer('Ataque Predeterminado Zen, Estado sobrenatural RF 160 (Terror), Escudo de energía 400 PV, Apresamiento Presa 12');
+    expect(d.desconocidos).toEqual([]);
+    expect([d.accion.ataqueFijo, d.accion.estados[0]?.rf, d.asalto.escudo, d.accion.apresamiento]).toEqual([440, 160, 400, 12]);
+  });
+});
