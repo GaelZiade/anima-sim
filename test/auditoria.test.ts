@@ -389,3 +389,16 @@ describe('crítico de más de 100 en una extremidad (Core p.98)', () => {
     expect(e.pPierna).toBe(0);
   });
 });
+
+describe('Tabla 41 (Core p.85)', () => {
+  it('máximo de acciones activas por Destreza + Agilidad', async () => {
+    const { maxAccionesActivas } = await import('../src/motor/reglas');
+    expect([10, 11, 15, 20, 23, 26, 29, 32].map(maxAccionesActivas)).toEqual([1, 2, 3, 4, 5, 6, 8, 10]);
+  });
+  it('quien corre con una sola acción activa no ataca ese asalto', async () => {
+    const { simularCombate } = await import('../src/motor/combate');
+    const torpe = { id: 't', nombre: 'Torpe', pv: 100, turno: 80, ataque: 100, defensa: 50, danoBase: 40, tipoAtaque: 'FIL' as const, ta: {}, rf: 30, constitucion: 6, tipoMovimiento: 6, atributos: { DES: 5, AGI: 5 } };
+    const r = simularCombate([torpe], [{ ...torpe, id: 'o', nombre: 'Otro', turno: 10 }], { semilla: 1, registrar: true, distanciaInicial: 15, maxAsaltos: 2 });
+    expect(r.registro!.some((e) => e.texto.includes('Tabla 41'))).toBe(true);
+  });
+});

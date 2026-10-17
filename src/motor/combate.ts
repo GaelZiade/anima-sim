@@ -5,7 +5,7 @@ import { crearRng, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, extremidadDe, haySorpresa, localizar, nivelCritico, penPifiaTurno,
+  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, extremidadDe, maxAccionesActivas, haySorpresa, localizar, nivelCritico, penPifiaTurno,
   umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia, type TipoAtaque,
 } from './reglas';
 import {
@@ -502,6 +502,13 @@ function turno(ctx: Contexto, l: Luchador) {
         mover(ctx, l, obj);
         if (!enAlcance(l, obj)) break;
       }
+      // Atacar es otra acción activa: con todas las de la Tabla 41 gastadas (correr, levantarse,
+      // zafarse), no le queda una para atacar (Core p.85).
+      if (sinAccionesActivas(l)) {
+        log(ctx, () => `${l.ficha.nombre} ya hizo todas las acciones activas que puede en el asalto (Tabla 41).`);
+        l.ataquesRestantes = 0;
+        break;
+      }
       atacar(ctx, l, obj, { esContra: false, bono: 0 });
     }
     // Espejismo: sus ilusiones atacan a su blanco (Dominus p.65).
@@ -590,6 +597,13 @@ function retirarse(ctx: Contexto, l: Luchador) {
   if (!activo(l)) return;
   if (danado) log(ctx, () => `  ${l.ficha.nombre} no logra retirarse.`);
   else huir(ctx, l);
+}
+
+/** Tabla 41: ya hizo tantas acciones activas como le permiten su Destreza y Agilidad (sin ellas en la ficha, no hay tope). */
+function sinAccionesActivas(l: Luchador): boolean {
+  const a = l.ficha.atributos;
+  if (a?.DES === undefined || a.AGI === undefined) return false;
+  return l.accionesActivas >= maxAccionesActivas(a.DES + a.AGI);
 }
 
 function huir(ctx: Contexto, l: Luchador) {

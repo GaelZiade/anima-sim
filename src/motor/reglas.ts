@@ -52,6 +52,11 @@ export function localizar(d100: number): Localizacion {
   return 'cabeza';
 }
 
+/** Tabla 41 (Core p.85): máximo de acciones activas por asalto según Destreza + Agilidad. */
+export function maxAccionesActivas(desAgi: number): number {
+  return desAgi <= 10 ? 1 : desAgi <= 14 ? 2 : desAgi <= 19 ? 3 : desAgi <= 22 ? 4 : desAgi <= 25 ? 5 : desAgi <= 28 ? 6 : desAgi <= 31 ? 8 : 10;
+}
+
 /**
  * Qué extremidad, por la misma tirada de la Tabla 51: 51-60 el brazo derecho (el del arma), 61-70 el
  * izquierdo, 71-90 una pierna.
