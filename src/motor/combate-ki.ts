@@ -4,6 +4,7 @@
 
 import type { Contexto, Luchador, Tecnica } from './modelo';
 import { fichaConArmaKi } from './rotura';
+import { estadoProyectiles } from './proyectiles';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { resultadoResistencia, umbralPifia } from './reglas';
 import { activo, baseDeteccionKi, ataqueFinal, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe, proximaRanura } from './calculos';
@@ -379,18 +380,21 @@ export function efectosDeAsalto(motor: Motor, ctx: Contexto, l: Luchador, recien
     motor.log(ctx, () => `  Las ilusiones de ${l.ficha.nombre} se desvanecen.`);
   } else if (ki?.espejismos && !l.espejismos && recienEjecutada) crearEspejismos(motor, ctx, l, ki);
   if (l.sinArmaKi && (!ki || ki.armaKi < 0)) {
-    const { ficha, desarmado } = l.sinArmaKi;
+    const { ficha, desarmado, proyectiles } = l.sinArmaKi;
     l.sinArmaKi = null;
     motor.cambiarFicha(l, ficha);
     l.desarmado = desarmado;
+    if (proyectiles) l.proyectiles = proyectiles;
     motor.log(ctx, () => `  El arma de Ki de ${l.ficha.nombre} desaparece.`);
   } else if (ki && ki.armaKi >= 0 && !l.sinArmaKi && recienEjecutada) {
-    const armada = fichaConArmaKi(l, ki.armaKi);
+    const armada = fichaConArmaKi(l, ki);
     if (armada) {
-      l.sinArmaKi = { ficha: l.ficha, desarmado: l.desarmado };
+      l.sinArmaKi = { ficha: l.ficha, desarmado: l.desarmado, ...(ki.armaKiProyectiles ? { proyectiles: l.proyectiles } : {}) };
       motor.cambiarFicha(l, armada);
       l.desarmado = false;
-      motor.log(ctx, () => `  ${l.ficha.nombre} empuña un arma de Ki de calidad +${ki.armaKi}.`);
+      // Con Proyectiles: munición ilimitada mientras dure; al desaparecer vuelve la que tenía.
+      if (ki.armaKiProyectiles) l.proyectiles = estadoProyectiles(armada);
+      motor.log(ctx, () => `  ${l.ficha.nombre} empuña ${ki.armasAdicionales > 0 ? 'armas' : 'un arma'} de Ki de calidad +${ki.armaKi}.`);
     }
   }
   if (recienEjecutada && ki?.intangibleOtros) {

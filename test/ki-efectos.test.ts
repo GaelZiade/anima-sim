@@ -739,8 +739,25 @@ describe('Espejismo y Armas físicas de Ki (Dominus p.63-66)', () => {
     const armado = l.ficha;
     l.fichaArmada = armado;
     l.desarmado = true;
-    const f = fichaConArmaKi(l, 10)!;
+    const f = fichaConArmaKi(l, { armaKi: 10, armasAdicionales: 0, armaKiProyectiles: false })!;
     expect([f.ataque, f.danoBase, f.arma!.calidad]).toEqual([armado.ataque + 10, armado.danoBase + 20, 10]);
+  });
+
+  it('ventajas: Armas adicionales empuña dos iguales (segunda arma); Proyectiles, sus armas a distancia con munición ilimitada (Dominus p.63)', async () => {
+    const { capacidades } = await import('../src/motor/rasgos');
+    const { fichaConArmaKi } = await import('../src/motor/rotura');
+    const l = crearLuchador(maestro([tecnica('X', 'Habilidad de ataque (+10)')], {
+      arma: { nombre: 'Espada', calidad: 0 },
+      armasDistancia: [{ nombre: 'Arco largo', clase: 'disparo', ataque: 100, danoBase: 40, tipoAtaque: 'PEN', alcance: 100, municion: 5 }],
+    }), 'A', 0, 0);
+    const dos = fichaConArmaKi(l, { armaKi: 5, armasAdicionales: 1, armaKiProyectiles: false })!;
+    expect(dos.arma!.nombre).toBe('Espada y Espada');
+    expect(capacidades(dos).extras.some((e) => e.nombre.startsWith('Segunda arma'))).toBe(true);
+    const arco = fichaConArmaKi(l, { armaKi: 5, armasAdicionales: 0, armaKiProyectiles: true })!;
+    expect(arco.armasDistancia![0]).toMatchObject({ calidad: 5, ataque: 105, danoBase: 50, municion: Infinity });
+    const { efectosDe } = await import('../src/motor/ki');
+    const m = efectosDe(tecnica('Y', 'Armas físicas de Ki (+10, Armas adicionales 2, Proyectiles)'));
+    expect([m.asalto.armaKi, m.asalto.armasAdicionales, m.asalto.armaKiProyectiles]).toEqual([10, 2, true]);
   });
 });
 

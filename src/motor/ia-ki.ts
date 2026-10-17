@@ -724,7 +724,7 @@ function valorEfectosDeAsalto(ctx: Contexto, l: Luchador, asalto: ModKi): number
   const antes = intercambio(ctx, l);
   const llegaba = new Set(enemigos(ctx, l).filter((x) => alcanzable(l, x)));
   // Armas físicas de Ki: con el arma de la técnica en la mano (Dominus p.63).
-  const armada = asalto.armaKi >= 0 && !l.sinArmaKi ? fichaConArmaKi(l, asalto.armaKi) : null;
+  const armada = asalto.armaKi >= 0 && !l.sinArmaKi ? fichaConArmaKi(l, asalto) : null;
   return conCambio(() => {
     const previo = e.activo;
     const ficha = l.ficha, cap = l.cap, desarmado = l.desarmado;

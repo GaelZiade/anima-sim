@@ -21,7 +21,8 @@ retomar el trabajo, empezar por README.md.
   Afinidad elemental de los Aeones, Legados por nombre, Dominio físico sin doble conteo, Aumento y
   Debilidad sin deriva, una Aura por fuente, Presencia base y Detección del Ki en una sola cuenta;
   negativos en tres bolsas (Eliminación, Inmunidad); Aikido, Hakyoukuken y Mushin según el rival;
-  Xing Quan con la Iniciativa; Kusari-Gama y Florete cortas; aviso sin Unificación del Ki.
+  Xing Quan con la Iniciativa; Kusari-Gama y Florete cortas; aviso sin Unificación del Ki; Custodium,
+  Armas adicionales y Proyectiles de las Armas físicas de Ki; Tabla 51 verificada en el manual.
 - **Reglas que faltaban:** varios conjuros preparados a la vez (97); +3 de los cuadrúpedos al Derribo (98).
 - **Segunda pasada** (93 a 95): la IA mira la Tabla 41 al moverse; una sola parálisis
   (`nivelParalisis`) y una sola ceguera (`nivelCeguera`); `combate.ts` partido en defensa, distancia

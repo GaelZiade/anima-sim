@@ -2,7 +2,8 @@
 
 import type { Contexto, Ficha, Luchador } from './modelo';
 import { dado } from './rng';
-import { capacidades, localizacionArmadura, type Ranura } from './rasgos';
+import { capacidades, localizacionArmadura, usaDosArmas, type Ranura } from './rasgos';
+import type { ModKi } from './ki';
 import { esMaestro } from './reglas';
 import { activo, capasDe, combinarTA, type ZonaArmadura } from './calculos';
 import { atributo } from './maniobras';
@@ -117,11 +118,26 @@ export function fichaConCalidad(f: Ficha, calidad: number): Ficha {
 
 /**
  * Armas físicas de Ki (Dominus p.63): la ficha con su arma (la que tenía si lo desarmaron o se la
- * rompieron) de la calidad de la técnica; null si nunca tuvo una.
+ * rompieron) de la calidad de la técnica; null si nunca tuvo una. Con Armas adicionales empuña dos
+ * iguales (cuenta como segunda arma); con Proyectiles, sus armas a distancia también son de esa
+ * calidad y con munición ilimitada.
  */
-export function fichaConArmaKi(l: Luchador, calidad: number): Ficha | null {
+export function fichaConArmaKi(l: Luchador, ki: Pick<ModKi, 'armaKi' | 'armasAdicionales' | 'armaKiProyectiles'>): Ficha | null {
   const base = l.desarmado || l.cap.desarmado ? l.fichaArmada ?? l.armaRota : l.ficha;
-  return base && !base.arma?.desarmado ? fichaConCalidad(base, calidad) : null;
+  if (!base || base.arma?.desarmado) return null;
+  let f = fichaConCalidad(base, ki.armaKi);
+  const nombre = f.arma?.nombre ?? '';
+  if (ki.armasAdicionales > 0 && nombre && !usaDosArmas(nombre)) f = { ...f, arma: { ...f.arma, nombre: `${nombre} y ${nombre}` } };
+  if (ki.armaKiProyectiles && f.armasDistancia?.length) {
+    f = {
+      ...f,
+      armasDistancia: f.armasDistancia.map((a) => {
+        const g = (ki.armaKi - (a.calidad ?? 0)) / 5;
+        return { ...a, calidad: ki.armaKi, ataque: a.ataque + 5 * g, danoBase: a.danoBase + 10 * g, municion: Infinity };
+      }),
+    };
+  }
+  return f;
 }
 
 /**

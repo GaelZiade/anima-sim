@@ -188,6 +188,24 @@ describe('Kael en combate', () => {
 });
 
 describe('Límites (Dominus p.28-29)', () => {
+  it('Custodium: 30 de Ki cuando un aliado queda gravemente herido y 40 si muere, una vez por aliado', async () => {
+    const { custodium } = await import('../src/motor/ki');
+    const f = tecnicista([CORTE]);
+    const g = crearLuchador({ ...f, ki: { ...f.ki!, limites: ['custodium'] } }, 'A', 0, 0);
+    const aliado = crearLuchador({ ...f, id: 'aliado', nombre: 'Aliado', pv: 100 }, 'A', 1, 0);
+    const rival = crearLuchador({ ...f, id: 'rival', nombre: 'Rival', pv: 100 }, 'B', 2, 0);
+    g.ki!.reserva = 20;
+    aliado.pv = 50;
+    expect(custodium(g, aliado, false)).toBe(0);
+    aliado.pv = 20;
+    expect(custodium(g, aliado, false)).toBe(30);
+    expect(custodium(g, aliado, false)).toBe(0);
+    rival.pv = 10;
+    expect(custodium(g, rival, false)).toBe(0);
+    g.ki!.reserva = 10;
+    expect(custodium(g, aliado, true)).toBe(40);
+  });
+
   it('Caelum: recupera 30 de Ki una sola vez al bajar de un cuarto de sus PV, sin pasar la reserva inicial', () => {
     const f = tecnicista([CORTE]);
     const l = crearLuchador({ ...f, ki: { ...f.ki!, limites: ['caelum'] } }, 'A', 0, 0);

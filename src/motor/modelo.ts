@@ -503,7 +503,7 @@ export interface Luchador {
   /** La ficha armada que tenía antes de que lo desarmaran (un Arma física de Ki la imita). */
   fichaArmada: Ficha | null;
   /** Arma física de Ki en la mano: la ficha y si estaba desarmado antes de crearla (Dominus p.63). */
-  sinArmaKi: { ficha: Ficha; desarmado: boolean } | null;
+  sinArmaKi: { ficha: Ficha; desarmado: boolean; proyectiles?: EstadoArmaDistancia[] } | null;
   /** Intangible por la técnica de un aliado (Afectar a otros), mientras éste la mantenga (Dominus p.69). */
   intangiblePor: Luchador | null;
   /** Lo atrapó una Presa existencial: controla con su Poder y no se libra con transportes (Dominus p.64). */

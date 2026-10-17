@@ -40,7 +40,7 @@ import {
   celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable, type Celda, type MapaListo,
 } from './mapa';
 import {
-  ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv, alRecibirCritico,
+  ajusteTaEnergia, alMatar, custodium, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv, alRecibirCritico,
   crearEstadoKi, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi, type ModKi, nivelMenos, vistaPrevia,
   apresamientoMantenido, efectosDe, cumpleCircunstancias,
 } from './ki';
@@ -1102,6 +1102,16 @@ function limitePorDano(ctx: Contexto, l: Luchador, dano: number, critico = false
   if (conc) log(ctx, () => `  ${l.ficha.nombre} ${conc.resultado === 'conserva' ? 'conserva la concentración' : conc.resultado === 'vuelve' ? 'pierde la concentración: el zeon vuelve a su reserva (menos 10)' : 'pierde la concentración y el zeon acumulado'} (Resistir el dolor ${conc.tirada} contra ${2 * dano}).`);
   const limite = alPerderPv(l, dano);
   if (limite) log(ctx, () => `  ${l.ficha.nombre} activa su Límite ${limite}: recupera Ki (reserva ${l.ki!.reserva}).`);
+  guardianes(ctx, l, false);
+}
+
+/** Custodium: los aliados con el Límite del Guardián ganan Ki si `l` queda gravemente herido o muere (Dominus p.29). */
+function guardianes(ctx: Contexto, l: Luchador, muere: boolean) {
+  for (const x of ctx.luchadores) {
+    if (!x.ki || !activo(x)) continue;
+    const ki = custodium(x, l, muere);
+    if (ki) log(ctx, () => `  ${x.ficha.nombre} activa su Límite Custodium por ${l.ficha.nombre}: recupera ${ki} de Ki (reserva ${x.ki!.reserva}).`);
+  }
 }
 
 function verificarCaida(ctx: Contexto, atk: Luchador, def: Luchador) {
@@ -1219,6 +1229,7 @@ function caer(ctx: Contexto, atk: Luchador, def: Luchador, estado: Luchador['est
   def.estado = estado;
   def.stats.asaltoCaida = ctx.asalto;
   if (estado === 'muerto' && atk !== def && alMatar(atk)) log(ctx, () => `  ${atk.ficha.nombre} activa su Límite Mors: recupera 1 de Ki.`);
+  if (estado === 'muerto') guardianes(ctx, def, true);
   if (atk !== def) atk.stats.bajas++;
   // Muerto, ya no sostiene sus conjuros (inconsciente sí los mantiene, Core p.122).
   if (estado === 'muerto') terminarMantenidos(def);

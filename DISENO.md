@@ -238,8 +238,8 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
 6. **Rotura**: las armas se controlan en cada parada; la parada sin armas sólo si la defensa tuvo
    éxito; las armas grandes cuentan como a dos manos para Batto jutsu.
 7. **Crítico de más de 100 en un miembro** (Core p.98): queda inservible. El brazo del arma la suelta
-   (desarmado); la pierna lo deja derribado. Qué zona es brazo o pierna sale de la Tabla 51 publicada
-   (51-60, 61-70, 71-90), porque la copia del manual no la trae.
+   (desarmado); la pierna lo deja derribado. Qué zona es brazo o pierna sale de la Tabla 51 (Core p.96; verificada en el manual)
+   (51-60, 61-70, 71-90).
 
 ### Auditoría del combate (17/10/2026)
 
@@ -1095,9 +1095,12 @@ penalizadores contra disparos (Core p.96). La bala no suma la Fuerza del usuario
 
 Lo que no se simula: la ventaja Sacrificio de Características del Aumento de daño (decisión del
 usuario: la IA no paga una pérdida permanente en un combate), las Habilidades psíquicas (Interrupción
-y RP sólo cuentan para lo que existe), Armas adicionales y Proyectiles de las Armas físicas de Ki,
-Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices, Custodium y la
-Transmisión del Ki (marionetas). La IA valora la rotura (la del arma y Aumentar rotura) con la
+y RP sólo cuentan para lo que existe; llegan con la psíquica), y lo que no cambia un combate del
+simulador: Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices (percepción
+sin regla de combate) y la Transmisión del Ki (marionetas, que el escenario no tiene).
+Custodium da 30 de Ki cuando un aliado queda gravemente herido (bajo un cuarto de sus PV, como
+Caelum: interpretación) y 40 si muere. Armas adicionales empuña dos armas iguales (segunda arma);
+Proyectiles hace también sus armas a distancia, de esa calidad y con munición ilimitada. La IA valora la rotura (la del arma y Aumentar rotura) con la
 misma cuenta que el motor (`pRompe`).
 De las 132 técnicas de ejemplo del Dominus sólo queda sin leer "Drenaje de Ki 160 RF" (un Estado
 escrito fuera de su efecto). Las técnicas a distancia miran la línea de visión y la cobertura, como

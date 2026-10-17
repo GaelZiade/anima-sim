@@ -124,6 +124,10 @@ export interface ModKi {
   espejismoFantasmal: number;
   /** Armas físicas de Ki: calidad del arma que crea (−1 si no crea ninguna, Dominus p.63). */
   armaKi: number;
+  /** Ventaja Armas adicionales: cuántas armas iguales más crea (Dominus p.63). */
+  armasAdicionales: number;
+  /** Ventaja Proyectiles: también sus armas a distancia, con munición ilimitada (Dominus p.63). */
+  armaKiProyectiles: boolean;
   /** Choque físico: la técnica puede interceptar una descarga como una a distancia (Dominus p.65). */
   choqueFisico: boolean;
   apresamiento: number;
@@ -198,7 +202,7 @@ export const SIN_KI: Readonly<ModKi> = Object.freeze({
   frialdad: 0, resistirDolor: 0, capacidad: Object.freeze([]) as readonly { atributo: Atributo; bono: number }[], rf: 0, rm: 0, rp: 0,
   visionNocturna: false, veEnergia: false,
   danaEnergia: false, critico: 0, criticoAuto: false, sobrenatural: false, elemento: '', naturaleza: '', marca: 0, impacto: 0,
-  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, espejismos: 0, espejismoIndeteccion: 0, espejismoFantasmal: 0, armaKi: -1, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
+  atraer: false, apresamiento: 0, presaExistencial: false, choqueFisico: false, espejismos: 0, espejismoIndeteccion: 0, espejismoFantasmal: 0, armaKi: -1, armasAdicionales: 0, armaKiProyectiles: false, estados: Object.freeze([]) as readonly EstadoSobrenatural[], interrumpe: false, interrumpeKi: false, interrumpeMagia: false,
   interrupcion: 0, escudo: 0, regeneraEscudo: 0, pantalla: 0, regeneraPantalla: 0, intangible: false, intangibleOtros: 0, fusion: false, reflectar: false, reflectarEligeBlanco: false, reflectarEsoterico: false, absorcionKi: 0, indirecto: false,
   danoReducido: 0, soloContra: '',
 });
@@ -316,7 +320,7 @@ const CATALOGO: Record<string, DefEfecto> = {
   'marca mayor': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.marca = Math.max(m.marca, 50); } },
   'impacto': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.impacto = Math.max(m.impacto, v); if (hay(o, /atraer/)) m.atraer = true; } },
   'espejismo': { tipo: 'asalto', clase: 'variable', aplicar: espejismo },
-  'armas fisicas de ki': { tipo: 'asalto', clase: 'variable', aplicar: (m, v) => { m.armaKi = Math.max(m.armaKi, v); } },
+  'armas fisicas de ki': { tipo: 'asalto', clase: 'variable', aplicar: armasFisicas },
   'choque fisico': { tipo: 'accion', clase: 'ataque', aplicar: (m) => { m.choqueFisico = true; } },
   'apresamiento': { tipo: 'accion', clase: 'ataque', aplicar: (m, v, o) => { m.apresamiento = Math.max(m.apresamiento, v); if (hay(o, /existencial/)) m.presaExistencial = true; } },
   'estados sobrenaturales': { tipo: 'accion', clase: 'ataque', aplicar: (m, _v, o) => { m.estados = [...m.estados, ...leerEstados(o)]; } },
@@ -451,6 +455,13 @@ function aumentoDeDano(m: ModKi, _v: number, o: string[]) {
   if (hay(o, /sacrificio (vital doble|de salud)/)) m.sacrificioVital = 2;
   else if (hay(o, /sacrificio vital/)) m.sacrificioVital = Math.max(m.sacrificioVital, 1);
   if (hay(o, /dano limite/)) m.danoLimite = true;
+}
+
+/** Armas físicas de Ki y sus ventajas (Dominus p.63): Armas adicionales (1, 2-3, 4-10, ilimitadas) y Proyectiles. */
+function armasFisicas(m: ModKi, v: number, o: string[]) {
+  m.armaKi = Math.max(m.armaKi, v);
+  if (hay(o, /armas? adicional/)) m.armasAdicionales = Math.max(m.armasAdicionales, hay(o, /ilimitad/) ? Infinity : valorEn(o, /armas? adicional/) || 1);
+  if (hay(o, /proyectil/)) m.armaKiProyectiles = true;
 }
 
 /** Interrupción y sus tipos (Dominus p.69): Ki, Magia (las Habilidades psíquicas no se simulan). Sin tipo, Ki. */
@@ -1446,6 +1457,20 @@ export function alPerderPv(l: Luchador, dano: number): string | null {
     activado = 'Terminus';
   }
   return activado;
+}
+
+/**
+ * Custodium (Dominus p.29): si un aliado queda gravemente herido (por debajo de un cuarto de sus PV,
+ * el umbral de Caelum: interpretación) gana 30 de Ki; si muere, 40. Una vez por aliado y por caso.
+ * Devuelve lo que recuperó.
+ */
+export function custodium(l: Luchador, aliado: Luchador, muere: boolean): number {
+  const e = l.ki;
+  if (!e || aliado === l || aliado.equipo !== l.equipo || !tieneLimite(l, 'custodium')) return 0;
+  const clave = `custodium:${muere ? 'muere' : 'herido'}:${aliado.ficha.id}`;
+  if (e.limitesUsados.has(clave) || (!muere && aliado.pv >= aliado.ficha.pv / 4)) return 0;
+  e.limitesUsados.add(clave);
+  return recuperarKi(l, muere ? 40 : 30);
 }
 
 /** Cruor: cada crítico que sufre, tenga o no efectos, recupera 10 de Ki. */

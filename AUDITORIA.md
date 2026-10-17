@@ -365,6 +365,8 @@ Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambi�
 | 112 | Xing Quan no miraba la Iniciativa | Sólo si actúa antes que ese rival (`puestoIniciativa`, Dominus p.38) | `calculos.ts`, `combate.ts` |
 | 113 | Kusari-Gama y Florete, de dos tipos con uno de Arma corta, contaban como medianas | Cortas: Derribo −60 (Core p.78, p.91; decisión del usuario) | `rasgos.ts` |
 | 114 | Una planilla sin Unificación de puntos de Ki se simulaba en silencio | Se avisa en el registro (Dominus p.8; decisión del usuario) | `hoja/ficha.ts`, `combate.ts` |
+| 115 | Tabla 51: los tramos se tomaban de la tabla publicada | Verificados en el manual (Core p.96, la tabla lleva el título debajo) | `reglas.ts` |
+| 116 | Custodium, Armas adicionales y Proyectiles de las Armas físicas de Ki sin simular | Simulados (Dominus p.29, p.63) | `ki.ts`, `combate.ts`, `rotura.ts`, `combate-ki.ts` |
 | 111 | Aikido sumaba la Fuerza del rival con el daño de otro arte y contra cualquiera; Hakyoukuken y Mushin contra cualquiera | `danoSinArmasDe`, `humanoide`, `organico` (Dominus p.29, p.31-32, p.42). Cambia Kiran (siete artes, daño de otra) | `estilos.ts`, `calculos.ts`, `ia.ts` |
 
 **Decisiones del usuario** sobre lo que la regla no precisa: DISENO.md, "Auditoría del combate"
