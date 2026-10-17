@@ -1,6 +1,7 @@
 // IA de la magia (Core cap. 11): qué conjuro lanzar, a quién y en qué grado; cómo acumular, preparar
 // o usar la magia innata; cuándo levantar un escudo. Todo en PV esperados, como el resto de la IA.
 
+import { sinDado } from './dados';
 import type { Contexto, Luchador } from './modelo';
 import { efecto, habilidadMina, radioArea, type Lanzamiento, type Meta } from './efectos';
 import {
@@ -154,7 +155,7 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
     for (const b of ctx.luchadores) {
       const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
       if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
-      const dano = danoEsperado(l, b, habilidadMina(d, z.radio) - 55, defensaContraConjuro(b, l, ki, z.radio), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: z.radio });
+      const dano = danoEsperado(l, b, sinDado(habilidadMina(d, z.radio)), defensaContraConjuro(b, l, ki, z.radio), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: z.radio });
       if (b.equipo !== l.equipo) enemigosDentro++;
       v += (b.equipo === l.equipo ? -lambda(l) : 1) * dano;
     }

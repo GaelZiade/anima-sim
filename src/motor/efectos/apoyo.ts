@@ -3,7 +3,7 @@
 // Sacrificio Vital, Magia por Capacidades).
 
 import { activo, distancia } from '../calculos';
-import { DADO_FIJO } from '../dados';
+import { DADO_FIJO, sinDado } from '../dados';
 import type { Golpe } from '../golpe';
 import { actDe, golpeDeConjuro, RANURA_MAGIA, zeonLibre } from '../magia';
 import { mejorCaracteristica, pGanaControl } from '../maniobras';
@@ -143,7 +143,7 @@ export const atar: ManejadorEfecto = {
     const fuerza = fuerzaCuerdas(ctx);
     for (const obj of enemigos(ctx, l)) {
       if (!aLaVista(ctx, l, obj, alcance) || obj.apresadoPor || obj.ficha.acumulacion) continue;
-      const p = tabla(0, obj.cap.umbralDefensa, false).pImpacto((g.habilidad ?? 0) - 55 - defensaFinal(obj, l));
+      const p = tabla(0, obj.cap.umbralDefensa, false).pImpacto(sinDado(g.habilidad ?? 0) - defensaFinal(obj, l));
       const control = pGanaControl(fuerza, mejorCaracteristica(obj, ['FUE', 'AGI']));
       probar({ conjuro: c, grado: i, objetivo: obj }, p * control * valorNegativo(l, obj, 80, 1, 0));
     }

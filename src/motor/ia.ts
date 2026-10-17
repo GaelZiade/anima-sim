@@ -14,6 +14,7 @@ import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, PEN_ACCION_ACTIVA, 
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
+import { MEDIA_TIRADA, sinDado } from './dados';
 import type { ParadaArea } from './golpe';
 import { enterezaArma, fichaConArmaKi, pRompe, roturaDe } from './rotura';
 import { rpDe } from './magia';
@@ -1868,7 +1869,7 @@ export function blancoDelReflejo(ctx: Contexto, l: Luchador, atk: Luchador, tota
   let mejorValor = -Infinity;
   for (const e of enemigos(ctx, l)) {
     if (e !== atk && visionEntre(ctx.luchadores, l, e) === 'bloqueada') continue;
-    const v = valorGolpe(l, e, pronostico(l, e, total - 50, defensaFinal(e, l), { tipo: g.tipo, ki: g.ki, esContra: true }), 0);
+    const v = valorGolpe(l, e, pronostico(l, e, sinDado(total), defensaFinal(e, l), { tipo: g.tipo, ki: g.ki, esContra: true }), 0);
     if (v > mejorValor) {
       mejor = e;
       mejorValor = v;
@@ -2044,16 +2045,16 @@ export function elegirTecnicaDefensa(
   if (!candidatas.length) return null;
   nuevaDecision(ctx);
   const costo = (mod: ModKi | undefined) => {
-    // Defensa Predeterminada: equivale a una habilidad unos 50 por debajo (lo que suma el d100 medio).
-    const hab = mod?.defensaFija ? mod.defensaFija - 50 : defensaFinal(def, atk, { ki: mod, kiAtk: g.ki, proyectil: g.aDistancia });
+    // Defensa Predeterminada: una defensa final fija, como habilidad que tira (lo que suma el d100 medio).
+    const hab = mod?.defensaFija ? sinDado(mod.defensaFija) : defensaFinal(def, atk, { ki: mod, kiAtk: g.ki, proyectil: g.aDistancia });
     const p = pronostico(atk, def, habAtk, hab, { maniobra: g.maniobra, tipo: g.tipo, ki: g.ki, kiDef: mod, esContra: g.esContra });
-    // Reflectar: si lo detiene, el golpe vuelve contra el atacante con su habilidad (unos 50 de dado)
+    // Reflectar: si lo detiene, el golpe vuelve contra el atacante con su habilidad (más lo que suma la tirada)
     // más el bono de contraataque, con su daño y sin efectos; ocupa el lugar de la contra (Dominus p.71).
     const contra = !mod?.reflectar && !mod?.sinContra && !g.ki?.indirecto && puedeContraatacar(def) ? p.pContra * golpeDeContra(def, atk, p.bonoContra) : 0;
     let extra = 0;
     if (mod?.reflectar) {
       const ki = { ...SIN_KI, danoFijo: danoBase(atk, def, g.esContra, undefined, g.ki) };
-      const vuelta = pronostico(def, atk, habAtk + 50 + p.bonoContra, defensaFinal(atk, def), { tipo: g.tipo, ki, esContra: true });
+      const vuelta = pronostico(def, atk, habAtk + MEDIA_TIRADA + p.bonoContra, defensaFinal(atk, def), { tipo: g.tipo, ki, esContra: true });
       extra += (1 - p.pImpacto) * valorGolpe(def, atk, vuelta, 0);
     }
     // Absorción de Ki: con una defensa que deja contraatacar se queda con Ki de la técnica.

@@ -59,4 +59,16 @@ export function tirarD100Cerrada(rng: Rng): number {
 }
 
 /** Un ataque automático o una habilidad fija: no se tira (resultado 0 de dado). */
+/**
+ * Lo que suma en promedio la tirada (abierta) de una habilidad: para la IA, una habilidad final fija
+ * (ataque automático de un conjuro, Defensa o Ataque predeterminado) equivale a una habilidad que tira
+ * con unos 55 menos.
+ */
+export const MEDIA_TIRADA = 55;
+
+/** Una habilidad final fija como habilidad que tira dados, para los pronósticos de la IA. */
+export function sinDado(final: number): number {
+  return final - MEDIA_TIRADA;
+}
+
 export const DADO_FIJO: TiradaD100 = { valor: 0, natural: 0, abiertas: 0, pifia: false, nivelPifia: 0 };

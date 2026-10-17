@@ -2,7 +2,7 @@
 // Fuego, Mina de Fuego, Crear Fuego y Control sobre el Fuego.
 
 import { activo, distancia, resistenciaCalor } from '../calculos';
-import { DADO_FIJO, tirarD100Cerrada } from '../dados';
+import { DADO_FIJO, sinDado, tirarD100Cerrada } from '../dados';
 import type { Golpe } from '../golpe';
 import { dejarDeMantener, estadoLlamas, golpeDeConjuro, mantenidoCon, RANURA_MAGIA, type Mantenido } from '../magia';
 import type { Conjuro, Grado } from '../conjuros';
@@ -137,7 +137,7 @@ export const tormenta: ManejadorEfecto = {
       for (const b of ctx.luchadores) {
         if (!activo(b) || distancia(b, obj) > g.area! || (control && b.equipo === l.equipo)) continue;
         // El ataque automático no tira: su habilidad es la final (aproximación: la media de una tirada menos).
-        const dano = danoEsperado(l, b, (g.habilidad ?? 0) - 55, defensaContraConjuro(b, l, ki, g.area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area: g.area });
+        const dano = danoEsperado(l, b, sinDado(g.habilidad ?? 0), defensaContraConjuro(b, l, ki, g.area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area: g.area });
         v += signo(b) * Math.min(Math.max(0, b.pv), (ASALTOS_EFECTO - 1) * dano);
       }
       probar({ conjuro: c, grado: i, objetivo: obj, control }, v, (control ? ZEON_CONTROL_DEL_ESPACIO : 0) * precioZeon(l));
@@ -182,7 +182,7 @@ export const barrera: ManejadorEfecto = {
     if (!vienen.length) return;
     const obj = vienen.sort((a, b) => distancia(l, a) - distancia(l, b))[0];
     let v = 0;
-    for (const x of vienen) v += danoEsperado(l, x, (g.habilidad ?? 240) - 55, defensaContraConjuro(x, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
+    for (const x of vienen) v += danoEsperado(l, x, sinDado(g.habilidad ?? 240), defensaContraConjuro(x, l, ki), { ki, tipo: 'CAL', ranura: RANURA_MAGIA });
     probar({ conjuro: c, grado: i, objetivo: obj }, v);
   },
 };
@@ -203,7 +203,7 @@ export const mina: ManejadorEfecto = {
       let v = 0;
       for (const b of ctx.luchadores) {
         if (!activo(b) || distancia(b, obj) > (g.area ?? 0)) continue;
-        const dano = danoEsperado(l, b, 280 - 55, defensaContraConjuro(b, l, ki, g.area), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: g.area });
+        const dano = danoEsperado(l, b, sinDado(280), defensaContraConjuro(b, l, ki, g.area), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: g.area });
         v += (b.equipo === l.equipo ? (l.ficha.magia?.controlDelEspacio ? 0 : -lambda(l)) : 1) * dano;
       }
       probar({ conjuro: c, grado: i, objetivo: obj }, 0.6 * v);
