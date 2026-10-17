@@ -88,8 +88,8 @@ export function detonarMina(m: Motor, ctx: Contexto, l: Luchador, x: Mantenido, 
   const z = x.zona!;
   const g = x.conjuro.grados[x.grado];
   dejarDeMantener(l, x);
-  if (control) l.magia!.reserva -= 10;
-  m.log(ctx, () => `${l.ficha.nombre} hace estallar la Mina de Fuego${control ? ' (Control del Espacio, 10 de zeon)' : ''}.`);
+  if (control) l.magia!.reserva -= ZEON_CONTROL_DEL_ESPACIO;
+  m.log(ctx, () => `${l.ficha.nombre} hace estallar la Mina de Fuego${control ? ` (Control del Espacio, ${ZEON_CONTROL_DEL_ESPACIO} de zeon)` : ''}.`);
   for (const b of ctx.luchadores) {
     const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
     if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;

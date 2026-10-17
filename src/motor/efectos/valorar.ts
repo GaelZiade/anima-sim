@@ -169,14 +169,14 @@ export function aliadosEnRadio(ctx: Contexto, l: Luchador, c: Conjuro, radio: nu
 }
 
 /**
- * Campeón: sólo uno de cada 10 del grupo de batalla (al menos uno, Arcana p.35). Los demás beneficios a
- * un aliado, uno por blanco.
+ * Cupo por grupo (`cupoPorGrupo`): Campeón, uno de cada 10 del grupo de batalla (al menos uno, Arcana
+ * p.35). Los demás beneficios a un aliado, uno por blanco.
  */
 export function cupoAgotado(ctx: Contexto, l: Luchador, c: Conjuro, ya: readonly Lanzamiento[]): boolean {
-  if (c.nombre !== 'Campeón') return false;
+  if (!c.cupoPorGrupo) return false;
   const grupo = ctx.luchadores.filter((x) => x.equipo === l.equipo && activo(x)).length;
   const usados = (l.magia?.mantenidos.filter((x) => x.conjuro === c).length ?? 0) + ya.filter((x) => x.conjuro === c).length;
-  return usados >= Math.max(1, Math.floor(grupo / 10));
+  return usados >= Math.max(1, Math.floor(grupo / c.cupoPorGrupo));
 }
 
 /**

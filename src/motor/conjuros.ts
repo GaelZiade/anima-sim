@@ -134,6 +134,8 @@ export interface Conjuro {
   /** Escudo que sólo dañan los ataques sobrenaturales; los de este tipo le hacen el doble. */
   escudoSoloSobrenatural?: boolean;
   escudoDobleContra?: string;
+  /** Uno por cada tantos del grupo de batalla (al menos uno): Campeón, 10 (Arcana p.35). */
+  cupoPorGrupo?: number;
   /** Sirve de escudo sólo si no tiene otro levantado (Barrera de Fuego, Core p.157). */
   escudoSiNoHayOtro?: boolean;
   efecto: EfectoConjuro;
@@ -228,7 +230,7 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
     grados: [[10, 1], [10, 2], [20, 2], [30, 3]].map(([resistencias, ta]) => ({ bono: { resistencias, ta } })),
   },
   {
-    nombre: 'Campeón', efecto: 'bendicion', blanco: 'aliado', fuente: 'Arcana p.35',
+    nombre: 'Campeón', efecto: 'bendicion', blanco: 'aliado', cupoPorGrupo: 10, fuente: 'Arcana p.35',
     grados: [[10, 10, 10, 2], [10, 20, 20, 3], [20, 20, 20, 4], [30, 30, 30, 5]].map(([toda, dano, turno, ta]) => ({ bono: { toda, dano, turno, ta } })),
   },
   // Libre acceso (Core p.187)
