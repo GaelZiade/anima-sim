@@ -904,22 +904,46 @@ export function fichaConAumento(f: Ficha, a: AtributoAumento, desde: number, has
   const d = bonoCaracteristica(hasta) - bonoCaracteristica(desde);
   const atributos = { ...f.atributos, [a]: hasta };
   const esquiva = f.tipoDefensa === 'esquiva';
-  const dos = tamanoArmaDe(f) === 'G' ? 2 : 1;
-  const dano = (x: number) => (a === 'FUE' ? Math.max(0, Math.ceil((x + d * dos) / 10) * 10) : x);
   const ataque = a === 'DES' ? d : 0;
   const defensa = (a === 'DES' && !esquiva) || (a === 'AGI' && esquiva) ? d : 0;
   const turno = a === 'DES' || a === 'AGI' ? d : 0;
   const s = f.sinArmas;
-  return {
+  const g: Ficha = {
     ...f, atributos,
-    ataque: f.ataque + ataque, defensa: f.defensa + defensa, turno: f.turno + turno, danoBase: dano(f.danoBase),
+    ataque: f.ataque + ataque, defensa: f.defensa + defensa, turno: f.turno + turno,
     rf: f.rf + (a === 'CON' ? d : 0),
     constitucion: a === 'CON' ? hasta : f.constitucion,
     tipoMovimiento: a === 'AGI' ? f.tipoMovimiento + (hasta - desde) : f.tipoMovimiento,
+    // Lo demás que sale de DES y AGI: las armas a distancia, Acrobacias y el turno con magia.
+    ...(ataque && f.armasDistancia ? { armasDistancia: f.armasDistancia.map((x) => ({ ...x, ataque: x.ataque + ataque })) } : {}),
+    ...(a === 'AGI' && f.acrobacias !== undefined ? { acrobacias: f.acrobacias + d } : {}),
+    ...(turno && f.magia?.turno !== undefined ? { magia: { ...f.magia, turno: f.magia.turno + turno } } : {}),
     sinArmas: s && {
-      ...s, ataque: s.ataque + ataque, danoBase: dano(s.danoBase), turno: s.turno + turno,
+      ...s, ataque: s.ataque + ataque, turno: s.turno + turno,
       defensa: s.defensa + ((a === 'DES' && s.tipoDefensa !== 'esquiva') || (a === 'AGI' && s.tipoDefensa === 'esquiva') ? d : 0),
     },
+  };
+  return a === 'FUE' ? conDanoPorFuerza(g, desde, hasta) : g;
+}
+
+/**
+ * El daño con otra Fuerza (Core p.75): base + bono de Fuerza (el doble a dos manos; sin armas, no),
+ * redondeado en grupos de 10 hacia arriba. Siempre desde el daño y la Fuerza de partida
+ * (`danoPorFuerza`), así subir y volver a bajar no lo infla. Si el arma cambió mientras tanto, parte
+ * de la actual.
+ */
+function conDanoPorFuerza(f: Ficha, desde: number, hasta: number): Ficha {
+  const dos = tamanoArmaDe(f) === 'G' ? 2 : 1;
+  const con = (base: number, fue: number, valor: number, mult: number) => {
+    const d = bonoCaracteristica(valor) - bonoCaracteristica(fue);
+    return d === 0 ? base : Math.max(0, Math.ceil((base + d * mult) / 10) * 10);
+  };
+  let o = f.danoPorFuerza;
+  if (!o || con(o.arma, o.fue, desde, dos) !== f.danoBase || (f.sinArmas && o.sinArmas !== undefined && con(o.sinArmas, o.fue, desde, 1) !== f.sinArmas.danoBase))
+    o = { fue: desde, arma: f.danoBase, sinArmas: f.sinArmas?.danoBase };
+  return {
+    ...f, danoPorFuerza: o, danoBase: con(o.arma, o.fue, hasta, dos),
+    sinArmas: f.sinArmas && { ...f.sinArmas, danoBase: con(o.sinArmas ?? f.sinArmas.danoBase, o.fue, hasta, 1) },
   };
 }
 

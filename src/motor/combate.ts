@@ -568,10 +568,13 @@ function aumentoDeCaracteristicas(ctx: Contexto, l: Luchador, pedido: DecisionKi
       e.reserva--;
       return;
     }
-    l.ficha = fichaConAumento(l.ficha, a.atributo, a.hasta, a.desde);
+    // Se deshace sólo lo que dio el Aumento: una Debilidad sufrida mientras tanto sigue (Core p.105, p.233).
+    const ahora = atributo(l, a.atributo);
+    const vuelve = Math.max(1, ahora - (a.hasta - a.desde));
+    l.ficha = fichaConAumento(l.ficha, a.atributo, ahora, vuelve);
     l.cap = capacidades(l.ficha);
     e.aumento = null;
-    log(ctx, () => `${l.ficha.nombre} no puede mantener el Aumento de características: ${a.atributo} vuelve a ${a.desde}.`);
+    log(ctx, () => `${l.ficha.nombre} no puede mantener el Aumento de características: ${a.atributo} vuelve a ${vuelve}.`);
     return;
   }
   if (!pedido || e.reserva < pedido.hasta) return;

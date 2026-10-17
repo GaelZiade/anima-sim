@@ -137,6 +137,19 @@ describe('Aumento de características (Core p.105, Dominus p.21)', () => {
     expect([h.ataque, h.defensa, h.turno]).toEqual([f.ataque, f.defensa, f.turno]);
   });
 
+  it('la Fuerza se recalcula desde el daño de partida: subir y bajar no lo infla; sin armas no se dobla (Core p.75)', () => {
+    const f = fuerte({ danoBase: 60, arma: { nombre: 'Mandoble' }, sinArmas: { ataque: 100, defensa: 100, turno: 60, danoBase: 30, tipoAtaque: 'CON' } as never });
+    // FUE 9 → 10: +5 de bono; a dos manos +10 → 70; sin armas +5 → 40 (redondeado).
+    const g = fichaConAumento(f, 'FUE', 9, 10);
+    expect([g.danoBase, g.sinArmas!.danoBase]).toEqual([70, 40]);
+    const h = fichaConAumento(g, 'FUE', 10, 9);
+    expect([h.danoBase, h.sinArmas!.danoBase]).toEqual([60, 30]);
+    // Varias vueltas no lo inflan.
+    let x = f;
+    for (let i = 0; i < 3; i++) x = fichaConAumento(fichaConAumento(x, 'FUE', 9, 10), 'FUE', 10, 9);
+    expect(x.danoBase).toBe(60);
+  });
+
   it('activarlo cuesta el valor alcanzado y después 1 de Ki por asalto; la IA lo usa si le sobra Ki', () => {
     const r = simularCombate([fuerte()], [rival('FIL')], { semilla: 5, registrar: true });
     const linea = r.registro!.find((x) => x.texto.includes('usa Aumento de características'));

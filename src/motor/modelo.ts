@@ -54,6 +54,11 @@ export interface Ficha {
   capasArmadura?: CapaArmadura[];
   /** Habilidad secundaria Acrobacias (retirarse del combate, Core p.94). */
   acrobacias?: number;
+  /**
+   * Lo pone el motor al cambiar la Fuerza (Aumento, Debilidad): la Fuerza y los daños de los que se
+   * parte, para recalcular siempre desde ahí con un solo redondeo (Core p.75).
+   */
+  danoPorFuerza?: { fue: number; arma: number; sinArmas?: number };
   /** Dominios del Ki: reserva, acumulaciones y técnicas (Core p.102-107, Dominus cap. 5). */
   ki?: KiFicha;
   /** Estados con los que empieza el combate (Tabla 43, Core cap. 14). */
