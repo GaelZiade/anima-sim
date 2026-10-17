@@ -22,7 +22,8 @@ import type { Ranura } from './rasgos';
 import { efectoCritico } from './valoracion';
 import type { ModKi } from './ki';
 import { atributo, bonoCaracteristica } from './maniobras';
-import { alcanzable, cacheDeDecision, enemigos, lambda, nuevaDecision, perfil, registrarFuenteAmenaza, trabadoConAlguien, valorDejarFuera, valorGolpe, valorNegativo, conCambio,
+import { cacheDeDecision } from './cache-decision';
+import { alcanzable, enemigos, lambda, nuevaDecision, perfil, registrarFuenteAmenaza, trabadoConAlguien, valorDejarFuera, valorGolpe, valorNegativo, conCambio,
 } from './ia';
 
 

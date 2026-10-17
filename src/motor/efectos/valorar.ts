@@ -13,7 +13,8 @@ import { fallaResistencia, tabla } from '../probabilidades';
 export { fallaResistencia };
 import { umbralPifia } from '../reglas';
 import type { ModKi } from '../ki';
-import { amenaza, base, cacheDeDecision, conCambio, enemigos, intercambio, lambda, pierdeElAsalto, riesgoContra, valorDejarFuera, valorGolpe, valorNegativo } from '../ia';
+import { cacheDeDecision } from '../cache-decision';
+import { amenaza, base, conCambio, enemigos, intercambio, lambda, pierdeElAsalto, riesgoContra, valorDejarFuera, valorGolpe, valorNegativo } from '../ia';
 import type { Lanzamiento } from './tipos';
 
 export { intercambio };
