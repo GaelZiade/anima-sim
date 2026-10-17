@@ -4,7 +4,7 @@
 
 import { CARACTERISTICAS_KI, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
 import type { TipoAtaque } from './reglas';
-import { capacidades, normalizarRasgo, tiene } from './rasgos';
+import { capacidades, normalizarRasgo, tamanoArmaDe, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
 /** Lo que las técnicas le suman a una acción o a todo el asalto. Los efectos iguales no se suman. */
@@ -899,7 +899,7 @@ export function fichaConAumento(f: Ficha, a: AtributoAumento, desde: number, has
   const d = bonoCaracteristica(hasta) - bonoCaracteristica(desde);
   const atributos = { ...f.atributos, [a]: hasta };
   const esquiva = f.tipoDefensa === 'esquiva';
-  const dos = f.tamanoArma === 'G' ? 2 : 1;
+  const dos = tamanoArmaDe(f) === 'G' ? 2 : 1;
   const dano = (x: number) => (a === 'FUE' ? Math.max(0, Math.ceil((x + d * dos) / 10) * 10) : x);
   const ataque = a === 'DES' ? d : 0;
   const defensa = (a === 'DES' && !esquiva) || (a === 'AGI' && esquiva) ? d : 0;

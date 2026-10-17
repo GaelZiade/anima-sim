@@ -11,7 +11,7 @@ import {
   AMENAZADO, atributo, bonoCaracteristica, esApuntado, esManiobraDeControl, ESTADOS_MUSHIN, modEstados, penManiobra,
   type EstadoMushin, type Maniobra,
 } from './maniobras';
-import { localizacionArmadura, type Ranura } from './rasgos';
+import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
 import { condicion } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
@@ -115,7 +115,7 @@ function penEspacio(l: Luchador, campo: 'ataque' | 'parada' | 'esquiva'): number
   if (!l.entorno.espacioReducido) return 0;
   const e = l.cap.est;
   if (campo !== 'ataque' && e.defensaSinEspacioReducido) return 0;
-  const grande = !l.cap.desarmado && l.ficha.tamanoArma === 'G';
+  const grande = !l.cap.desarmado && tamanoArmaDe(l.ficha) === 'G';
   const pen = campo === 'esquiva' || grande ? 40 : 0;
   return pen * e.factorEspacioReducido;
 }
@@ -124,7 +124,7 @@ function penEspacio(l: Luchador, campo: 'ataque' | 'parada' | 'esquiva'): number
 function penDesenfundar(l: Luchador, campo: 'ataque' | 'parada' | 'esquiva'): number {
   if (!l.enfundada || campo === 'esquiva') return 0;
   // Batto jutsu no sirve con armas a dos manos: se toman como tales las grandes.
-  return l.cap.est.battoJutsu && l.ficha.tamanoArma !== 'G' ? 0 : 25;
+  return l.cap.est.battoJutsu && tamanoArmaDe(l.ficha) !== 'G' ? 0 : 25;
 }
 
 /** Bono de la sangre de Orochi: +20 despierta, +30 desencadenada (Dominus p.81). */
@@ -612,7 +612,7 @@ function cubre(c: CapaArmadura, zona: ZonaArmadura): boolean {
 }
 
 /** Capas combinadas (Core p.83): la TA más alta más la mitad de cada una de las otras, hacia abajo. */
-function combinarTA(capas: CapaArmadura[], t: TipoAtaque): number {
+export function combinarTA(capas: CapaArmadura[], t: TipoAtaque): number {
   const v = capas.map((c) => c.ta[t] ?? 0).sort((a, b) => b - a);
   let total = v[0] ?? 0;
   for (let i = 1; i < v.length; i++) total += Math.floor(v[i] / 2);

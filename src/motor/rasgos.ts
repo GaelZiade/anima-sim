@@ -98,6 +98,11 @@ export function fuerzaPresaArma(arma: DetalleArma | undefined): number {
   return base ? base + Math.floor(Math.max(0, arma.calidad ?? 0) / 5) : 0;
 }
 
+/** Tamaño de su arma: el de la planilla o, si no lo trae, por el nombre; mediano si tampoco. */
+export function tamanoArmaDe(f: Ficha): TamanoArma {
+  return f.tamanoArma ?? tamanoPorNombre(f.arma?.nombre ?? '') ?? 'M';
+}
+
 export function tamanoPorNombre(nombre: string): TamanoArma | null {
   let resultado: TamanoArma | null = null;
   for (const parte of normalizarRasgo(nombre).split(/\s+y\s+|\s*[+/,&]\s*/)) {
@@ -258,7 +263,7 @@ function calcularCapacidades(f: Ficha): Capacidades {
   let penPorAtaque: number;
   if (desarmado) penPorAtaque = kempo >= 2 ? 10 : kempo === 1 ? 15 : 20;
   else {
-    const tamano = f.tamanoArma ?? tamanoPorNombre(nombreArma) ?? 'M';
+    const tamano = tamanoArmaDe(f);
     penPorAtaque = tamano === 'P' ? 20 : tamano === 'M' ? (encadenado ? 20 : 30) : encadenado ? 30 : 40;
   }
 

@@ -4,7 +4,7 @@ import type { Contexto, Ficha, Luchador } from './modelo';
 import { dado } from './rng';
 import { capacidades, localizacionArmadura, type Ranura } from './rasgos';
 import { esMaestro } from './reglas';
-import { activo, capasDe, type ZonaArmadura } from './calculos';
+import { activo, capasDe, combinarTA, type ZonaArmadura } from './calculos';
 import { atributo } from './maniobras';
 import { type Motor } from './efectos';
 
@@ -135,17 +135,18 @@ export function roturaDeArmadura(motor: Motor, ctx: Contexto, atk: Luchador, def
   if (!enZona.size) return;
   const rotura = roturaDe(atk, ranura);
   let rotas = 0;
-  let rotasCuerpo = 0;
   const nuevas = capas.map((c) => {
     if (!enZona.has(c) || controlRotura(ctx, rotura, c.entereza + enterezaKi(def)) === 0) return c;
     rotas++;
-    if ((c.localizacion ?? 'completa') !== 'cabeza') rotasCuerpo++;
     return { ...c, ta: Object.fromEntries(Object.entries(c.ta).map(([t, v]) => [t, Math.max(0, (v ?? 0) - 1)])) };
   });
   if (!rotas) return;
-  // La TA total de la planilla es la del cuerpo: el yelmo no cuenta en ella.
+  // La TA total de la planilla es la del cuerpo (el yelmo no cuenta): baja lo que baja la combinación
+  // de sus capas, la mayor más la mitad de las otras (Core p.83), y el resto de la TA queda igual.
+  const antes = capasDe(def.ficha, 'cuerpo');
+  const despues = capasDe({ ...def.ficha, capasArmadura: nuevas }, 'cuerpo');
   const ta = { ...def.ficha.ta };
-  for (const t of Object.keys(ta) as (keyof typeof ta)[]) ta[t] = Math.max(0, (ta[t] ?? 0) - rotasCuerpo);
+  for (const t of Object.keys(ta) as (keyof typeof ta)[]) ta[t] = Math.max(0, (ta[t] ?? 0) - (combinarTA(antes, t) - combinarTA(despues, t)));
   def.ficha = { ...def.ficha, ta, capasArmadura: nuevas };
   motor.log(ctx, () => `  La armadura de ${def.ficha.nombre} se daña: −${rotas} a la TA de ${zona === 'cabeza' ? 'su yelmo' : 'las capas golpeadas'}.`);
 }

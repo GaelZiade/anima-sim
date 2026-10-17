@@ -7,7 +7,7 @@
 
 import type { Ficha } from './modelo';
 import type { TipoAtaque } from './reglas';
-import { fuerzaPresaArma, gradoArteMarcial, tiene } from './rasgos';
+import { fuerzaPresaArma, gradoArteMarcial, tamanoArmaDe, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
 export interface Estilos {
@@ -198,7 +198,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
   const sambo = g('Sambo');
   const grappling = g('Grappling');
   const pankration = g('Pankration');
-  let penDerribo = desarmado ? 30 : f.tamanoArma === 'P' ? 60 : 30;
+  let penDerribo = desarmado ? 30 : tamanoArmaDe(f) === 'P' ? 60 : 30;
   if (sambo >= 1 || grappling === 1) penDerribo = Math.min(penDerribo, 15);
   if (grappling >= 2) penDerribo = 0;
   let penPresa = 40;
@@ -215,7 +215,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
   if (tiene(tablas, 'tabla de area') || sambo >= 2) penArea = 25;
   const capoeira = g('Capoeira');
   if (capoeira >= 3) penArea = Math.min(penArea, 10);
-  let blancosArea: number = BLANCOS_AREA[f.tamanoArma ?? 'M'];
+  let blancosArea: number = BLANCOS_AREA[tamanoArmaDe(f)];
   if (desarmado) blancosArea = capoeira >= 2 ? 5 : capoeira === 1 ? 3 : 3;
 
   const aikido = g('Aikido');
