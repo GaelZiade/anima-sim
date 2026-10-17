@@ -70,18 +70,21 @@ export function esDesarmado(nombre: string, tipo?: string): boolean {
   return normalizarRasgo(tipo ?? '') === 'desarmado' || n.includes('desarmado') || n.includes('sin armas');
 }
 
-/** Tablas 29, 30 y 32 del Core con el tamaño que da el tipo de arma (p.76). */
+/**
+ * Tablas 29, 30 y 32 del Core con el tamaño que da el tipo de arma (p.76). Un arma de dos tipos con
+ * uno de Arma corta (Florete, Kusari-Gama) cuenta como corta (decisión del usuario).
+ */
 const TAMANO_POR_NOMBRE: Record<string, TamanoArma> = {
   alabarda: 'G', arpon: 'G', cadena: 'M', cestus: 'P', cimitarra: 'M', 'daga de parada': 'P', daga: 'P',
   'espada ancha': 'M', 'espada bastarda': 'G', 'espada corta': 'P', 'espada larga': 'M', estilete: 'P',
-  estoque: 'M', florete: 'M', garfio: 'P', garrote: 'M', 'gran martillo de guerra': 'M', guadana: 'G',
+  estoque: 'M', florete: 'P', garfio: 'P', garrote: 'M', 'gran martillo de guerra': 'M', guadana: 'G',
   'hacha a dos manos': 'G', 'hacha de guerra': 'M', 'hacha de mano': 'M', jabalina: 'G',
   'lanza de caballeria': 'G', lanza: 'G', latigo: 'M', lazo: 'M', mandoble: 'G', mangual: 'G',
   'martillo de guerra': 'M', mayal: 'M', 'maza pesada de combate': 'G', maza: 'M', 'red de gladiador': 'M',
   sable: 'M', tridente: 'G', vara: 'G',
   'katana de doble hoja': 'M', katana: 'M', katar: 'P', garras: 'P', nunchaku: 'M', bumeran: 'P',
   quebradora: 'G', shuriken: 'P', cuervo: 'P', 'anciano de primavera': 'G', nodachi: 'G', tanto: 'P',
-  tonfa: 'P', 'abanico de combate': 'P', sai: 'P', 'kusari-gama': 'M', shuko: 'P',
+  tonfa: 'P', 'abanico de combate': 'P', sai: 'P', 'kusari-gama': 'P', shuko: 'P',
   'botella rota': 'P', silla: 'G', 'palo de madera': 'M', 'barra metalica': 'M', jarron: 'M',
   'cuchillo de cocina': 'P', martillo: 'M', 'hacha de lenador': 'M', azada: 'M', hoz: 'P', pico: 'P',
   antorcha: 'M',

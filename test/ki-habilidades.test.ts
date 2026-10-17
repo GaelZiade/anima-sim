@@ -226,6 +226,14 @@ describe('Forzar Técnicas (Dominus p.21) y Técnicas Combinables (Dominus p.49)
   });
 });
 
+describe('Unificación de puntos de Ki (Dominus p.8)', () => {
+  it('si la planilla no la usa, se simula con una reserva y se avisa', () => {
+    const f = maestro(['Recuperacion'], { ki: { reserva: 60, acumulacion: { DES: 2 }, tecnicas: [], sinUnificar: true } });
+    const r = simularCombate([f], [rival('FIL')], { semilla: 1, registrar: true, maxAsaltos: 1 });
+    expect(r.registro!.some((x) => x.texto.startsWith('Aviso: la planilla de') && x.texto.includes('no unifica'))).toBe(true);
+  });
+});
+
 describe('Detección del Ki (Core p.103-104)', () => {
   it('la media entre CM y Advertir, +10 por nivel de Percepción del Ki (Dominus p.18)', async () => {
     const { baseDeteccionKi } = await import('../src/motor/calculos');

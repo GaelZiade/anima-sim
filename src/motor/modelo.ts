@@ -199,6 +199,11 @@ export const CARACTERISTICAS_KI: readonly CaracteristicaKi[] = ['AGI', 'CON', 'D
 export interface KiFicha {
   /** Puntos de Ki de la reserva. Con la Unificación de puntos de Ki es una sola (todas las planillas). */
   reserva: number;
+  /**
+   * La planilla no usa la Unificación de puntos de Ki (Dominus p.8). El simulador igual usa una sola
+   * reserva y lo avisa en el registro (decisión del usuario).
+   */
+  sinUnificar?: boolean;
   /** Acumulación por asalto de cada característica (Tabla 53 más lo comprado). */
   acumulacion: Partial<Record<CaracteristicaKi, number>>;
   tecnicas: Tecnica[];

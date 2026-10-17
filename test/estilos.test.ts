@@ -226,6 +226,12 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     expect([mors.roturaExtra, mors.criticoAutomatico]).toEqual([0, false]);
   });
 
+  it('Kusari-Gama y Florete, de dos tipos con uno de Arma corta, cuentan como cortas: Derribo −60 (Core p.78, p.91)', async () => {
+    const { tamanoArmaDe } = await import('../src/motor/rasgos');
+    expect([tamanoArmaDe(ficha('Kusari-Gama')), tamanoArmaDe(ficha('Florete'))]).toEqual(['P', 'P']);
+    expect(estilos(ficha('Kusari-Gama'), false).penDerribo).toBe(60);
+  });
+
   it('Xing Quan: +10/+20/+30 en su turno contra un único rival; no en contras ni después de defenderse (p.38)', () => {
     const def = luchador(ficha('Rival'), 'B');
     const otro = luchador(ficha('Otro'), 'B');

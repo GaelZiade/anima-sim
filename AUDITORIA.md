@@ -363,9 +363,10 @@ Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambi�
 
 | 110 | Eliminación de penalizadores e Inmunidad al dolor dividían todo junto | Tres bolsas: críticos (las dos), Dolor (Inmunidad), Estados sobrenaturales (ninguna) (Core p.21, p.104) | `calculos.ts`, `combate-ki.ts`, `efectos/estados.ts` |
 | 112 | Xing Quan no miraba la Iniciativa | Sólo si actúa antes que ese rival (`puestoIniciativa`, Dominus p.38) | `calculos.ts`, `combate.ts` |
+| 113 | Kusari-Gama y Florete, de dos tipos con uno de Arma corta, contaban como medianas | Cortas: Derribo −60 (Core p.78, p.91; decisión del usuario) | `rasgos.ts` |
+| 114 | Una planilla sin Unificación de puntos de Ki se simulaba en silencio | Se avisa en el registro (Dominus p.8; decisión del usuario) | `hoja/ficha.ts`, `combate.ts` |
 | 111 | Aikido sumaba la Fuerza del rival con el daño de otro arte y contra cualquiera; Hakyoukuken y Mushin contra cualquiera | `danoSinArmasDe`, `humanoide`, `organico` (Dominus p.29, p.31-32, p.42). Cambia Kiran (siete artes, daño de otra) | `estilos.ts`, `calculos.ts`, `ia.ts` |
 
-**Supuesto anotado:** el simulador trata el Ki como una sola reserva (Unificación de puntos de Ki,
-Dominus p.8); las siete planillas la marcan.
-
-**Interpretaciones preguntadas al usuario:** ver DISENO.md, "Pendiente de decidir".
+**Decisiones del usuario** sobre lo que la regla no precisa: DISENO.md, "Auditoría del combate"
+(posición superior, Pankration, Dominio físico, Aura, Selene, armas de dos tipos, Aeones sin TA,
+Unificación del Ki). No queda ninguna interpretación abierta de esta auditoría.

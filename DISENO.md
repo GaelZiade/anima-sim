@@ -264,10 +264,11 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
   alcance del cuerpo a cuerpo (Core p.90); Pankration avanzado no sufre ningún penalizador por apresar,
   turno incluido (Dominus p.33); la RF de la planilla (con el +10 de Dominio físico) vale contra todo;
   el Aura de combate cobra 1 de Ki al encenderse y después cada 5 asaltos.
-- **Supuestos sin confirmar (la regla no lo precisa):** Selene dobla el bono después del tope de
-  +150 y también con una técnica de Ki; un arma de dos
-  tipos ("Arma corta / Cuerda") toma el tamaño del más grande; Sangre de Toa, Phandemonium y
-  Shephirah no tienen TA propia; el Ki es una sola reserva (Unificación, Dominus p.8).
+- **También decidido por el usuario:** Selene dobla el bono después del tope de +150, también con
+  una técnica de Ki sin armas; un arma de dos tipos con uno de Arma corta (Florete, Kusari-Gama) cuenta
+  como corta; Sangre de Toa, Phandemonium y Shephirah no tienen TA propia (la Afinidad no cambia el
+  daño); el Ki es una sola reserva y, si una planilla no unifica los puntos de Ki, se avisa en el
+  registro (Dominus p.8).
 - **Datos de la ficha para reglas que dependen del rival o del estilo:** `organico` y `humanoide` (por
   defecto sí) para Hakyoukuken, Mushin y Aikido; `danoSinArmasDe` dice de qué arte sale el daño sin
   armas (sin el dato, el Aikido sólo si es su única arte marcial). Negativos en tres bolsas: críticos

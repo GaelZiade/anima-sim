@@ -20,7 +20,8 @@ retomar el trabajo, empezar por README.md.
 - **Estilos y Ki** (AUDITORIA.md 11, 99 a 109): Selene en la IA, Xing Quan, patada del Tae Kwon Do,
   Afinidad elemental de los Aeones, Legados por nombre, Dominio físico sin doble conteo, Aumento y
   Debilidad sin deriva, una Aura por fuente, Presencia base y Detección del Ki en una sola cuenta;
-  negativos en tres bolsas (Eliminación, Inmunidad); Aikido, Hakyoukuken y Mushin según el rival.
+  negativos en tres bolsas (Eliminación, Inmunidad); Aikido, Hakyoukuken y Mushin según el rival;
+  Xing Quan con la Iniciativa; Kusari-Gama y Florete cortas; aviso sin Unificación del Ki.
 - **Reglas que faltaban:** varios conjuros preparados a la vez (97); +3 de los cuadrúpedos al Derribo (98).
 - **Segunda pasada** (93 a 95): la IA mira la Tabla 41 al moverse; una sola parálisis
   (`nivelParalisis`) y una sola ceguera (`nivelCeguera`); `combate.ts` partido en defensa, distancia

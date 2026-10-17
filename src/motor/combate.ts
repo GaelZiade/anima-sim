@@ -208,6 +208,9 @@ export function simularCombate(equipoA: Ficha[], equipoB: Ficha[], o: OpcionesCo
     ctx.ataquesAsaltoAnterior = ctx.ataquesEnAsalto;
     ctx.ataquesEnAsalto = 0;
     ctx.movimientosEnAsalto = 0;
+    if (ctx.asalto === 1)
+      for (const l of luchadores)
+        if (l.ficha.ki?.sinUnificar) log(ctx, () => `Aviso: la planilla de ${l.ficha.nombre} no unifica los puntos de Ki; se simula con una sola reserva (Dominus p.8).`);
     jugarAsalto(ctx);
     // Nadie ataca ni se mueve durante 3 asaltos: combate estancado.
     asaltosQuietos = ctx.ataquesEnAsalto + ctx.movimientosEnAsalto === 0 ? asaltosQuietos + 1 : 0;

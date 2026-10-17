@@ -94,7 +94,8 @@ function leerKi(json: HojaJson): KiFicha | undefined {
   if (!reserva && !tecnicas.length) return undefined;
   // "Caelum: Límite del Peligro" → "caelum".
   const limites = json.Ki.limites.map((x) => normalizar(x.split(':')[0]));
-  return { reserva, acumulacion, tecnicas, limites };
+  const sinUnificar = normalizar(json.Ki.unificacion ?? '') === 'no';
+  return { reserva, acumulacion, tecnicas, limites, ...(sinUnificar ? { sinUnificar } : {}) };
 }
 
 /**
