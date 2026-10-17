@@ -435,6 +435,14 @@ function jugarAsalto(ctx: Contexto) {
 function turno(ctx: Contexto, l: Luchador) {
   // Ya usó su acción del asalto disparando en paralelo o interceptando una descarga (Core p.95, p.117).
   if (l.haActuado) return;
+  // Engatillado: atacarlo es una acción pasiva para quien lo amenaza (gasta un ataque); cuando va a
+  // actuar, lo golpea antes, salvo que el amenazado lo haya sorprendido (Core p.92).
+  const amenaza = l.amenazadoPor;
+  if (amenaza && activo(amenaza) && activo(l) && amenaza.ataquesRestantes > 0 && enAlcance(amenaza, l) && !l.sorprendeA.has(amenaza)) {
+    log(ctx, () => `${amenaza.ficha.nombre} aprovecha que tiene engatillado a ${l.ficha.nombre}.`);
+    atacar(ctx, amenaza, l, { esContra: false, bono: 0 });
+    if (!activo(l)) return;
+  }
   // Recuperar acción (Ki): a la defensiva, si no recibió un crítico, ejecuta la técnica y vuelve a
   // poder actuar; no le da ataques que ya no tenga (Dominus p.57).
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0 && !l.criticoEnAsalto) {
