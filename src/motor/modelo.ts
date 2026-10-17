@@ -345,6 +345,8 @@ export interface Luchador {
   accionesActivas: number;
   metrosMovidos: number;
   /** Se movió el asalto anterior: puede declarar una carga si no está trabado (Tabla 43, Core p.90). */
+  /** Este asalto corrió hacia un enemigo (la carga del asalto siguiente lo pide, Core p.90). */
+  avanzoHaciaEnemigo: boolean;
   movioAsaltoAnterior: boolean;
   /** En carga este asalto: +10 al ataque, −10 a la parada, −20 a la esquiva, sin −25 por correr. */
   cargando: boolean;

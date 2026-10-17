@@ -76,7 +76,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     trabados: [],
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
-    movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
+    movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, avanzoHaciaEnemigo: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
     derribado: false, paralisis: 0, apresadoPor: null, apresando: null, desarmado: false,
     condiciones: {}, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
@@ -246,7 +246,9 @@ function jugarAsalto(ctx: Contexto) {
   const vivos = ctx.luchadores.filter(activo);
   for (const l of vivos) {
     l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
-    l.movioAsaltoAnterior = l.metrosMovidos > 0;
+    // Cargar pide haber corrido hacia un enemigo el asalto anterior, no cualquier paso (Core p.90).
+    l.movioAsaltoAnterior = l.avanzoHaciaEnemigo;
+    l.avanzoHaciaEnemigo = false;
     l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
     l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
     l.planResistir = null;
@@ -612,6 +614,7 @@ function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
   if (paso <= 0) return;
   cruzarMuros(MOTOR, ctx, l, desde);
   l.metrosMovidos += paso;
+  if (obj.equipo !== l.equipo) l.avanzoHaciaEnemigo = true;
   ctx.movimientosEnAsalto++;
   const yaActivo = l.movioActivo;
   if (l.metrosMovidos > total / 4 && !yaActivo) {
