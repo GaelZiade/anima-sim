@@ -40,6 +40,21 @@ export interface FlechaAtaque {
   contra: boolean;
 }
 
+/** Un área de conjuro o de Ki: círculo de `radio` metros; las zonas que duran, punteadas. */
+export interface AreaTablero {
+  x: number;
+  y: number;
+  radio: number;
+  /** Tipo de ataque (CAL, FRI, ELE, ENE…): el color. */
+  tipo: string;
+  nombre: string;
+  /** Sigue activa (Tormenta de Fuego, Mina), no es el golpe de esta línea. */
+  zona: boolean;
+}
+
+/** Color de un área por su tipo de ataque. */
+const COLOR_AREA: Record<string, string> = { CAL: '255, 122, 26', FRI: '94, 200, 255', ELE: '255, 212, 0', ENE: '180, 140, 255' };
+
 /** Recorrido ya hecho en el asalto; el de la línea actual se dibuja a medida que avanza. */
 export interface Estela {
   id: string;
@@ -71,6 +86,8 @@ export class Tablero {
   flecha: FlechaAtaque | null = null;
   dano: { id: string; cantidad: number } | null = null;
   estelas: Estela[] = [];
+  /** Al ver: áreas de conjuros y técnicas (la de esta línea y las zonas activas). */
+  areas: AreaTablero[] = [];
   /** Al pintar una pared o terreno (null: al borrar). */
   alCambiarCelda: (c: Celda, tipo: Pincel | null) => void = () => {};
   /** Al soltar una ficha en otra celda. */
@@ -164,10 +181,12 @@ export class Tablero {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const color = this.color;
 
+    for (const a of this.areas) this.dibujarArea(g, a);
     for (const e of this.estelas) this.dibujarEstela(g, e, color);
     // Los caídos abajo, así no tapan a los que siguen en pie.
     const orden = [...this.fichas].sort((a, b) => Number(!!b.caido) - Number(!!a.caido));
     for (const f of orden) this.dibujarFicha(g, f, color);
+    for (const a of this.areas) this.dibujarMarcaArea(g, a);
     if (this.flecha) this.dibujarFlecha(g, this.flecha, color);
     if (this.dano) this.dibujarDano(g, this.dano, color);
     const t = this.turno && this.fichas.find((f) => f.id === this.turno);
@@ -365,6 +384,59 @@ export class Tablero {
     g.lineTo(cx, arriba);
     g.closePath();
     g.fill();
+    g.restore();
+  }
+
+  /** Un área, debajo de las fichas: círculo translúcido del color de su tipo; una zona activa, punteada. */
+  private dibujarArea(g: CanvasRenderingContext2D, a: AreaTablero) {
+    const c = this.celda;
+    const cx = (a.x + 0.5) * c, cy = (a.y + 0.5) * c, r = Math.max(c * 0.5, a.radio * c);
+    const rgb = COLOR_AREA[a.tipo] ?? '200, 200, 200';
+    g.save();
+    g.beginPath();
+    g.arc(cx, cy, r, 0, Math.PI * 2);
+    g.fillStyle = `rgba(${rgb}, ${a.zona ? 0.18 : 0.32})`;
+    g.fill();
+    g.lineWidth = 3;
+    g.strokeStyle = `rgba(${rgb}, 0.95)`;
+    if (a.zona) g.setLineDash([6, 5]);
+    g.stroke();
+    g.restore();
+  }
+
+  /**
+   * Encima de las fichas: un aro en el centro del área (se ve aunque el radio cubra todo el mapa) y el
+   * nombre con el radio al lado, dentro del lienzo.
+   */
+  private dibujarMarcaArea(g: CanvasRenderingContext2D, a: AreaTablero) {
+    const c = this.celda;
+    const cx = (a.x + 0.5) * c, cy = (a.y + 0.5) * c;
+    const rgb = COLOR_AREA[a.tipo] ?? '200, 200, 200';
+    const aro = c * 0.75;
+    g.save();
+    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    g.beginPath();
+    g.arc(cx, cy, aro, 0, Math.PI * 2);
+    g.stroke();
+    g.lineWidth = 2.5;
+    g.strokeStyle = `rgb(${rgb})`;
+    if (a.zona) g.setLineDash([4, 3]);
+    g.stroke();
+    g.setLineDash([]);
+    const tam = Math.max(11, Math.round(c * 0.42));
+    g.font = `800 ${tam}px system-ui, sans-serif`;
+    const texto = `${a.nombre} · ${a.radio} m`;
+    const w = g.measureText(texto).width;
+    const tx = Math.min(Math.max(cx, w / 2 + 4), this.mapa.ancho * c - w / 2 - 4);
+    const ty = Math.max(tam + 2, cy - aro - 4);
+    g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    g.lineWidth = 3.5;
+    g.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    g.strokeText(texto, tx, ty);
+    g.fillStyle = `rgb(${rgb})`;
+    g.fillText(texto, tx, ty);
     g.restore();
   }
 

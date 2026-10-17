@@ -1,6 +1,6 @@
 // Resolución de un combate completo con dados reales. Las decisiones las toma ./ia.
 
-import type { Contexto, Equipo, Evento, Ficha, FotoLuchador, Luchador, OpcionesEscenario, Tecnica } from './modelo';
+import type { AreaVisible, Contexto, Equipo, Evento, Ficha, FotoLuchador, Luchador, OpcionesEscenario, Tecnica } from './modelo';
 import { crearRng, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
@@ -115,8 +115,21 @@ function log(ctx: Contexto, texto: string | (() => string), extra?: () => Omit<E
   const turno = ctx.turnoDe ? ctx.luchadores.indexOf(ctx.turnoDe) : undefined;
   const linea = typeof texto === 'string' ? texto : texto();
   const ev: Evento = { asalto: ctx.asalto, texto: linea, foto, turno, ...extra?.() };
+  if (ctx.areaActual) ev.area = ctx.areaActual;
+  const zonas = zonasVisibles(ctx);
+  if (zonas.length) ev.zonas = zonas;
   ev.sujeto ??= ev.ataque?.de ?? ev.dano?.quien ?? sujetoDe(ctx, linea);
   ctx.registro.push(ev);
+}
+
+/** Las zonas de conjuro activas (Tormenta de Fuego, una Mina puesta), para dibujarlas. */
+function zonasVisibles(ctx: Contexto): AreaVisible[] {
+  const r: AreaVisible[] = [];
+  ctx.luchadores.forEach((l, i) => {
+    for (const x of l.magia?.mantenidos ?? [])
+      if (x.zona) r.push({ x: x.zona.x, y: x.zona.y, radio: x.zona.radio, de: i, tipo: x.conjuro.ta ?? 'ENE', nombre: x.conjuro.nombre });
+  });
+  return r;
 }
 
 /** Nombres de los luchadores, los más largos primero ("Soldado (2)" antes que "Soldado"), por combate. */
@@ -628,6 +641,7 @@ const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
 
 export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   golpear(ctx, atk, def, a);
+  ctx.areaActual = null;
   trasLaTecnica(MOTOR, ctx, atk);
 }
 
@@ -767,6 +781,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     // Ataque en área: una sola tirada contra varios blancos que se defienden en orden (Core p.92). Un
     // área de Ki alcanza a todos los del radio (Dominus p.58); sin Elección de blanco, aliados incluidos.
     const enArea = ki?.area ? ia.blancosAreaKi(ctx, atk, def, ki) : m === 'area' ? ia.blancosArea(ctx, atk, def) : [def];
+    if (ki?.area && ctx.registro) ctx.areaActual = { ...def.pos, radio: ki.area, de: nro(ctx, atk), tipo: ki.elemento || plan.tipo || 'ENE', nombre: plan.tecnica?.nombre ?? 'Área de Ki' };
     const alcanzados = estela.length ? [...estela.filter((b) => !enArea.includes(b)), ...enArea] : enArea;
     // Parada en área (Ki): quien cubre a sus aliados se defiende primero (Dominus p.58).
     const golpeG = limitado ? opcionesLimitado : opcionesAtk;

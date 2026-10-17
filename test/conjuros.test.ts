@@ -161,6 +161,18 @@ describe('beneficios de Guerra y de Fuego', () => {
   });
 });
 
+describe('áreas en el registro (para verlas en el tablero)', () => {
+  it('un conjuro de área marca su centro, radio y tipo en las líneas que lo narran', () => {
+    const m = mago({ libres: ['Bola de Fuego'] });
+    const sold = [0, 1, 2].map((i) => ({ ...soldado, id: `s${i}`, nombre: `Soldado ${i + 1}` }));
+    let area;
+    for (let semilla = 1; semilla <= 5 && !area; semilla++)
+      area = simularCombate([m], sold, { semilla, registrar: true }).registro!.find((e) => e.area?.nombre === 'Bola de Fuego')?.area;
+    expect(area).toMatchObject({ tipo: 'CAL', de: 0 });
+    expect(area!.radio).toBeGreaterThan(0);
+  });
+});
+
 describe('Tabla 76: En llamas (Core p.236)', () => {
   it('estados y PV por asalto; la armadura contra calor resta 2 por TA salvo calcinado', () => {
     expect([estadoLlamas(99), estadoLlamas(100), estadoLlamas(180), estadoLlamas(240), estadoLlamas(300)]).toEqual(['', 'prendido', 'ardiendo', 'en llamas', 'calcinado']);

@@ -544,6 +544,20 @@ export interface Evento {
   dano?: { quien: number; cantidad: number };
   /** De quién habla la línea: quien ataca, o si no el primero que nombra (`sujetoDe` en combate.ts). */
   sujeto?: number;
+  /** El área del ataque que narra la línea (conjuro, técnica de Ki): para dibujarla. */
+  area?: AreaVisible;
+  /** Zonas que siguen activas (Tormenta de Fuego, Mina): para dibujarlas todo el tiempo. */
+  zonas?: AreaVisible[];
+}
+
+/** Un área en el tablero: centro en metros, radio, de quién es y el tipo de ataque (el color). */
+export interface AreaVisible {
+  x: number;
+  y: number;
+  radio: number;
+  de: number;
+  tipo: string;
+  nombre: string;
 }
 
 export interface FotoLuchador {
@@ -618,4 +632,6 @@ export interface Contexto {
   ventaja: Record<Equipo, number>;
   /** Quién está jugando su turno (para el registro). */
   turnoDe?: Luchador | null;
+  /** El ataque en área que se está resolviendo, para que el registro lo dibuje. */
+  areaActual?: AreaVisible | null;
 }

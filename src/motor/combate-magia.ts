@@ -2,7 +2,7 @@
 // anímicos y efectos del registro), el choque de descargas, las zonas que atacan cada asalto y percibir
 // a los invisibles. El motor se presta por `Motor` (efectos/tipos.ts), como en los efectos.
 
-import type { Contexto, Luchador, Tecnica } from './modelo';
+import type { AreaVisible, Contexto, Luchador, Tecnica } from './modelo';
 import type { Golpe } from './golpe';
 import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
@@ -23,6 +23,26 @@ import { afectaElArea, blancosConjuro, detonarMina, efecto, radioArea, type Lanz
  * alcanzan sin defensa a quien cumpla su condición; los de efecto quedan activos sobre sus blancos.
  */
 export function lanzarConjuro(motor: Motor, ctx: Contexto, l: Luchador, x: Lanzamiento) {
+  // El área del conjuro (o de la Mina que estalla), para que el registro la dibuje.
+  if (ctx.registro) ctx.areaActual = areaVisible(ctx, l, x);
+  try {
+    lanzarEn(motor, ctx, l, x);
+  } finally {
+    ctx.areaActual = null;
+  }
+}
+
+function areaVisible(ctx: Contexto, l: Luchador, x: Lanzamiento): AreaVisible | null {
+  const c = x.conjuro;
+  const de = nro(ctx, l), tipo = c.ta ?? 'ENE', nombre = c.nombre;
+  const z = x.detonar?.zona;
+  if (z) return { x: z.x, y: z.y, radio: z.radio, de, tipo, nombre };
+  const radio = radioArea(c, c.grados[x.grado]);
+  const centro = c.radioOfensivo ? l.pos : x.objetivo?.pos;
+  return radio && centro ? { x: centro.x, y: centro.y, radio, de, tipo, nombre } : null;
+}
+
+function lanzarEn(motor: Motor, ctx: Contexto, l: Luchador, x: Lanzamiento) {
   const c = x.conjuro;
   if (x.detonar) {
     detonarMina(motor, ctx, l, x.detonar, !!x.control);
@@ -275,12 +295,15 @@ export function zonasMagicas(motor: Motor, ctx: Contexto) {
       const z = x.zona;
       if (!z || ctx.asalto < z.desde) continue;
       const g = x.conjuro.grados[x.grado];
+      if (ctx.registro) ctx.areaActual = { x: z.x, y: z.y, radio: z.radio, de: nro(ctx, l), tipo: x.conjuro.ta ?? 'ENE', nombre: x.conjuro.nombre };
       for (const b of ctx.luchadores) {
         if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || !afectaElArea(l, b, x.conjuro, z.control)) continue;
         const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
         motor.resolverDefensa(ctx, l, b, g.habilidad ?? 0, DADO_FIJO, golpe, `${x.conjuro.nombre} de ${l.ficha.nombre} ataca a ${b.ficha.nombre}`);
-        if (motor.terminado(ctx)) return;
+        if (motor.terminado(ctx)) break;
       }
+      ctx.areaActual = null;
+      if (motor.terminado(ctx)) return;
     }
   }
 }

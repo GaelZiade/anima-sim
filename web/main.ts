@@ -257,6 +257,7 @@ function dibujarMapa() {
     tablero.flecha = null;
     tablero.dano = null;
     tablero.estelas = [];
+    tablero.areas = [];
   }
   tablero.dibujar();
 }
@@ -674,6 +675,8 @@ function irA(k: number) {
     }
     : null;
   tablero.dano = e.dano ? { id: f.ids[e.dano.quien], cantidad: e.dano.cantidad } : null;
+  // Áreas: las zonas activas (punteadas) y la del conjuro o técnica de esta línea.
+  tablero.areas = [...(e.zonas ?? []).map((z) => ({ ...z, zona: true })), ...(e.area ? [{ ...e.area, zona: false }] : [])];
   tablero.sujeto = e.sujeto !== undefined ? f.ids[e.sujeto] : null;
 
   // Estelas: los recorridos del asalto hasta esta línea; el de esta línea se dibuja mientras avanza.
@@ -754,6 +757,7 @@ function volverAEditar() {
   tablero.flecha = null;
   tablero.dano = null;
   tablero.estelas = [];
+  tablero.areas = [];
   dibujarMapa();
 }
 
