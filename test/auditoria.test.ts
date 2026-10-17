@@ -126,6 +126,17 @@ describe('respuestas a la auditoría', () => {
     expect(ataqueFinal(l, r, { esContra: true }) - ataqueFinal(l, r, { esContra: false })).toBe(l.cap.penPorAtaque);
   });
 
+  it('Selene dobla el bono de la contra con una sola cuenta para motor e IA (Dominus p.39)', async () => {
+    const { bonoDeContra } = await import('../src/motor/calculos');
+    const ia = await import('../src/motor/ia');
+    const selene = crearLuchador(ficha('Selene', { artesMarciales: ['Selene (Base)'] }, { arma: { nombre: 'Desarmado', desarmado: true } }), 'A', 0, 0);
+    const otro = crearLuchador(ficha('Otro'), 'A', 0, 0);
+    const r = crearLuchador(ficha('Rival'), 'B', 1, 0);
+    expect([bonoDeContra(selene, 30), bonoDeContra(otro, 30)]).toEqual([60, 30]);
+    // La IA espera de su contra con +30 lo mismo que con +60 sin doblar.
+    expect(ia.golpeDeContra(selene, r, 30)).toBe(ia.golpeDeContra({ ...selene, cap: { ...selene.cap, est: { ...selene.cap.est, doblaBonoContra: false } } }, r, 60));
+  });
+
   it('desequilibrio de atributos: +10 por punto de DES+AGI por encima de 7, sólo con la opción (Dominus p.10)', () => {
     const rapido = ficha('Rápido', {}, { atributos: { DES: 15, AGI: 15 } });
     const lento = ficha('Lento', {}, { atributos: { DES: 9, AGI: 10 } });

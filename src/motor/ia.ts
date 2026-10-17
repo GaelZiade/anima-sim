@@ -8,7 +8,7 @@ import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } 
 import {
   activo, bonoCriticoDe, rfCritico, rfDe, alcanceMaximo, modProyectil, visionEntre, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
-  perfilDe, proximaRanura, golpeAPuntoVulnerable, quedanAccionesActivas } from './calculos';
+  perfilDe, proximaRanura, golpeAPuntoVulnerable, quedanAccionesActivas, bonoDeContra } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
@@ -163,7 +163,7 @@ export function puedeContraatacar(def: Luchador): boolean {
 export function golpeDeContra(def: Luchador, atk: Luchador, bono: number): number {
   const b = base(def, atk);
   b.contra ??= { hab: ataqueFinal(def, atk, { esContra: true }), prep: preparacionCon(def, atk, { esContra: true }) };
-  return danoCon(b.contra.prep, b.contra.hab + bono - b.def);
+  return danoCon(b.contra.prep, b.contra.hab + bonoDeContra(def, bono) - b.def);
 }
 
 /** Lo que arriesga `atk` si su golpe (con pronóstico `p`) deja contraatacar a `def`, por su λ. */
@@ -458,7 +458,7 @@ function declararSinKi(ctx: Contexto, l: Luchador): Omit<Declaracion, 'acumularK
     let contrasLibres = 0;
     for (const { e, peso, p } of contras) {
       if (p.pContra <= 0) continue;
-      const golpe = danoEsperado(l, e, ataqueFinal(l, e, { declarados: n, ranura: plan[0], bono: p.bonoContra, esContra: true }), defensaFinal(e, l));
+      const golpe = danoEsperado(l, e, ataqueFinal(l, e, { declarados: n, ranura: plan[0], bono: bonoDeContra(l, p.bonoContra), esContra: true }), defensaFinal(e, l));
       if (l.cap.est.contrasIlimitadas) contrasLibres += peso * p.pContra * golpe;
       else usos.push(peso * p.pContra * golpe);
     }
@@ -637,7 +637,7 @@ export function elegirObjetivo(ctx: Contexto, l: Luchador): Luchador | null {
 export function usarContra(ctx: Contexto, l: Luchador, atk: Luchador, bono: number): boolean {
   nuevaDecision(ctx);
   if (perfil(l) === 'bestia') return true;
-  const ahora = valorAtaque(l, atk, { bono });
+  const ahora = valorAtaque(l, atk, { bono: bonoDeContra(l, bono) });
   if (ahora <= 0) return false;
   if (l.haActuado || l.ataquesRestantes > 1) return true;
   // Le queda un solo ataque y todavía no actuó: comparar con su mejor ataque en su turno.

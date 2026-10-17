@@ -195,6 +195,11 @@ function tipoMovimientoKi(l: Luchador): number {
   return Math.max(Math.floor(l.ficha.tipoMovimiento / 2), Math.floor(tm) - ki.lentitud);
 }
 
+/** Bono con que contraataca `l`: Selene lo dobla (Dominus p.39). Motor e IA usan esta. */
+export function bonoDeContra(l: Luchador, bono: number): number {
+  return l.cap.est.doblaBonoContra ? bono * 2 : bono;
+}
+
 /**
  * Tabla 41 (Core p.85): ¿le quedan acciones activas después de hacer `mas` más? Sin Destreza y
  * Agilidad en la ficha no hay tope.

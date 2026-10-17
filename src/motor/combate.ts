@@ -11,7 +11,7 @@ import {
 import {
   activo, ALCANCE, bonoCriticoDe, nro, rfCritico, rfDe, ataqueFinal, danoBase, distancia, enAlcance, enLaLinea, posicionDe, cegueraContra,
   modControl, umbralPifiaTurno, penAccion, proximaRanura, puedeActuar, turnoFinal, modProyectil, visionEntre, PEN_COBERTURA, golpeAPuntoVulnerable,
-  quedanAccionesActivas,
+  quedanAccionesActivas, bonoDeContra,
 } from './calculos';
 import {
   atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esNoLetal, gradoPresa, localizacionApuntada,
@@ -634,8 +634,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // Atacar es hacer otra cosa que lanzar: si acumulaba magia, este asalto acumula la mitad (Core p.117).
   hacerOtraAccion(atk);
 
-  // Selene: dobla el bono del contraataque peleando sin armas (Dominus p.39).
-  const bono = a.esContra && atk.cap.est.doblaBonoContra ? a.bono * 2 : a.bono;
+  const bono = a.esContra ? bonoDeContra(atk, a.bono) : a.bono;
   // Transporte automático (Ki): con una técnica que lo lleva hasta el blanco aparece junto a él y lo
   // golpea cuerpo a cuerpo (Dominus p.59).
   const transporte = a.tecnica && !enAlcance(atk, def) ? vistaPrevia(atk, a.tecnica).transporte : 0;
