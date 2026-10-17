@@ -260,8 +260,10 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
  * penalizadores de flanco y espalda (Dominus p.11). Se supone que la tirada de detección sale.
  */
 export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
-  // Cegado por un destello: el asalto previo a recuperar la vista, sólo ceguera parcial (Core p.233).
+  // Lo más común (está en el camino más caliente): nada que lo ciegue.
   const c = condicion(l, 'ceguera');
+  if (!c && !invisible && !l.ficha.estados?.ceguera && !rival.bono?.invisible && !l.entorno.oscuridad) return SIN_CEGUERA;
+  // Cegado por un destello: el asalto previo a recuperar la vista, sólo ceguera parcial (Core p.233).
   const destello = !c ? undefined : c.destello && c.asaltos === 1 ? 'parcial' : c.nivel >= 2 ? 'absoluta' : 'parcial';
   const propia = destello === 'absoluta' || l.ficha.estados?.ceguera === 'absoluta' ? 'absoluta' : destello ?? l.ficha.estados?.ceguera;
   const casos: Ceguera[] = [

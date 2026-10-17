@@ -1450,9 +1450,19 @@ export function textoKi(l: Luchador): string {
 
 /** Efectos que tendría la acción si ejecutara esta técnica (sin ejecutarla). */
 export function vistaPrevia(l: Luchador, t: Tecnica): ModKi {
-  const ef = efectosDe(t);
-  return combinar(combinar(l.ki?.activo ?? SIN_KI, ef.asalto), ef.accion);
+  // Se repite mucho en la IA: se guarda por los efectos activos (que nunca se cambian en el lugar,
+  // siempre se reemplazan) y la técnica.
+  const activo = l.ki?.activo ?? SIN_KI;
+  let porTecnica = vistas.get(activo);
+  if (!porTecnica) vistas.set(activo, (porTecnica = new Map()));
+  let v = porTecnica.get(t);
+  if (!v) {
+    const ef = efectosDe(t);
+    porTecnica.set(t, (v = Object.freeze(combinar(combinar(activo, ef.asalto), ef.accion))));
+  }
+  return v;
 }
+const vistas = new WeakMap<ModKi, Map<Tecnica, ModKi>>();
 
 /** Ki total que cuesta ejecutarla. */
 export function costeKi(t: Tecnica): number {
