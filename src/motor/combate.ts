@@ -840,7 +840,8 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       log(ctx, () => `${etiquetaPara(def)}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`,
         () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: a.esContra, resultado: null } }));
       avisarPifia(ctx, atk);
-      ofrecerContra(ctx, def, atk, tA.nivelPifia);
+      // La pifia da contra sólo trabado en cuerpo a cuerpo (Core p.98).
+      if (enAlcance(atk, def)) ofrecerContra(ctx, def, atk, tA.nivelPifia);
       return;
     }
     const limitado = g >= conEfectos;
@@ -1025,7 +1026,7 @@ function disparoCombinado(ctx: Contexto, atk: Luchador, def: Luchador) {
     log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: false, resultado: null } }));
     avisarPifia(ctx, atk);
-    ofrecerContra(ctx, def, atk, tA.nivelPifia);
+    if (enAlcance(atk, def)) ofrecerContra(ctx, def, atk, tA.nivelPifia);
     return;
   }
   const r = resolverDefensa(ctx, atk, def, hab, tA, { maniobra: 'normal', esContra: false, ranura: RANURA_BALA, tipo: perfilDe(atk, RANURA_BALA).tipoAtaque }, etiqueta);
@@ -1634,6 +1635,7 @@ function ofrecerContra(ctx: Contexto, def: Luchador, atk: Luchador, bono: number
   // Sólo puede aprovechar la contra quien todavía puede hacer acciones activas y atacar (Core p.89).
   const motivo = def.aLaDefensiva ? 'está a la defensiva'
     : def.defensaTotal ? 'está en Defensa total'
+    : def.fascinado ? 'está fascinado'
     : def.ataquesRestantes <= 0 && !ilimitadas ? 'ya usó todos sus ataques del asalto'
     : null;
   // Desde lejos sólo se contraataca con un arma a distancia, y sin el bono (Core p.95).
