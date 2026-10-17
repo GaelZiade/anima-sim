@@ -82,7 +82,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,
-    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, presaExistencial: false, intangiblePor: null, espejismos: null, fichaArmada: null, sinArmaKi: null, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
+    ki: null, magia: null, bendiciones: [], bono: null, llamas: 0, apagando: false, extasis: false, lazos: null, percibe: new Set(), radioDeteccionKi: 0, armaRota: null, detecta: new Set(), descubre: new Set(), holograma: false, atadura: 0, balas: 0, proyectiles: estadoProyectiles(ficha), apuntando: null, ultimoBlanco: null, disparo: false, atrapadas: 0, ataqueFinalUsado: false, maniobraEspecialVista: new Set(), camuflajeConocido: new Map(), transportesVistos: new Map(), defensaPlena: false, intentoZafarse: false, presaExistencial: false, intangiblePor: null, espejismos: null, fichaArmada: null, sinArmaKi: null, camufladoA: new Set(), previsionContra: null, criticoEnAsalto: false, repitioControl: false, samiel: new Map(), orochi: 0, orochiAsaltos: 0,
     stats: {
       danoCausado: 0, danoRecibido: 0, bajas: 0, criticosCausados: 0, asaltoCaida: null,
       ataquesHechos: 0, contrasHechas: 0, cansancioGastado: 0, asaltosDefensaTotal: 0, maniobras: {}, tecnicas: {},
@@ -245,7 +245,7 @@ function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario
 function jugarAsalto(ctx: Contexto) {
   const vivos = ctx.luchadores.filter(activo);
   for (const l of vivos) {
-    l.haActuado = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
+    l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
     l.movioAsaltoAnterior = l.metrosMovidos > 0;
     l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
     l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
@@ -409,7 +409,7 @@ function jugarAsalto(ctx: Contexto) {
   for (const l of ctx.luchadores) {
     if (!activo(l)) continue;
     // Quien está apresado y no pudo actuar puede intentar zafarse igual (Core p.92).
-    if (l.apresadoPor && !l.haActuado) zafarse(ctx, l);
+    if (l.apresadoPor && !l.intentoZafarse) zafarse(ctx, l);
     l.penDolor = Math.max(0, l.penDolor - 5);
     l.penTecnica = Math.max(0, l.penTecnica - 10);
     // Condiciones con duración: un asalto menos (parálisis inducida, ceguera).
@@ -431,6 +431,8 @@ function jugarAsalto(ctx: Contexto) {
 }
 
 function turno(ctx: Contexto, l: Luchador) {
+  // Ya usó su acción del asalto disparando en paralelo o interceptando una descarga (Core p.95, p.117).
+  if (l.haActuado) return;
   // Recuperar acción (Ki): a la defensiva, si no recibió un crítico, ejecuta la técnica y vuelve a
   // poder actuar; no le da ataques que ya no tenga (Dominus p.57).
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0 && !l.criticoEnAsalto) {
@@ -444,7 +446,8 @@ function turno(ctx: Contexto, l: Luchador) {
   }
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0)
     log(ctx, () => `${l.ficha.nombre} está a la defensiva: no puede actuar este asalto.`);
-  if (puedeActuar(l) && ctx.opciones.huida && !l.bono?.ira && ia.quiereHuir(ctx, l)) {
+  // Retirarse es moverse: apresado, atado o con Lazos, primero tiene que librarse (Core p.92, p.94).
+  if (puedeActuar(l) && ctx.opciones.huida && !l.bono?.ira && !l.apresadoPor && !l.atadura && !l.lazos && ia.quiereHuir(ctx, l)) {
     retirarse(ctx, l);
     l.haActuado = true;
     return;
@@ -1583,6 +1586,7 @@ function soltar(l: Luchador) {
 function zafarse(ctx: Contexto, l: Luchador): boolean {
   const captor = l.apresadoPor;
   if (!captor) return true;
+  l.intentoZafarse = true;
   if (l.lazos) {
     log(ctx, () => `${l.ficha.nombre} no puede romper los Lazos de Luz.`);
     return false;

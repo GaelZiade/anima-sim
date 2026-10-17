@@ -473,6 +473,8 @@ export interface Luchador {
   intangiblePor: Luchador | null;
   /** Lo atrapó una Presa existencial: controla con su Poder y no se libra con transportes (Dominus p.64). */
   presaExistencial: boolean;
+  /** Ya intentó zafarse de la presa este asalto (si no pudo actuar, lo intenta al final, Core p.92). */
+  intentoZafarse: boolean;
   /** Se retira con un Transporte automático: se defiende sin defensas previas ni posición (Dominus p.59). */
   defensaPlena: boolean;
   /** Maniobra Especial: rivales que ya la presenciaron o sufrieron; contra ellos no da bono (Dominus p.86). */
