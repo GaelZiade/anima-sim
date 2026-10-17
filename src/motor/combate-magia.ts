@@ -8,7 +8,8 @@ import { GRADOS, type Conjuro, type Grado } from './conjuros';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { umbralPifia } from './reglas';
 import { activo, ataqueFinal, ataqueMagico, danoBase, puedeActuar, distancia, enAlcance, nro, penAccion, proximaRanura } from './calculos';
-import { ejecutar, textoKi } from './ki';
+import { textoKi } from './ki';
+import { trasLaTecnica, usarTecnica } from './combate-ki';
 import { atributo, bonoCaracteristica } from './maniobras';
 import { dejarDeMantener, golpeDeConjuro, lanzar, pagarDeterminada, proyeccionDeterminada, RANURA_MAGIA } from './magia';
 import * as ia from './ia';
@@ -193,8 +194,15 @@ function factorChoque(dif: number): number {
 function choqueFisico(
   motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean, tecnica: Tecnica,
 ): 'anulado' | 'pierde' | number | null {
-  const ki = ejecutar(def, tecnica);
-  def.stats.tecnicas[tecnica.nombre] = (def.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+  const r = chocarConTecnica(motor, ctx, atk, def, resultado, baseAtk, atkEsMago, tecnica);
+  trasLaTecnica(motor, ctx, def);
+  return r;
+}
+
+function chocarConTecnica(
+  motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, resultado: number, baseAtk: number, atkEsMago: boolean, tecnica: Tecnica,
+): 'anulado' | 'pierde' | number | null {
+  const ki = usarTecnica(motor, ctx, def, tecnica);
   def.haActuado = true;
   def.ataquesRestantes = 0;
   const t = motor.tirar(ctx, def.cap.umbralAtaque);

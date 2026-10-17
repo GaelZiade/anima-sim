@@ -24,7 +24,7 @@ import * as ia from './ia';
 import * as iaMagia from './ia-magia';
 import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, ataquesDeIlusiones, destruccionPorKi, detectarPresencias, efectosAlImpactar, efectosDeAsalto, estadosAutomaticos, fusion, golpeAIlusion, moverHacia, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, ataquesDeIlusiones, destruccionPorKi, detectarPresencias, efectosAlImpactar, efectosDeAsalto, estadosAutomaticos, fusion, golpeAIlusion, moverHacia, trasLaTecnica, usarTecnica, puntosDePresion, reflectar, repetirFascinacion,
 } from './combate-ki';
 import { roturaDeArmadura, roturaEnParada } from './rotura';
 import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
@@ -42,7 +42,7 @@ import {
 } from './mapa';
 import {
   ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
-  alRecibirCritico, crearEstadoKi, ejecutar, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
+  alRecibirCritico, crearEstadoKi, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
   recuperarKi, type ModKi,
   nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, efectosDe, cumpleCircunstancias, defensaSirve,
 } from './ki';
@@ -245,7 +245,7 @@ function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario
 function jugarAsalto(ctx: Contexto) {
   const vivos = ctx.luchadores.filter(activo);
   for (const l of vivos) {
-    l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.defensasHechas = 0; l.cansancioAsalto = 0;
+    l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.camufladoA.clear(); l.defensasHechas = 0; l.cansancioAsalto = 0;
     // Cargar pide haber corrido hacia un enemigo el asalto anterior, no cualquier paso (Core p.90).
     l.movioAsaltoAnterior = l.avanzoHaciaEnemigo;
     l.avanzoHaciaEnemigo = false;
@@ -340,11 +340,9 @@ function jugarAsalto(ctx: Contexto) {
       if (d.acumularKi) log(ctx, () => `${l.ficha.nombre} acumula Ki: ${textoKi(l)}.`);
       const tecnica = ia.tecnicaDeTurno(ctx, l);
       if (tecnica) {
-        ejecutar(l, tecnica);
-        l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+        usarTecnica(MOTOR, ctx, l, tecnica);
         log(ctx, () => `${l.ficha.nombre} ejecuta ${tecnica.nombre} [Ki ${textoKi(l)}].`);
-        trasLaTecnica(ctx, l);
-        efectosDeAsalto(MOTOR, ctx, l, true);
+        trasLaTecnica(MOTOR, ctx, l);
       }
     }
   }
@@ -448,10 +446,10 @@ function turno(ctx: Contexto, l: Luchador) {
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0 && !l.criticoEnAsalto) {
     const t = ia.recuperarAccion(ctx, l);
     if (t) {
-      ejecutar(l, t);
-      l.stats.tecnicas[t.nombre] = (l.stats.tecnicas[t.nombre] ?? 0) + 1;
+      usarTecnica(MOTOR, ctx, l, t);
       l.aLaDefensiva = false;
       log(ctx, () => `${l.ficha.nombre} usa ${t.nombre} [Ki ${textoKi(l)}] y recupera la acción.`);
+      trasLaTecnica(MOTOR, ctx, l);
     }
   }
   if (activo(l) && l.aLaDefensiva && !l.defensaTotal && l.ataquesRestantes > 0)
@@ -728,25 +726,7 @@ const NOMBRE_MANIOBRA: Record<Maniobra, string> = {
 
 export function atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   golpear(ctx, atk, def, a);
-  trasLaTecnica(ctx, atk);
-}
-
-/**
- * Lo que una técnica le hace al terminar la acción (Dominus p.74-75): Pérdida del arma (se destroza;
- * queda desarmado) y Técnica final (muere).
- */
-function trasLaTecnica(ctx: Contexto, l: Luchador) {
-  const p = l.ki?.pendiente;
-  if (!p || (!p.arma && !p.final)) return;
-  if (p.arma) {
-    p.arma = false;
-    log(ctx, () => `  La energía destroza el arma de ${l.ficha.nombre}.`);
-    desarmar(ctx, l, l);
-  }
-  if (p.final) {
-    p.final = false;
-    if (l.estado === 'activo') caer(ctx, l, l, 'muerto');
-  }
+  trasLaTecnica(MOTOR, ctx, atk);
 }
 
 function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
@@ -789,9 +769,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // valen los efectos de Asalto activos y, una vez por asalto, los de Acción de una mantenida.
   let ki: ModKi | undefined;
   if (plan.tecnica) {
-    ki = ejecutar(atk, plan.tecnica);
-    atk.stats.tecnicas[plan.tecnica.nombre] = (atk.stats.tecnicas[plan.tecnica.nombre] ?? 0) + 1;
-    efectosDeAsalto(MOTOR, ctx, atk, true);
+    ki = usarTecnica(MOTOR, ctx, atk, plan.tecnica);
   } else ki = modDeAccion(atk, 'ataque', true);
   // Ataque especializado: contra otra clase de defensa la técnica no tiene ningún efecto (Dominus p.72).
   if (ki?.soloContra && (def.ficha.acumulacion ? 'acumulacion' : def.ficha.tipoDefensa ?? 'parada') !== ki.soloContra) ki = atk.ki?.activo;
@@ -1269,7 +1247,7 @@ function resolverDefensa(
   ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
 ): ResultadoDefensa {
   const r = defenderse(ctx, atk, def, habAtk, tA, o, etiqueta);
-  trasLaTecnica(ctx, r.defensor);
+  trasLaTecnica(MOTOR, ctx, r.defensor);
   return r;
 }
 
@@ -1331,9 +1309,7 @@ function defenderse(
   const tecnica = elegida && defensaSirve(efectosDe(elegida).desventajas.defensaContra, o) ? elegida : null;
   let kiDef: ModKi | undefined;
   if (tecnica) {
-    kiDef = ejecutar(quienDefiende, tecnica);
-    quienDefiende.stats.tecnicas[tecnica.nombre] = (quienDefiende.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
-    efectosDeAsalto(MOTOR, ctx, quienDefiende, true);
+    kiDef = usarTecnica(MOTOR, ctx, quienDefiende, tecnica);
   } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
   const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk, o.ki) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined, area: o.area, centroArea: o.centroArea }) - (proteccion?.pen ?? 0) - trasAtrapar;
   quienDefiende.previenePendiente.delete(atk);

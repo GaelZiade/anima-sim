@@ -276,11 +276,11 @@ function terminarIntangibilidad(l: Luchador) {
  * ataque. Un blanco (o todos los que estén a su distancia si alcanza a varios) hace la RF.
  */
 export function estadosAutomaticos(motor: Motor, ctx: Contexto, l: Luchador, tecnica: Tecnica, blancos: Luchador[]) {
-  const ki = ejecutar(l, tecnica);
-  l.stats.tecnicas[tecnica.nombre] = (l.stats.tecnicas[tecnica.nombre] ?? 0) + 1;
+  const ki = usarTecnica(motor, ctx, l, tecnica);
   motor.log(ctx, () => `${l.ficha.nombre} usa ${tecnica.nombre} [Ki ${textoKi(l)}] sobre ${blancos.map((b) => b.ficha.nombre).join(', ')}.`);
   for (const b of blancos)
     for (const est of ki.estados) if (est.condicion === 'automatico' && activo(b)) estadoSobrenatural(motor, ctx, l, b, est);
+  trasLaTecnica(motor, ctx, l);
 }
 
 /**
@@ -371,6 +371,8 @@ export function detectarPresencias(motor: Motor, ctx: Contexto) {
  */
 export function efectosDeAsalto(motor: Motor, ctx: Contexto, l: Luchador, recienEjecutada: boolean) {
   const ki = l.ki?.activo;
+  // Los que hizo intangibles dejan de serlo cuando él ya no mantiene la técnica.
+  if (!ki?.intangible) for (const x of ctx.luchadores) if (x.intangiblePor === l) x.intangiblePor = null;
   if (l.espejismos && !ki?.espejismos) {
     l.espejismos = null;
     motor.log(ctx, () => `  Las ilusiones de ${l.ficha.nombre} se desvanecen.`);
@@ -444,5 +446,35 @@ export function ataquesDeIlusiones(motor: Motor, ctx: Contexto, l: Luchador, bla
     if (t.pifia) continue;
     const golpe: Golpe = { maniobra: 'normal', esContra: false, ranura, ilusion: { fantasmal: e.fantasmal } };
     motor.resolverDefensa(ctx, l, blanco, hab, t, golpe, `Una ilusión de ${l.ficha.nombre} ataca a ${blanco.ficha.nombre}`);
+  }
+}
+
+/**
+ * Ejecuta una técnica en combate: paga y aplica sus efectos (ki.ts), la cuenta en las estadísticas y
+ * deja lo que traen sus efectos de Asalto (Espejismo, Arma de Ki, Afectar a otros). Todo camino que
+ * ejecuta una técnica pasa por acá; lo que hace al terminar la acción, `trasLaTecnica`.
+ */
+export function usarTecnica(motor: Motor, ctx: Contexto, l: Luchador, t: Tecnica): ModKi {
+  const ki = ejecutar(l, t);
+  l.stats.tecnicas[t.nombre] = (l.stats.tecnicas[t.nombre] ?? 0) + 1;
+  efectosDeAsalto(motor, ctx, l, true);
+  return ki;
+}
+
+/**
+ * Lo que una técnica le hace al terminar la acción (Dominus p.74-75): Pérdida del arma (se destroza;
+ * queda desarmado) y Técnica final (muere).
+ */
+export function trasLaTecnica(motor: Motor, ctx: Contexto, l: Luchador) {
+  const p = l.ki?.pendiente;
+  if (!p || (!p.arma && !p.final)) return;
+  if (p.arma) {
+    p.arma = false;
+    motor.log(ctx, () => `  La energía destroza el arma de ${l.ficha.nombre}.`);
+    motor.desarmar(ctx, l, l);
+  }
+  if (p.final) {
+    p.final = false;
+    if (l.estado === 'activo') motor.caer(ctx, l, l, 'muerto');
   }
 }
