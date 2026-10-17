@@ -139,11 +139,14 @@ export interface Conjuro {
   /** Sirve de escudo sólo si no tiene otro levantado (Barrera de Fuego, Core p.157). */
   escudoSiNoHayOtro?: boolean;
   efecto: EfectoConjuro;
-  /**
-   * Su radio alrededor del lanzador es un área ofensiva: alcanza a todos los de adentro salvo a él, y con
-   * Control del Espacio puede elegir a quiénes (Core p.122, Arcana p.28).
-   */
+  /** Su radio alrededor del lanzador es un área ofensiva (Core p.122). */
   radioOfensivo?: boolean;
+  /**
+   * Dice que no se pueden designar blancos en su área (Core p.123, "Selección de blancos"): alcanza a
+   * todos, el lanzador incluido ('todos') o salvo él ('salvoLanzador'); sólo Control del Espacio deja
+   * elegir (Arcana p.28). Sin esto, el mago elige a quién afecta.
+   */
+  sinElegirBlancos?: 'todos' | 'salvoLanzador';
   /** Mantenimiento diario: una vez lanzado sigue activo todo el combate sin pagar por asalto (Core p.122). */
   diario?: boolean;
   /** Sobre quién cae un conjuro de efecto: un aliado (o él) o todos los aliados del radio. */
@@ -169,12 +172,12 @@ interface Comportamiento extends Omit<Conjuro, 'grados' | 'via' | 'nivel' | 'tip
 
 const COMPORTAMIENTO: readonly Comportamiento[] = [
   // Luz (Core p.126-127)
-  { nombre: 'Flash Cegador', tipos: ['automatico'], efecto: 'flash', centro: 'lanzador', radioOfensivo: true, fuente: 'Core p.126' },
+  { nombre: 'Flash Cegador', tipos: ['automatico'], efecto: 'flash', centro: 'lanzador', radioOfensivo: true, sinElegirBlancos: 'salvoLanzador', fuente: 'Core p.126' },
   { nombre: 'Escudo de Luz', efecto: 'escudo', escudoSoloSobrenatural: true, escudoDobleContra: 'oscuridad', fuente: 'Core p.126' },
   { nombre: 'Armadura de Luz', efecto: 'armadura', fuente: 'Core p.127' },
   { nombre: 'Descarga de Luz', efecto: 'ataque', ta: 'ENE', fuente: 'Core p.127' },
   // Fuego (Core p.157-159)
-  { nombre: 'Bola de Fuego', efecto: 'ataque', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157' },
+  { nombre: 'Bola de Fuego', efecto: 'ataque', ta: 'CAL', centro: 'objetivo', sinElegirBlancos: 'todos', fuente: 'Core p.157' },
   { nombre: 'Descarga de Calor', efecto: 'ataque', ta: 'CAL', fuente: 'Core p.157' },
   {
     nombre: 'Arma Ígnea', efecto: 'bendicion', blanco: 'aliado', fuente: 'Core p.157',
@@ -205,7 +208,7 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   },
   { nombre: 'Crítico Directo', efecto: 'criticoDirecto', fuente: 'Core p.159' },
   {
-    nombre: 'Tormenta de Fuego', efecto: 'tormenta', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.159',
+    nombre: 'Tormenta de Fuego', efecto: 'tormenta', ta: 'CAL', centro: 'objetivo', sinElegirBlancos: 'todos', fuente: 'Core p.159',
     todos: { dano: 100 }, grados: [180, 240, 280, 320].map((habilidad) => ({ habilidad })),
   },
   {
@@ -301,7 +304,7 @@ const COMPORTAMIENTO: readonly Comportamiento[] = [
   },
   {
     // Ataque automático de 240 a más de la mitad del radio, 280 a menos y 320 a bocajarro.
-    nombre: 'Mina de Fuego', efecto: 'mina', ta: 'CAL', centro: 'objetivo', fuente: 'Core p.157',
+    nombre: 'Mina de Fuego', efecto: 'mina', ta: 'CAL', centro: 'objetivo', sinElegirBlancos: 'todos', fuente: 'Core p.157',
   },
   { nombre: 'Fundir', tipos: ['animico'], efecto: 'fundir', centro: 'lanzador', fuente: 'Core p.158' },
   { nombre: 'Sacrificio Vital', efecto: 'sacrificioVital', fuente: 'Core p.158', grados: [50, 100, 150, 200].map((maximo) => ({ maximo })) },

@@ -14,7 +14,7 @@ import { atributo, bonoCaracteristica } from './maniobras';
 import { dejarDeMantener, golpeDeConjuro, lanzar, pagarDeterminada, proyeccionDeterminada, RANURA_MAGIA } from './magia';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
-import { blancosConjuro, detonarMina, efecto, radioArea, type Lanzado, type Lanzamiento, type Motor } from './efectos';
+import { afectaElArea, blancosConjuro, detonarMina, efecto, radioArea, type Lanzado, type Lanzamiento, type Motor } from './efectos';
 
 /**
  * Lanza un conjuro (Core p.117-122). Todo conjuro pide un control de Proyección Mágica: con pifia
@@ -276,7 +276,7 @@ export function zonasMagicas(motor: Motor, ctx: Contexto) {
       if (!z || ctx.asalto < z.desde) continue;
       const g = x.conjuro.grados[x.grado];
       for (const b of ctx.luchadores) {
-        if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || (z.excluye === 'aliados' && b.equipo === l.equipo)) continue;
+        if (!activo(b) || Math.hypot(b.pos.x - z.x, b.pos.y - z.y) > z.radio || !afectaElArea(l, b, x.conjuro, z.control)) continue;
         const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: x.conjuro.ta, ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
         motor.resolverDefensa(ctx, l, b, g.habilidad ?? 0, DADO_FIJO, golpe, `${x.conjuro.nombre} de ${l.ficha.nombre} ataca a ${b.ficha.nombre}`);
         if (motor.terminado(ctx)) return;

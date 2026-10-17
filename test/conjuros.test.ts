@@ -84,6 +84,21 @@ describe('Control del Espacio (Arcana p.28)', () => {
     expect(blancosConjuro(ctx, l, e1, c, c.grados[0], false)).toEqual([aliado, e1, e2]);
     expect(blancosConjuro(ctx, l, e1, c, c.grados[0], true)).toEqual([e1, e2]);
   });
+
+  it('selección de blancos (Core p.123): libre salvo que el conjuro la prohíba; entonces alcanza también al mago', () => {
+    const bola = conjuro('Bola de Fuego');
+    const l = crearLuchador(mago({}), 'A', 0, 0);
+    const aliado = crearLuchador(soldado, 'A', 2, 0);
+    const e1 = crearLuchador(soldado, 'B', 3, 0);
+    const ctx = { luchadores: [l, aliado, e1] } as never;
+    // Bola de Fuego no deja designar blancos: todos los del radio, él incluido.
+    expect(blancosConjuro(ctx, l, e1, bola, bola.grados[0], false)).toEqual([l, aliado, e1]);
+    // Un área que no lo prohíbe: el mago elige, sólo los enemigos y sin pagar Control del Espacio.
+    expect(blancosConjuro(ctx, l, e1, { ...bola, sinElegirBlancos: undefined }, bola.grados[0], false)).toEqual([e1]);
+    // Flash Cegador: a todos salvo al lanzador.
+    const flash = conjuro('Flash Cegador');
+    expect(flash.sinElegirBlancos).toBe('salvoLanzador');
+  });
 });
 
 describe('beneficios de Guerra y de Fuego', () => {

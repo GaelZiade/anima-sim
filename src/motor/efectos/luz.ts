@@ -12,18 +12,19 @@ import { tabla } from '../probabilidades';
 import { umbralPifia } from '../reglas';
 import { amenaza, enemigos, lambda, valorDejarFuera, valorNegativo } from '../ia';
 import { ataqueMagico, pronostico } from '../calculos';
+import { afectaElArea, sirveControl } from './comun';
 import type { ManejadorEfecto, Motor } from './tipos';
 import { aLaVista, ASALTOS_EFECTO, defensaContraConjuro, fallaResistencia, precioZeon, resistencias } from './valorar';
 
 /**
  * Flash Cegador (Core p.126): todos los del radio salvo el lanzador (con Control del Espacio, sólo los
- * enemigos) hacen una RF; quedan ciegos tantos asaltos como decenas por las que fallen.
+ * enemigos: `afectaElArea`) hacen una RF; quedan ciegos tantos asaltos como decenas por las que fallen.
  */
 export const flash: ManejadorEfecto = {
   resolver(m, { ctx, l, x, g }) {
     const control = !!x.control;
     for (const b of ctx.luchadores) {
-      if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo)) continue;
+      if (!activo(b) || distancia(l, b) > (g.radio ?? 0) || !afectaElArea(l, b, x.conjuro, control)) continue;
       const asaltos = Math.floor(m.tirarRf(ctx, b, g.rf ?? 0, 'el Flash Cegador').fracaso / 10);
       if (asaltos > 0) {
         // Un ciego por un estado (todo el combate) sigue así; si no, la ceguera del destello más larga.
@@ -35,10 +36,11 @@ export const flash: ManejadorEfecto = {
   },
   valorar({ ctx, l, c, i, g, probar, signo }) {
     // Ciego, cada asalto vale lo que un −90 a sus acciones durante medio intercambio (aproximación).
-    const control = !!l.ficha.magia?.controlDelEspacio && ctx.luchadores.some((x) => x !== l && x.equipo === l.equipo && activo(x) && distancia(l, x) <= (g.radio ?? 0));
+    const enRadio = (b: Luchador) => activo(b) && distancia(l, b) <= (g.radio ?? 0);
+    const control = sirveControl(l, c) && ctx.luchadores.some((x) => enRadio(x) && x.equipo === l.equipo && afectaElArea(l, x, c, false));
     let v = 0;
     for (const b of ctx.luchadores) {
-      if (b === l || !activo(b) || distancia(l, b) > (g.radio ?? 0) || (control && b.equipo === l.equipo) || (condicion(b, 'ceguera')?.asaltos ?? 0) > 1) continue;
+      if (!enRadio(b) || !afectaElArea(l, b, c, control) || (condicion(b, 'ceguera')?.asaltos ?? 0) > 1) continue;
       const f = fallaResistencia(resistencias(b).rf, g.rf ?? 0);
       const asaltos = Math.min(3, Math.floor(f.fracaso / 10));
       const rival = b.equipo === l.equipo ? enemigos(ctx, b)[0] : l;
@@ -50,14 +52,14 @@ export const flash: ManejadorEfecto = {
 };
 
 /**
- * Imbuir Calma, Destruir Sentimientos Negativos (Core p.126, p.128): quita el Miedo a los del radio que
- * no se resistan (los aliados no se resisten; con Control del Espacio, sólo a los suyos).
+ * Imbuir Calma, Destruir Sentimientos Negativos (Core p.126, p.128): quita el Miedo a los del radio. El
+ * mago elige a quién (Core p.123): sólo a los suyos.
  */
 export const calmar: ManejadorEfecto = {
-  resolver(m, { ctx, l, x, g }) {
-    const radio = g.radio ?? 0, control = !!x.control;
+  resolver(m, { ctx, l, g }) {
+    const radio = g.radio ?? 0;
     for (const b of ctx.luchadores) {
-      if (!activo(b) || distancia(l, b) > radio || (control && b.equipo !== l.equipo)) continue;
+      if (!activo(b) || distancia(l, b) > radio || b.equipo !== l.equipo) continue;
       const conMiedo = b.ficha.estados?.miedo || b.aura?.estado === 'miedo';
       if (!conMiedo) continue;
       if (b.ficha.estados?.miedo) m.cambiarFicha(b, { ...b.ficha, estados: { ...b.ficha.estados, miedo: false } });
@@ -73,7 +75,7 @@ export const calmar: ManejadorEfecto = {
       const rival = enemigos(ctx, a).sort((x, y) => distancia(a, x) - distancia(a, y))[0];
       if (rival) v += valorNegativo(rival, a, 60, 1, 0);
     }
-    probar({ conjuro: c, grado: i, objetivo: null, control: !!l.ficha.magia?.controlDelEspacio && v > 0 }, v, l.ficha.magia?.controlDelEspacio ? precioZeon(l) * ZEON_CONTROL_DEL_ESPACIO : 0);
+    probar({ conjuro: c, grado: i, objetivo: null }, v);
   },
 };
 

@@ -10,6 +10,7 @@ import type { Contexto, Luchador } from '../modelo';
 import { enemigos, lambda, valorDejarFuera } from '../ia';
 import { danoEsperado, enAlcance, faltaParaLlegar, metrosTotales } from '../calculos';
 import { ZEON_CONTROL_DEL_ESPACIO } from '../magia';
+import { afectaElArea, sirveControl } from './comun';
 import type { ManejadorEfecto, Motor } from './tipos';
 import {
   aLaVista, ASALTOS_EFECTO, danoDeLlamas, defensaContraConjuro, fallaResistencia, precioZeon, resistencias, valorPrender,
@@ -92,7 +93,7 @@ export function detonarMina(m: Motor, ctx: Contexto, l: Luchador, x: Mantenido, 
   m.log(ctx, () => `${l.ficha.nombre} hace estallar la Mina de Fuego${control ? ` (Control del Espacio, ${ZEON_CONTROL_DEL_ESPACIO} de zeon)` : ''}.`);
   for (const b of ctx.luchadores) {
     const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
-    if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
+    if (!activo(b) || d > z.radio || !afectaElArea(l, b, x.conjuro, control)) continue;
     const golpe: Golpe = { maniobra: 'normal', esContra: false, tipo: 'CAL', ranura: RANURA_MAGIA, ki: golpeDeConjuro(x.conjuro, g), aDistancia: true, area: z.radio, centroArea: { x: z.x, y: z.y } };
     m.resolverDefensa(ctx, l, b, habilidadMina(d, z.radio), DADO_FIJO, golpe, `La mina alcanza a ${b.ficha.nombre} (a ${d.toFixed(0)} m)`);
     if (m.terminado(ctx)) return;
@@ -125,17 +126,18 @@ export const incinerar: ManejadorEfecto = {
 export const tormenta: ManejadorEfecto = {
   resolver(m, { ctx, l, x, c, g, obj }) {
     if (!obj) return;
-    mantenidoCon(l, c)!.zona = { x: obj.pos.x, y: obj.pos.y, radio: g.area ?? 0, desde: ctx.asalto + 1, excluye: x.control ? 'aliados' : 'nadie' };
+    mantenidoCon(l, c)!.zona = { x: obj.pos.x, y: obj.pos.y, radio: g.area ?? 0, desde: ctx.asalto + 1, control: !!x.control };
     m.log(ctx, () => `  La tormenta cubre ${g.area} m alrededor de donde está ${obj.ficha.nombre}: ataca desde el asalto siguiente.`);
   },
   valorar({ ctx, l, c, i, g, alcance, probar, signo }) {
     const ki = golpeDeConjuro(c, g);
     for (const obj of enemigos(ctx, l)) {
       if (!aLaVista(ctx, l, obj, alcance)) continue;
-      const control = !!l.ficha.magia?.controlDelEspacio && ctx.luchadores.some((x) => x.equipo === l.equipo && activo(x) && distancia(x, obj) <= g.area!);
+      const enArea = (b: Luchador) => activo(b) && distancia(b, obj) <= g.area!;
+      const control = sirveControl(l, c) && ctx.luchadores.some((x) => enArea(x) && x.equipo === l.equipo && afectaElArea(l, x, c, false));
       let v = 0;
       for (const b of ctx.luchadores) {
-        if (!activo(b) || distancia(b, obj) > g.area! || (control && b.equipo === l.equipo)) continue;
+        if (!enArea(b) || !afectaElArea(l, b, c, control)) continue;
         // El ataque automático no tira: su habilidad es la final (aproximación: la media de una tirada menos).
         const dano = danoEsperado(l, b, sinDado(g.habilidad ?? 0), defensaContraConjuro(b, l, ki, g.area), { ki, tipo: c.ta, ranura: RANURA_MAGIA, area: g.area });
         v += signo(b) * Math.min(Math.max(0, b.pv), (ASALTOS_EFECTO - 1) * dano);
@@ -191,7 +193,7 @@ export const mina: ManejadorEfecto = {
   resolver(m, { ctx, l, c, g, obj }) {
     if (!obj) return;
     const x = mantenidoCon(l, c)!;
-    x.zona = { x: obj.pos.x, y: obj.pos.y, radio: g.area ?? 0, desde: Infinity, excluye: 'nadie' };
+    x.zona = { x: obj.pos.x, y: obj.pos.y, radio: g.area ?? 0, desde: Infinity, control: false };
     m.log(ctx, () => `  La mina queda donde está ${obj.ficha.nombre} (${g.area} m de radio); estalla cuando ${l.ficha.nombre} quiera.`);
   },
   valorar({ ctx, l, e, c, i, g, alcance, probar }) {
@@ -202,9 +204,10 @@ export const mina: ManejadorEfecto = {
       if (!aLaVista(ctx, l, obj, alcance)) continue;
       let v = 0;
       for (const b of ctx.luchadores) {
-        if (!activo(b) || distancia(b, obj) > (g.area ?? 0)) continue;
+        // Al estallar decide si paga Control del Espacio para no alcanzar a los suyos.
+        if (!activo(b) || distancia(b, obj) > (g.area ?? 0) || !afectaElArea(l, b, c, sirveControl(l, c))) continue;
         const dano = danoEsperado(l, b, sinDado(280), defensaContraConjuro(b, l, ki, g.area), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: g.area });
-        v += (b.equipo === l.equipo ? (l.ficha.magia?.controlDelEspacio ? 0 : -lambda(l)) : 1) * dano;
+        v += (b.equipo === l.equipo ? -lambda(l) : 1) * dano;
       }
       probar({ conjuro: c, grado: i, objetivo: obj }, 0.6 * v);
     }

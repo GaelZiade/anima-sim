@@ -3,7 +3,7 @@
 
 import { sinDado } from './dados';
 import type { Contexto, Luchador } from './modelo';
-import { efecto, habilidadMina, radioArea, type Lanzamiento, type Meta } from './efectos';
+import { afectaElArea, efecto, sirveControl, habilidadMina, radioArea, type Lanzamiento, type Meta } from './efectos';
 import {
   ASALTOS_EFECTO, defensaContraConjuro, precioZeon,
 } from './efectos/valorar';
@@ -148,14 +148,17 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
   const mina = e.mantenidos.find((x) => x.conjuro.efecto === 'mina' && x.zona);
   if (mina) {
     const z = mina.zona!;
-    const control = !!l.ficha.magia?.controlDelEspacio && zeonLibre(e) >= ZEON_CONTROL_DEL_ESPACIO;
+    const enZona = (b: Luchador) => activo(b) && Math.hypot(b.pos.x - z.x, b.pos.y - z.y) <= z.radio;
+    // Control del Espacio sólo si alcanzaría a él o a un aliado, y le alcanza el zeon (Arcana p.28).
+    const control = sirveControl(l, mina.conjuro) && zeonLibre(e) >= ZEON_CONTROL_DEL_ESPACIO &&
+      ctx.luchadores.some((b) => enZona(b) && b.equipo === l.equipo && afectaElArea(l, b, mina.conjuro, false));
     const gM = mina.conjuro.grados[mina.grado];
     const ki = golpeDeConjuro(mina.conjuro, gM);
     let v = 0;
     let enemigosDentro = 0;
     for (const b of ctx.luchadores) {
       const d = Math.hypot(b.pos.x - z.x, b.pos.y - z.y);
-      if (!activo(b) || d > z.radio || (control && b.equipo === l.equipo)) continue;
+      if (!enZona(b) || !afectaElArea(l, b, mina.conjuro, control)) continue;
       const dano = danoEsperado(l, b, sinDado(habilidadMina(d, z.radio)), defensaContraConjuro(b, l, ki, z.radio), { ki, tipo: 'CAL', ranura: RANURA_MAGIA, area: z.radio });
       if (b.equipo !== l.equipo) enemigosDentro++;
       v += (b.equipo === l.equipo ? -lambda(l) : 1) * dano;

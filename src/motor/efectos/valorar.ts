@@ -18,7 +18,7 @@ import { amenaza, base, conCambio, enemigos, intercambio, lambda, pierdeElAsalto
 import type { Lanzamiento } from './tipos';
 
 export { intercambio };
-import { blancosConjuro, radioArea } from './comun';
+import { blancosConjuro, radioArea, sirveControl } from './comun';
 
 /**
  * Precio de un punto de zeon en PV, como el del Ki: gastar toda la reserva tiene que rendir la mitad
@@ -51,9 +51,9 @@ export function valorConjuroContra(atk: Luchador, def: Luchador, c: Conjuro, g: 
   return v;
 }
 
-/** Si conviene pagar Control del Espacio: hay algún aliado en el área que elegir dejar afuera. */
+/** Si conviene pagar Control del Espacio: el área no deja elegir y alcanzaría a él o a un aliado. */
 export function quiereControl(ctx: Contexto, l: Luchador, obj: Luchador, c: Conjuro, g: Grado): boolean {
-  return !!l.ficha.magia?.controlDelEspacio && deArea(c, g) && blancosConjuro(ctx, l, obj, c, g, false).some((x) => x.equipo === l.equipo);
+  return sirveControl(l, c) && deArea(c, g) && blancosConjuro(ctx, l, obj, c, g, false).some((x) => x.equipo === l.equipo);
 }
 
 /** Asaltos en que se valora un efecto que dura (armadura, beneficios, tormenta). */

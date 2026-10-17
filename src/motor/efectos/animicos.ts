@@ -121,7 +121,7 @@ export const extasis: ManejadorEfecto = {
   },
   valorar({ ctx, l, c, i, g, probar }) {
     // −20 a toda acción en lugar de sus negativos: malo para quien tiene pocos, bueno para quien tiene muchos.
-    const control = !!l.ficha.magia?.controlDelEspacio;
+    // El mago elige a quién (Core p.123): a quien le conviene.
     const blancos: Luchador[] = [];
     let v = 0;
     for (const b of ctx.luchadores) {
@@ -135,12 +135,12 @@ export const extasis: ManejadorEfecto = {
         const p = pAlcanzaAnimico(l, b, c, g) * fallaResistencia(resistencias(b).rm, g.rm ?? 0).p;
         valor = 2 * p * (delta > 0 ? valorNegativo(l, b, delta, 1, 0) : -valorNegativo(b, l, -delta, 1, 0));
       }
-      if (control && valor <= 0) continue;
+      if (valor <= 0) continue;
       blancos.push(b);
       v += valor;
     }
     const obj = blancos.find((b) => b.equipo !== l.equipo) ?? blancos[0];
-    if (obj) probar({ conjuro: c, grado: i, objetivo: obj, blancos, control }, v, control ? precioZeon(l) * ZEON_CONTROL_DEL_ESPACIO : 0);
+    if (obj) probar({ conjuro: c, grado: i, objetivo: obj, blancos }, v);
   },
 };
 

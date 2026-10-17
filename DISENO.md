@@ -244,7 +244,7 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
 ### Auditoría del combate (17/10/2026)
 
 - **Presa:** quien no pudo actuar en el asalto se zafa al final; apresado, atado o con lazos no huye
-  (Core p.92, p.94). Un zafarse fallido le hace perder el asalto (a confirmar).
+  (Core p.92, p.94). Un zafarse fallido le hace perder el asalto (confirmado por el usuario).
 - **Flanco y espalda:** un ataque a distancia o en área de quien no está trabado llega de frente
   (Core p.90).
 - **Contra:** la pifia la da sólo en cuerpo a cuerpo y en alcance; el fascinado no contraataca
@@ -751,9 +751,15 @@ entero. Se implementa en la parte 3.
 37. La IA defiende contra un conjuro con lo mejor entre la defensa física y el escudo, si el escudo
     lo detiene (la regla del motor).
 
-**Pendiente de decidir (preguntado al usuario):** si elegir blancos dentro de un área es libre salvo
-que el conjuro lo prohíba (hoy pide Control del Espacio, como generalizó DISENO), si la Bola de Fuego
-alcanza a quien la lanza, y si la IA usa varios conjuros preparados a la vez.
+38. **Selección de blancos** (Core p.123, decidido por el usuario el 17/10/2026): en un área el mago
+    elige a quién afecta (los enemigos de un ataque, los suyos de un beneficio) sin pagar nada. Sólo
+    los conjuros que dicen que no se pueden designar blancos (`sinElegirBlancos`: Bola de Fuego,
+    Tormenta y Mina de Fuego, que alcanzan también al mago; Flash Cegador, salvo a él) alcanzan a
+    todos, y Control del Espacio sirve para esos (Arcana p.28). Una sola regla: `afectaElArea` y
+    `sirveControl` (`efectos/comun.ts`); la IA paga Control del Espacio sólo si el área la alcanzaría
+    a ella o a un aliado.
+
+**Sin decidir:** si la IA usa varios conjuros preparados a la vez (el motor lo permite).
 
 ## Proyectiles (fase 4)
 
@@ -1072,8 +1078,8 @@ penalizadores contra disparos (Core p.96). La bala no suma la Fuerza del usuario
 
 ### Pendiente del Ki
 
-Lo que todavía no se simula: el Sacrificio de Características del Aumento de daño (la planilla trae
-los valores finales y no se recalculan al perder atributos), las Habilidades psíquicas (Interrupción
+Lo que no se simula: la ventaja Sacrificio de Características del Aumento de daño (decisión del
+usuario: la IA no paga una pérdida permanente en un combate), las Habilidades psíquicas (Interrupción
 y RP sólo cuentan para lo que existe), Armas adicionales y Proyectiles de las Armas físicas de Ki,
 Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices, Custodium y la
 Transmisión del Ki (marionetas). La IA valora la rotura (la del arma y Aumentar rotura) con la

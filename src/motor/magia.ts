@@ -19,7 +19,7 @@ export interface Mantenido {
   /** A quiénes beneficia (conjuros de efecto sobre otros). */
   blancos?: Luchador[];
   /** Zona estática donde sigue actuando (Tormenta de Fuego) y a quiénes deja fuera (Control del Espacio). */
-  zona?: { x: number; y: number; radio: number; desde: number; excluye: 'aliados' | 'nadie' };
+  zona?: { x: number; y: number; radio: number; desde: number; control: boolean };
   /** Innato: se mantiene sin gastar zeon (Core p.117). */
   innato?: boolean;
   /** Lo que deshace al dejar de mantenerlo (lazos, éxtasis, una mina sin estallar). */

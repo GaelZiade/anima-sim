@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 365 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 366 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
@@ -163,9 +163,8 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 3. Confirmar las interpretaciones propias del Ki (DISENO.md, "Interpretaciones propias"): frenar la
    retirada por Transporte, el arma que crea un Arma física de Ki, cómo reparte los ataques el
    Espejismo y las desventajas de ambientación dadas por cumplidas.
-4. Decidir lo que dejó abierto la auditoría del 17/10 (AUDITORIA.md, sección 10): blancos dentro de
-   un área, la Bola de Fuego sobre el mago, zafarse fallido, el costo del Sacrificio de
-   Características.
+4. Decidir lo poco que dejó abierto la auditoría del 17/10 (AUDITORIA.md, sección 10): varios
+   conjuros preparados a la vez y el +3 de los cuadrúpedos.
 5. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
    Ki"). Las reglas que faltaban de AUDITORIA.md sección 3 están todas.
 
@@ -174,4 +173,6 @@ cabeza con −30 (Core p.76-77); Defensa adicional de Ki = +N defensas libres; t
 pagan por asalto; el Ki sobrante vale en el mismo asalto y vuelve al terminarlo; un área de Ki no se
 intercepta; la Detección del Ki se tira una vez por asalto; Parada en área sin el −120, con parar
 energía contra lo sobrenatural y una sola tirada para todos; Transporte con Advertir 140 las dos
-primeras veces; Estela sólo la línea. El resto, en DISENO.md y AUDITORIA.md.
+primeras veces; Estela sólo la línea; en un área de conjuro se eligen los blancos salvo que el conjuro
+lo prohíba (y entonces alcanza al mago si no lo excluye); zafarse fallido pierde el asalto; la IA no
+usa el Sacrificio de Características. El resto, en DISENO.md y AUDITORIA.md.
