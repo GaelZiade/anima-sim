@@ -13,7 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
-import { nivelCeguera, nivelParalisis } from './condiciones';
+import { hayAura, nivelCeguera, nivelParalisis } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
 
@@ -89,7 +89,8 @@ export function penAccion(l: Luchador): number {
   const negativos = c.est.sangreEterna && l.pv < 0 ? -l.pv : 0;
   // Miedo: −60 a toda acción que no sea huir (Core p.232); pelear no lo es.
   // El Aura de combate de un rival puede dar miedo o −10 a toda acción (Dominus p.22, Tabla 9).
-  const miedo = (l.ficha.estados?.miedo || l.aura?.estado === 'miedo' ? PEN_MIEDO : 0) + (l.aura?.estado === 'afectado' ? 10 : 0);
+  const auras = l.auras.size > 0;
+  const miedo = (l.ficha.estados?.miedo || (auras && hayAura(l, 'miedo')) ? PEN_MIEDO : 0) + (auras && hayAura(l, 'afectado') ? 10 : 0);
   // Éxtasis: −20 a toda acción en lugar de los demás negativos, salvo los físicos (Core p.128).
   if (l.extasis) return 20 + l.penFisico + l.penTecnica - luna;
   // El penalizador de una técnica (desventaja) no lo quita nada sobrenatural (Dominus p.74).

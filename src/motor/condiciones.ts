@@ -2,7 +2,7 @@
 // descuenta junto al terminar cada asalto. Un solo mecanismo para lo que provoquen conjuros, técnicas
 // de Ki, maniobras o poderes psíquicos. El estado con que empieza (la planilla) está en `ficha.estados`.
 
-import type { Luchador } from './modelo';
+import type { EstadoAura, Luchador } from './modelo';
 
 export type TipoCondicion = 'ceguera' | 'paralisis';
 
@@ -41,6 +41,12 @@ export function nivelCeguera(l: Luchador): 0 | 1 | 2 {
   const deCondicion = !c ? 0 : c.destello && c.asaltos === 1 ? 1 : c.nivel >= 2 ? 2 : 1;
   const dePlanilla = l.ficha.estados?.ceguera === 'absoluta' ? 2 : l.ficha.estados?.ceguera ? 1 : 0;
   return Math.max(deCondicion, dePlanilla) as 0 | 1 | 2;
+}
+
+/** Alguna Aura de combate lo dejó en ese estado (cada fuente se controla aparte, Dominus p.21). */
+export function hayAura(l: Luchador, estado: EstadoAura): boolean {
+  for (const a of l.auras.values()) if (a.estado === estado) return true;
+  return false;
 }
 
 /** Le pone (o reemplaza) una condición. Cómo se combina con la que ya tenía lo decide quien la impone. */

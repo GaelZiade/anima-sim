@@ -310,6 +310,9 @@ export interface Estadisticas {
   tecnicas: Partial<Record<string, number>>;
 }
 
+/** Resultado del control contra el Aura de combate de alguien (Dominus p.21, Tabla 9). */
+export type EstadoAura = 'resistio' | 'afectado' | 'miedo' | 'paralizado';
+
 export interface Luchador {
   ficha: Ficha;
   /** Condiciones del escenario (compartidas por todos los luchadores del combate). */
@@ -392,7 +395,7 @@ export interface Luchador {
    * Aura de combate de un rival (Dominus p.21, Tabla 9): el control ya hecho y su resultado. Quien lo
    * superó no lo repite en el combate; afectado lo repite cada 5 asaltos.
    */
-  aura: { fuente: Luchador; estado: 'resistio' | 'afectado' | 'miedo' | 'paralizado'; asalto: number } | null;
+  auras: Map<Luchador, { estado: EstadoAura; asalto: number }>;
   /** Marcas de Ki que le pusieron: bono al ataque de quien lo marcó (Dominus p.70). */
   marcas: Map<Luchador, number>;
   /** Escudo de energía activo: resistencia que le queda (0 sin escudo, Dominus p.66). */

@@ -76,7 +76,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
     movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, avanzoHaciaEnemigo: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
     derribado: false, paralisisPresa: 0, apresadoPor: null, apresando: null, desarmado: false,
-    condiciones: {}, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
+    condiciones: {}, auras: new Map(), curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
     bonoVariableEn: null, objetivoUnico: null, godhandListo: false, godhandPreparado: false,

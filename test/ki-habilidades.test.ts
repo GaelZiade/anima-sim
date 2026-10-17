@@ -235,4 +235,22 @@ describe('Aura de combate (Dominus p.21)', () => {
     const conAliado = simularCombate([isana, aliado], [{ ...rival('FIL'), presencia: 20 }], { semilla: 1, registrar: true });
     expect(conAliado.registro!.some((x) => x.texto.includes('desencadena'))).toBe(false);
   });
+
+  it('cada Aura se controla aparte: haber resistido una no protege de otra (Dominus p.21)', async () => {
+    const { aplicarAuras } = await import('../src/motor/combate-ki');
+    const { hayAura } = await import('../src/motor/condiciones');
+    const { crearRng } = await import('../src/motor/rng');
+    const conAura = (id: string) => maestro(['Aura de combate'], { id, nombre: id, presencia: 200, ki: { reserva: 60, acumulacion: { POD: 4, VOL: 4 }, tecnicas: [] } });
+    const a = crearLuchador(conAura('A'), 'A', 0, 0);
+    const b = crearLuchador(conAura('B'), 'A', 1, 0);
+    const x = crearLuchador({ ...rival('FIL'), presencia: 10 }, 'B', 1, 1);
+    for (const l of [a, b]) l.ki!.auraActiva = true;
+    x.auras.set(a, { estado: 'resistio', asalto: 1 });
+    const ctx = { luchadores: [a, b, x], rng: crearRng(1), asalto: 1, registro: null } as never;
+    const motor = { log() {}, caer() {} } as never;
+    aplicarAuras(motor, ctx, [a, b]);
+    expect(x.auras.get(a)?.estado).toBe('resistio');
+    expect(x.auras.get(b)?.estado).not.toBe('resistio');
+    expect(hayAura(x, 'resistio')).toBe(true);
+  });
 });

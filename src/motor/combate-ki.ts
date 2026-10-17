@@ -29,11 +29,12 @@ import {
 export function aplicarAuras(motor: Motor, ctx: Contexto, vivos: Luchador[]) {
   for (const fuente of vivos) {
     if (!fuente.ki?.auraActiva || !activo(fuente)) continue;
-    const dificultad = dificultadAura(fuente, penAccion(fuente));
+    // Un bono a toda acción no sube una habilidad sobrenatural (Core p.232): sólo restan los negativos.
+    const dificultad = dificultadAura(fuente, Math.max(0, penAccion(fuente)));
     for (const x of ctx.luchadores) {
       // Alcanza a todos los del radio, aliados incluidos (Dominus p.21: "aquellos que lo rodean").
       if (x === fuente || !activo(x) || !sensibleAlAura(fuente, x) || distancia(fuente, x) > radioAura(fuente)) continue;
-      const previo = x.aura;
+      const previo = x.auras.get(fuente);
       if (previo && (previo.estado !== 'afectado' || ctx.asalto - previo.asalto < 5)) continue;
       const dado100 = tirarD100Cerrada(ctx.rng);
       // Con Frialdad suma su bono (Dominus p.21, Core p.54).
@@ -44,7 +45,7 @@ export function aplicarAuras(motor: Motor, ctx: Contexto, vivos: Luchador[]) {
       const texto = `${x.ficha.nombre} siente el Aura de combate de ${fuente.ficha.nombre} (Presencia ${base + dado100} [${base}+${dado100}] contra ${dificultad})`;
       // Repetir el control como afectado sólo puede mejorar: o lo supera o sigue igual.
       if (previo && estado !== 'resistio') {
-        x.aura = { ...previo, asalto: ctx.asalto };
+        x.auras.set(fuente, { ...previo, asalto: ctx.asalto });
         motor.log(ctx, () => `${texto}: sigue afectado.`);
         continue;
       }
@@ -53,7 +54,7 @@ export function aplicarAuras(motor: Motor, ctx: Contexto, vivos: Luchador[]) {
         motor.caer(ctx, fuente, x, 'inconsciente');
         continue;
       }
-      x.aura = { fuente, estado, asalto: ctx.asalto };
+      x.auras.set(fuente, { estado, asalto: ctx.asalto });
       if (estado === 'paralizado') {
         // "Incapaz apenas de moverse": paralización parcial (Core p.233), mientras dure el combate.
         imponer(x, 'paralisis', { nivel: Math.max(nivelCondicion(x, 'paralisis'), 2), asaltos: Infinity });

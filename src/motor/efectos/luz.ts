@@ -4,7 +4,7 @@
 
 import { activo, distancia } from '../calculos';
 import type { Grado } from '../conjuros';
-import { condicion, imponer } from '../condiciones';
+import { condicion, hayAura, imponer } from '../condiciones';
 import { golpeDeConjuro, mantenidoCon, RANURA_MAGIA, ZEON_CONTROL_DEL_ESPACIO } from '../magia';
 import { mejorCaracteristica, pGanaControl } from '../maniobras';
 import type { Contexto, Luchador } from '../modelo';
@@ -60,10 +60,10 @@ export const calmar: ManejadorEfecto = {
     const radio = g.radio ?? 0;
     for (const b of ctx.luchadores) {
       if (!activo(b) || distancia(l, b) > radio || b.equipo !== l.equipo) continue;
-      const conMiedo = b.ficha.estados?.miedo || b.aura?.estado === 'miedo';
+      const conMiedo = b.ficha.estados?.miedo || hayAura(b, 'miedo');
       if (!conMiedo) continue;
       if (b.ficha.estados?.miedo) m.cambiarFicha(b, { ...b.ficha, estados: { ...b.ficha.estados, miedo: false } });
-      if (b.aura?.estado === 'miedo') b.aura = { ...b.aura, estado: 'resistio' };
+      for (const [fuente, a] of b.auras) if (a.estado === 'miedo') b.auras.set(fuente, { ...a, estado: 'resistio' });
       m.log(ctx, () => `  ${b.ficha.nombre} se calma: deja de tener Miedo.`);
     }
   },
@@ -71,7 +71,7 @@ export const calmar: ManejadorEfecto = {
     // Quitarle el Miedo (−60) a los suyos del radio.
     let v = 0;
     for (const a of ctx.luchadores) {
-      if (a.equipo !== l.equipo || !activo(a) || distancia(l, a) > (g.radio ?? 0) || !(a.ficha.estados?.miedo || a.aura?.estado === 'miedo')) continue;
+      if (a.equipo !== l.equipo || !activo(a) || distancia(l, a) > (g.radio ?? 0) || !(a.ficha.estados?.miedo || hayAura(a, 'miedo'))) continue;
       const rival = enemigos(ctx, a).sort((x, y) => distancia(a, x) - distancia(a, y))[0];
       if (rival) v += valorNegativo(rival, a, 60, 1, 0);
     }
