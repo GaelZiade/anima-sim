@@ -120,7 +120,7 @@ describe('de planilla a Ficha del simulador', () => {
     expect(cap.penPorAtaque).toBe(20);
     expect(cap.extras).toEqual([
       { nombre: 'Segunda arma con Ambidestría', pen: 10 },
-      { nombre: 'Patada de Tae Kwon Do', pen: 30, sinArmas: true },
+      { nombre: 'Patada de Tae Kwon Do', pen: 30, sinArmas: true, alFinal: true },
     ]);
     expect(cap.mitadCansancio).toBe(true);
     expect(cap.danaEnergia).toBe(true); // Extensión del aura al arma

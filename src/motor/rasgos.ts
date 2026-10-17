@@ -154,6 +154,8 @@ export interface AtaqueExtra {
   pen: number;
   /** Se hace sin armas (la patada del Tae Kwon Do): usa el perfil sin armas de la ficha. */
   sinArmas?: boolean;
+  /** Va después de todos los demás ataques (la patada del Tae Kwon Do, Dominus p.36). */
+  alFinal?: boolean;
 }
 
 /** Un ataque del asalto: su penalizador propio y con qué se hace. */
@@ -187,7 +189,7 @@ export function planDeAtaques(cap: Capacidades, n: number, estiloDefensivo = fal
 function armarPlan(cap: Capacidades, n: number, estiloDefensivo: boolean): Ranura[] {
   const extras = cap.extras
     .filter((e) => !(estiloDefensivo && e.nombre.startsWith('Segunda arma')))
-    .sort((a, b) => a.pen - b.pen)
+    .sort((a, b) => Number(!!a.alFinal) - Number(!!b.alFinal) || a.pen - b.pen)
     .map((e) => ({ pen: e.pen, sinArmas: !!e.sinArmas }));
   return [...Array.from({ length: n }, () => ({ pen: 0, sinArmas: false })), ...extras];
 }
@@ -275,7 +277,7 @@ function calcularCapacidades(f: Ficha): Capacidades {
   }
   const tkd = Math.max(gradoArteMarcial(artes, 'Tae Kwon Do'), gradoArteMarcial(artes, 'Taekwondo'));
   // La patada es un ataque sin armas, posible aun peleando con armas (Dominus p.36).
-  if (tkd > 0) extras.push({ nombre: 'Patada de Tae Kwon Do', pen: [0, 30, 20, 0][tkd], sinArmas: !desarmado });
+  if (tkd > 0) extras.push({ nombre: 'Patada de Tae Kwon Do', pen: [0, 30, 20, 0][tkd], sinArmas: !desarmado, alFinal: true });
 
   // Reducción de TA: cada +5 de calidad resta 1 (Core p.76); Tabla de Reducción de Armadura;
   // Dumah sin armas −2 (Arcano −6); lo extra del arma. Se acumulan.

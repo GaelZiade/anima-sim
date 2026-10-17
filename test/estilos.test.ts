@@ -198,6 +198,13 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     expect(estilos(ficha('Desarmado', arte('Selene (Arcano)')), true).contrasIlimitadas).toBe(true);
   });
 
+  it('la patada del Tae Kwon Do va después de los demás ataques, aunque penalice menos (p.36)', async () => {
+    const { capacidades, planDeAtaques } = await import('../src/motor/rasgos');
+    // Supremo: la patada sin penalizador (0) y la segunda arma con Ambidestría (−10).
+    const cap = capacidades(ficha('Espada y daga', { ...arte('Tae Kwon Do (Supremo)'), ventajas: ['Ambidestría'] }));
+    expect(planDeAtaques(cap, 1).map((r) => [r.pen, r.sinArmas])).toEqual([[0, false], [10, false], [0, true]]);
+  });
+
   it('Xing Quan: +10/+20/+30 en su turno contra un único rival; no en contras ni después de defenderse (p.38)', () => {
     const def = luchador(ficha('Rival'), 'B');
     const otro = luchador(ficha('Otro'), 'B');
