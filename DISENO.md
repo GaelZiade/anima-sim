@@ -1099,7 +1099,7 @@ y RP sólo cuentan para lo que existe; llegan con la psíquica), y lo que no cam
 simulador: Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices (percepción
 sin regla de combate) y la Transmisión del Ki (marionetas, que el escenario no tiene).
 Custodium da 30 de Ki cuando un aliado queda gravemente herido (bajo un cuarto de sus PV, como
-Caelum: interpretación) y 40 si muere. Armas adicionales empuña dos armas iguales (segunda arma);
+Caelum: decisión del usuario) y 40 si muere. Armas adicionales empuña dos armas iguales (segunda arma);
 Proyectiles hace también sus armas a distancia, de esa calidad y con munición ilimitada. La IA valora la rotura (la del arma y Aumentar rotura) con la
 misma cuenta que el motor (`pRompe`).
 Las 132 técnicas de ejemplo del Dominus se leen todas (un Estado escrito suelto con su RF, como

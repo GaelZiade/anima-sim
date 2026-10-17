@@ -1467,7 +1467,7 @@ export function alPerderPv(l: Luchador, dano: number): string | null {
 
 /**
  * Custodium (Dominus p.29): si un aliado queda gravemente herido (por debajo de un cuarto de sus PV,
- * el umbral de Caelum: interpretación) gana 30 de Ki; si muere, 40. Una vez por aliado y por caso.
+ * el umbral de Caelum: decisión del usuario) gana 30 de Ki; si muere, 40. Una vez por aliado y por caso.
  * Devuelve lo que recuperó.
  */
 export function custodium(l: Luchador, aliado: Luchador, muere: boolean): number {
