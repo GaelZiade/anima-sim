@@ -15,6 +15,9 @@ retomar el trabajo, empezar por README.md.
 - **Estructura:** `ia-ki.ts` y `cache-decision.ts`; `nuevoAsalto`; toda técnica por `usarTecnica`;
   registros exhaustivos.
 - **Velocidad:** `dijkstra`, `cegueraContra`, `vistaPrevia` y `base().prep` sin trabajo repetido.
+- **Segunda pasada** (93 a 95): la IA mira la Tabla 41 al moverse; una sola parálisis
+  (`nivelParalisis`) y una sola ceguera (`nivelCeguera`); `combate.ts` partido en defensa, distancia
+  y movimiento.
 
 ## 16/10/2026: Ki completo (todos los efectos del Dominus)
 

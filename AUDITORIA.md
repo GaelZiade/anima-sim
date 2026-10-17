@@ -326,12 +326,16 @@ tiene test; la huella cambió sólo en los commits de reglas, nunca en los de es
 | 90 | Acrobacias al escapar sin la Tabla 43 | Columna Acción física (Core p.90) | `calculos.ts` |
 | 91 | Engatillar gastaba una acción activa | Pasiva, al empezar el turno del amenazado (Core p.92) | `combate.ts` |
 | 92 | Caminos de técnicas que no pagaban todo | Todos por `usarTecnica`/`trasLaTecnica` | `combate-ki.ts` |
+| 93 | La IA no miraba la Tabla 41 al moverse | No cuenta como alcanzable a quien sólo llega gastando la última acción activa (Core p.85) | `calculos.ts`, `ia.ts` |
+| 94 | La parálisis inducida no quitaba gestos ni anulaba la posición | Una sola parálisis para las reglas, `nivelParalisis` (Core p.117, Dominus p.11) | `condiciones.ts`, `magia.ts`, `calculos.ts` |
+| 95 | Ceguera de la planilla y del destello contadas distinto en cada lugar | Una sola, `nivelCeguera`; el último asalto del destello, parcial (Core p.233) | `condiciones.ts`, `calculos.ts`, `ia-ki.ts` |
 
-**Estructura y velocidad (huella idéntica):** `ia.ts` partido (`ia-ki.ts`, `cache-decision.ts`);
+**Estructura y velocidad (huella idéntica):** `combate.ts` partido (`combate-defensa.ts`,
+`combate-distancia.ts`, `combate-movimiento.ts`, con `MotorCombate`); `ia.ts` partido (`ia-ki.ts`, `cache-decision.ts`);
 `nuevoAsalto`; registros exhaustivos sin listas a mano; `dijkstra` sólo recorre las celdas que tocó;
 `cegueraContra` y `vistaPrevia` sin trabajo repetido; la IA reusa la preparación de cada base.
 
 **Abierto, a decidir por el usuario:** blancos dentro de un área (libre o con Control del Espacio);
 si la Bola de Fuego alcanza al mago; varios conjuros preparados; si zafarse fallido pierde el asalto;
 el +3 de los cuadrúpedos (las planillas no lo dicen); el costo para la IA del Sacrificio de
-Características. **Sigue en estructura:** partir `combate.ts`, un registro único de estados.
+Características. Verificado en el manual: zafarse lleva el −3 (Core p.92; 5 con Pankration).

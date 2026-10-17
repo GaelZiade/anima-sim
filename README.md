@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 363 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 365 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
@@ -158,7 +158,7 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
    extiende sin romper"). La magia está completa para Stéphan (DISENO.md, "Magia", interpretaciones
    confirmadas); otros magos: catalogar sus conjuros sobre el grimorio
    (`sinSimular` dice qué falta).
-2. **IA:** moverse con acción activa sólo cuando conviene. (La amenaza ya cuenta magia y Ki; la escala
+2. **IA:** moverse con acción activa sólo cuando conviene (la Tabla 41 ya la mira). (La amenaza ya cuenta magia y Ki; la escala
    unificada del puntaje se probó y se descartó: DISENO.md, "La moneda del puntaje".)
 3. Confirmar las interpretaciones propias del Ki (DISENO.md, "Interpretaciones propias"): frenar la
    retirada por Transporte, el arma que crea un Arma física de Ki, cómo reparte los ataques el

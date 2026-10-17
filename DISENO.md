@@ -257,7 +257,7 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
 - **Rotura de armadura:** se recalcula con las capas combinadas (Core p.83).
 - **Carga:** sólo si el asalto anterior corrió hacia un enemigo (Core p.90).
 - **Tabla 41:** máximo de acciones activas por Destreza + Agilidad, si la planilla las trae (Core p.85).
-  La IA todavía no lo mira al moverse.
+  La IA tampoco cuenta como alcanzable a quien sólo llega gastando la última.
 - **Acrobacias** al escapar sufre la columna Acción física de la Tabla 43 (Core p.90).
 - **Engatillar:** atacar al amenazado es una acción pasiva, al empezar su turno (Core p.92).
 
@@ -451,6 +451,9 @@ diez lugares.
   entre su golpe con el arma y cada fuente registrada: su mejor técnica de Ki (`ia.ts`) y su mejor
   conjuro con daño repartido entre los asaltos que tarda en juntar el zeon (`ia-magia.ts`). Un dominio
   nuevo (psíquicos) registra la suya y toda la IA lo ve como amenaza.
+- **Un estado, una cuenta:** la parálisis que vale para las reglas es `nivelParalisis` (la peor
+  entre la de una presa, `paralisisPresa`, y la inducida); la ceguera propia, `nivelCeguera`
+  (planilla y destello). Una regla nueva que mire esos estados usa esas funciones.
 - **Lo que vuelve a cero cada asalto** está en `nuevoAsalto(l)` (`combate.ts`), un solo lugar.
 - **Toda técnica pasa por `usarTecnica` y `trasLaTecnica`** (`combate-ki.ts`): pagar, desventajas,
   usos, sobrecarga y lo que deja. Un camino nuevo que ejecute una técnica las llama y no repite nada.
