@@ -368,3 +368,11 @@ describe('auditoría de magia (16/10/2026)', () => {
     expect(actDe(m)).toBe(Math.floor(act / 2));
   });
 });
+
+describe('Conjuro Especialista (Arcana p.30)', () => {
+  it('cada esfera en el mismo conjuro suma +10 al ACT y +1 a la Inteligencia', async () => {
+    const { actPara, actDe } = await import('../src/motor/magia');
+    const m = crearLuchador(mago({ libres: ['Arma Ígnea'], especialista: ['Arma Ígnea', 'Arma Ígnea'] }), 'A', 0, 0);
+    expect(actPara(m, conjuro('Arma Ígnea')) - actDe(m)).toBe(20);
+  });
+});

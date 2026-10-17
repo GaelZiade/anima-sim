@@ -2,7 +2,7 @@
 // queda activo de ellos (escudo y armadura mágicos).
 
 import type { Luchador } from './modelo';
-import { conjurosDe, esEspecialista, gradosPosibles, type EfectoConjuro, type BonoMagico, type Conjuro, type Grado } from './conjuros';
+import { conjurosDe, especializaciones, gradosPosibles, type EfectoConjuro, type BonoMagico, type Conjuro, type Grado } from './conjuros';
 import type { Rng } from './rng';
 import { tirarD100 } from './dados';
 import { atributo, bonoCaracteristica } from './maniobras';
@@ -179,9 +179,9 @@ function sinGestos(l: Luchador): boolean {
   return !!l.apresadoPor || l.atadura > 0 || !!l.lazos || l.paralisis >= 2;
 }
 
-/** Su ACT este asalto preparando ese conjuro: +10 si es su Conjuro Especialista (Arcana p.30). */
+/** Su ACT este asalto preparando ese conjuro: +10 por cada esfera de Conjuro Especialista en él (Arcana p.30). */
 export function actPara(l: Luchador, c?: Conjuro | null): number {
-  return actDe(l) + (c && esEspecialista(c, l.ficha.magia) ? 10 : 0);
+  return actDe(l) + (c ? 10 * especializaciones(c, l.ficha.magia) : 0);
 }
 
 /** Zeon libre de la reserva: lo que no está acumulado ni en un conjuro preparado. */

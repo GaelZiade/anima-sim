@@ -380,18 +380,25 @@ export function sinSimular(m: MagiaFicha): EntradaGrimorio[] {
  * Inteligencia para ese conjuro (Arcana p.30).
  */
 export function gradosPosibles(c: Conjuro, inteligencia: number, m?: MagiaFicha): number[] {
-  const int = inteligencia + (esEspecialista(c, m) ? 1 : 0);
+  const int = inteligencia + especializaciones(c, m);
   const res: number[] = [];
   for (let i = 0; i < c.grados.length; i++) if (c.grados[i].int <= int) res.push(i);
   return res;
 }
 
-const especialidades = new WeakMap<MagiaFicha, ReadonlySet<string>>();
+const especialidades = new WeakMap<MagiaFicha, ReadonlyMap<string, number>>();
 
-/** Es su Conjuro Especialista (Arcana p.30). */
-export function esEspecialista(c: Conjuro, m?: MagiaFicha): boolean {
-  if (!m?.especialista?.length) return false;
+/**
+ * Cuántas esferas de Conjuro Especialista tiene en ese conjuro (Arcana p.30): cada una, +10 al ACT y +1
+ * a la Inteligencia para su grado.
+ */
+export function especializaciones(c: Conjuro, m?: MagiaFicha): number {
+  if (!m?.especialista?.length) return 0;
   let s = especialidades.get(m);
-  if (!s) especialidades.set(m, (s = new Set(m.especialista.map(clave))));
-  return s.has(clave(c.nombre));
+  if (!s) {
+    const cuenta = new Map<string, number>();
+    for (const n of m.especialista) cuenta.set(clave(n), (cuenta.get(clave(n)) ?? 0) + 1);
+    especialidades.set(m, (s = cuenta));
+  }
+  return s.get(clave(c.nombre)) ?? 0;
 }
