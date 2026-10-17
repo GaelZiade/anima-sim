@@ -10,7 +10,7 @@ import {
 } from './reglas';
 import {
   absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
-  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, posicionDe, cegueraContra, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
+  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, posicionDe, cegueraContra, penAccionFisica, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
   perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
   golpeAPuntoVulnerable,
 } from './calculos';
@@ -576,7 +576,8 @@ function retirarse(ctx: Contexto, l: Luchador) {
   l.ataquesRestantes = 0;
   if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
   if (l.ficha.acrobacias !== undefined) {
-    const base = conIncremento(l.ficha.acrobacias, l.ki?.activo.acrobacias ?? 0) - penAccion(l);
+    // Acrobacias es una acción física: sufre la columna correspondiente de la Tabla 43 (Core p.90).
+    const base = conIncremento(l.ficha.acrobacias, l.ki?.activo.acrobacias ?? 0) - penAccion(l) - penAccionFisica(l);
     const t = tirar(ctx, umbralPifia(l.ficha.acrobacias, l.cap.ajustePifia));
     const acrobacias = base + valorTirada(t);
     const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e.cap.umbralAtaque))) > 40);

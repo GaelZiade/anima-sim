@@ -13,7 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
-import { condicion } from './condiciones';
+import { condicion, nivelCondicion } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
 
@@ -193,6 +193,19 @@ function tipoMovimientoKi(l: Luchador): number {
   if (!ki || (!ki.movimiento && !ki.lentitud)) return tm;
   for (let i = 0; i < ki.movimiento; i++) tm += tm < 13 ? 1 : 0.5;
   return Math.max(Math.floor(l.ficha.tipoMovimiento / 2), Math.floor(tm) - ki.lentitud);
+}
+
+/**
+ * Columna "Acción física" de la Tabla 43 (Core p.90), para las habilidades físicas como Acrobacias:
+ * ceguera −30/−90, derribado −30, parálisis −40/−60/−200, amenazado −100, levitando −60, espacio
+ * reducido −20. Las parálisis no se suman: vale la peor.
+ */
+export function penAccionFisica(l: Luchador): number {
+  const c = condicion(l, 'ceguera');
+  const ceguera = (c && c.nivel >= 2) || l.ficha.estados?.ceguera === 'absoluta' ? 90 : c || l.ficha.estados?.ceguera ? 30 : 0;
+  const paralisis = Math.max(l.paralisis, nivelCondicion(l, 'paralisis'));
+  return ceguera + (l.derribado ? 30 : 0) + [0, 40, 60, 200][paralisis] + (l.amenazadoPor ? 100 : 0) +
+    (l.ficha.estados?.levitando ? 60 : 0) + (l.entorno.espacioReducido ? 20 : 0);
 }
 
 /** Dónde está `atacante` respecto de `defensor`, según el orden en que se trabó con él. */
