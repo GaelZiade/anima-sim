@@ -6,7 +6,7 @@ import type { Contexto, Luchador, Tecnica } from './modelo';
 import { fichaConArmaKi } from './rotura';
 import { DADO_FIJO, textoTirada, tirarD100Cerrada } from './dados';
 import { resultadoResistencia, umbralPifia } from './reglas';
-import { activo, ataqueFinal, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe, proximaRanura } from './calculos';
+import { activo, baseDeteccionKi, ataqueFinal, cegueraContra, nro, frialdadDe, rfDe, danoBase, distancia, enAlcance, modControl, penAccion, perfilDe, proximaRanura } from './calculos';
 import { atributo, capacidad, controlEnfrentado, dificultadPuntosPresion, type EstadoMushin } from './maniobras';
 import type { Golpe } from './golpe';
 import { imponer, nivelCondicion } from './condiciones';
@@ -350,7 +350,7 @@ export function detectarPresencias(motor: Motor, ctx: Contexto) {
     if (!activo(l) || !l.cap.est.deteccionKi) continue;
     const ciego = ctx.luchadores.some((x) => x.equipo !== l.equipo && activo(x) && cegueraContra(l, x).nivel >= 2);
     if (!ciego) continue;
-    const base = Math.floor(((l.ficha.cm ?? 0) + (l.ficha.advertir ?? 0)) / 2);
+    const base = baseDeteccionKi(l);
     const habilidad = base - penAccion(l);
     const t = motor.tirar(ctx, umbralPifia(base, l.cap.ajustePifia));
     l.radioDeteccionKi = t.pifia ? 0 : radioDeteccion(habilidad + t.valor, l.cap.est.topeMovimiento);
@@ -409,7 +409,7 @@ function crearEspejismos(motor: Motor, ctx: Contexto, l: Luchador, ki: ModKi) {
     if (e.cap.est.veEnergia || e.ki?.activo.veEnergia) descubren.add(e);
     else if (e.cap.est.deteccionKi) {
       // Detección del Ki contra la Indetección; sin ella, quien detecta el Ki las descubre.
-      const base = Math.floor(((e.ficha.cm ?? 0) + (e.ficha.advertir ?? 0)) / 2);
+      const base = baseDeteccionKi(e);
       const t = motor.tirar(ctx, umbralPifia(base, e.cap.ajustePifia));
       if (!ki.espejismoIndeteccion || (!t.pifia && base - penAccion(e) + t.valor >= ki.espejismoIndeteccion)) descubren.add(e);
     }

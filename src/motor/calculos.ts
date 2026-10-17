@@ -11,7 +11,7 @@ import {
   AMENAZADO, atributo, bonoCaracteristica, esApuntado, esManiobraDeControl, ESTADOS_MUSHIN, modEstados, penManiobra,
   type EstadoMushin, type Maniobra,
 } from './maniobras';
-import { localizacionArmadura, presenciaBase, tamanoArmaDe, type Ranura } from './rasgos';
+import { localizacionArmadura, normalizarRasgo, presenciaBase, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
 import { hayAura, nivelCeguera, nivelParalisis } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
@@ -194,6 +194,16 @@ function tipoMovimientoKi(l: Luchador): number {
   if (!ki || (!ki.movimiento && !ki.lentitud)) return tm;
   for (let i = 0; i < ki.movimiento; i++) tm += tm < 13 ? 1 : 0.5;
   return Math.max(Math.floor(l.ficha.tipoMovimiento / 2), Math.floor(tm) - ki.lentitud);
+}
+
+/**
+ * Detección del Ki (Core p.103-104): la media entre su CM total y Advertir, +10 por nivel de la
+ * ventaja Percepción del Ki (Dominus p.18; "Percepción del Ki 2" es nivel 2, sin número 1).
+ */
+export function baseDeteccionKi(l: Luchador): number {
+  const percepcion = (l.ficha.rasgos?.ventajas ?? []).map(normalizarRasgo).find((v) => v.startsWith('percepcion del ki'));
+  const nivel = percepcion === undefined ? 0 : Number(percepcion.match(/(\d+)\s*$/)?.[1] ?? 1);
+  return Math.floor(((l.ficha.cm ?? 0) + (l.ficha.advertir ?? 0)) / 2) + 10 * nivel;
 }
 
 /** Bono con que contraataca `l`: Selene lo dobla (Dominus p.39). Motor e IA usan esta. */

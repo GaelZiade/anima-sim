@@ -226,6 +226,16 @@ describe('Forzar Técnicas (Dominus p.21) y Técnicas Combinables (Dominus p.49)
   });
 });
 
+describe('Detección del Ki (Core p.103-104)', () => {
+  it('la media entre CM y Advertir, +10 por nivel de Percepción del Ki (Dominus p.18)', async () => {
+    const { baseDeteccionKi } = await import('../src/motor/calculos');
+    const f = maestro(['Deteccion del Ki'], { cm: 200, advertir: 100 });
+    expect(baseDeteccionKi(crearLuchador(f, 'A', 0, 0))).toBe(150);
+    expect(baseDeteccionKi(crearLuchador({ ...f, rasgos: { ...f.rasgos, ventajas: ['Percepción del Ki 2'] } }, 'A', 0, 0))).toBe(170);
+    expect(baseDeteccionKi(crearLuchador({ ...f, rasgos: { ...f.rasgos, ventajas: ['Percepción del Ki'] } }, 'A', 0, 0))).toBe(160);
+  });
+});
+
 describe('Aura de combate (Dominus p.21)', () => {
   it('alcanza también a los aliados sensibles del radio, así que la IA no la enciende con uno cerca', () => {
     const isana = maestro(['Aura de combate'], { presencia: 80, ki: { reserva: 60, acumulacion: { POD: 4, VOL: 4 }, tecnicas: [] } });
