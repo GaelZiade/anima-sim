@@ -341,3 +341,27 @@ tiene test; la huella cambió sólo en los commits de reglas, nunca en los de es
 **Decidido por el usuario (17/10/2026):** blancos libres salvo prohibición, y el mago entra en el área
 sólo si el conjuro lo dice (96); zafarse fallido pierde el asalto; la IA no usa el Sacrificio de
 Características. Cerrados por el manual: varios conjuros preparados (97) y el +3 de los cuadrúpedos (98). Verificado en el manual: zafarse lleva el −3 (Core p.92; 5 con Pankration).
+
+## 11. Estilos, habilidades del Ki y lector de planillas (17/10/2026)
+
+Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambió con Dominio físico
+(Kiran, en revuelto).
+
+| # | Qué estaba mal | Cómo quedó | Dónde |
+|---|---|---|---|
+| 99 | La IA valoraba la contra de Selene sin el bono doble | Una sola cuenta, `bonoDeContra` (Dominus p.39) | `calculos.ts`, `ia.ts` |
+| 100 | Xing Quan fijaba el blanco aunque no aplicara el bono | Sólo si lo aplicó (Dominus p.38) | `combate.ts` |
+| 101 | La patada del Tae Kwon Do podía ir antes que la segunda arma | Siempre al final (`alFinal`, Dominus p.36) | `rasgos.ts` |
+| 102 | Afinidad elemental incompleta (Boreas y Ran sin elemento; sin +20 ni +10) | Tabla Aeon → TA, +20 a resistir el fuego, +10 al daño de Ki y Magia (Dominus p.63, p.76) | `estilos.ts`, `calculos.ts` |
+| 103 | El +10 de Ataque elemental del Ki se sumaba a los conjuros | Sólo a técnicas (Dominus p.63) | `calculos.ts` |
+| 104 | Los Legados se buscaban de dos maneras ("Límite de la Muerte" contaba como los Ojos) | `legadosDe`, por nombre completo (Dominus cap. 6) | `estilos.ts` |
+| 105 | Dominio físico sumaba +10 a una RF que ya lo trae | No se suma de nuevo (Dominus p.22) | `calculos.ts` |
+| 106 | El daño por Fuerza se redondeaba dos veces y se inflaba; sin armas doblaba la Fuerza; Aumento pisaba la Debilidad | Desde el daño de partida con un solo redondeo; sin armas una vez; se deshace sólo lo del Aumento; DES y AGI actualizan armas a distancia, Acrobacias y turno con magia (Core p.75, p.105, p.233) | `ki.ts`, `combate.ts` |
+| 107 | Un solo registro de Aura por luchador; un bono subía su dificultad | Una por fuente; sólo los negativos restan (Dominus p.21, Core p.232) | `combate-ki.ts`, `condiciones.ts` |
+| 108 | Presencia base calculada de tres maneras | Una, `presenciaBase` (Core p.25) | `rasgos.ts` |
+| 109 | Detección del Ki calculada dos veces y sin Percepción del Ki | Una, `baseDeteccionKi`, +10 por nivel (Dominus p.18) | `calculos.ts`, `combate-ki.ts` |
+
+**Supuesto anotado:** el simulador trata el Ki como una sola reserva (Unificación de puntos de Ki,
+Dominus p.8); las siete planillas la marcan.
+
+**Interpretaciones preguntadas al usuario:** ver DISENO.md, "Pendiente de decidir".

@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 368 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 376 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7

@@ -260,6 +260,17 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
   La IA tampoco cuenta como alcanzable a quien sólo llega gastando la última.
 - **Acrobacias** al escapar sufre la columna Acción física de la Tabla 43 (Core p.90).
 - **Engatillar:** atacar al amenazado es una acción pasiva, al empezar su turno (Core p.92).
+- **Decidido por el usuario (17/10/2026):** la posición superior contra un derribado vale sólo al
+  alcance del cuerpo a cuerpo (Core p.90); Pankration avanzado no sufre ningún penalizador por apresar,
+  turno incluido (Dominus p.33); la RF de la planilla (con el +10 de Dominio físico) vale contra todo;
+  el Aura de combate cobra 1 de Ki al encenderse y después cada 5 asaltos.
+- **Supuestos sin confirmar (la regla no lo precisa):** Selene dobla el bono después del tope de
+  +150 y también con una técnica de Ki; Xing Quan no comprueba que lleve la iniciativa; Aikido suma la
+  Fuerza del rival aunque el daño sin armas sea de otro arte; los rivales se dan por orgánicos y
+  humanoides (Hakyoukuken, Mushin, Aikido); un arma de dos tipos ("Arma corta / Cuerda") toma el
+  tamaño del más grande; Sangre de Toa, Phandemonium y Shephirah no tienen TA propia; Eliminación de
+  penalizadores divide también los negativos de técnicas y de Mushin; el Ki es una sola reserva
+  (Unificación, Dominus p.8).
 
 ### Pendiente
 

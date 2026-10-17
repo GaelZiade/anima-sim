@@ -374,6 +374,15 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(caracteristicasControl('derribo', otro, velez)).toEqual({ atk: 8, def: 12 });
   });
 
+  it('la posición superior contra un derribado vale sólo al alcance del cuerpo a cuerpo (Core p.90)', () => {
+    const atk = crearLuchador(ficha('A'), 'A', 0, 0);
+    const cerca = crearLuchador(ficha('Cerca'), 'B', 1, 0);
+    const lejos = crearLuchador(ficha('Lejos'), 'B', 20, 0);
+    const sinDerribar = [ataqueFinal(atk, cerca), ataqueFinal(atk, lejos)];
+    cerca.derribado = lejos.derribado = true;
+    expect([ataqueFinal(atk, cerca) - sinDerribar[0], ataqueFinal(atk, lejos) - sinDerribar[1]]).toEqual([20, 0]);
+  });
+
   it('los cuadrúpedos suman +3 a sus controles de Derribo, no a los de Presa (Core p.91)', () => {
     const caballo = crearLuchador(ficha('Caballo', {}, { atributos: { FUE: 8, DES: 6, AGI: 6 }, cuadrupedo: true }), 'A', 0, 0);
     const otro = crearLuchador(ficha('O', {}, { atributos: { FUE: 8, DES: 6, AGI: 6 } }), 'B', 1, 0);

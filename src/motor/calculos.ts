@@ -426,8 +426,8 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
     (nivelParalisis(atk) === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
-    // Contra un rival derribado se suma la posición superior (Tabla 43, Dominus p.38).
-    (def.derribado ? BONO_POSICION_SUPERIOR : 0) -
+    // Contra un rival derribado y al alcance del cuerpo a cuerpo, la posición superior (Tabla 43, Dominus p.38; Core p.90, decisión del usuario).
+    (def.derribado && enAlcance(atk, def) ? BONO_POSICION_SUPERIOR : 0) -
     (atk.previenePendiente.has(def) ? PEN_PREVER_SORPRESA : 0) +
     porCansancio * (o.cansancio ?? 0) + (o.bono ?? 0) +
     (o.esContra ? e.bonoContraataque : 0) +
