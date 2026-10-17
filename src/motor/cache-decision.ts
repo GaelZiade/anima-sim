@@ -7,6 +7,8 @@
  */
 export class CacheDecision<K, V> {
   private actual = new Map<K, V>();
+  /** La de la hipótesis anterior, ya vacía: se reusa en vez de crear otra (menos basura). */
+  private libre: Map<K, V> | null = null;
   get(k: K): V | undefined {
     return this.actual.get(k);
   }
@@ -15,15 +17,20 @@ export class CacheDecision<K, V> {
     return this;
   }
   clear() {
-    this.actual.clear();
+    // Vaciar un Map ya vacío igual reserva memoria nueva: se evita.
+    if (this.actual.size) this.actual.clear();
   }
   /** Deja una vacía y devuelve la que tenía. */
   apartar(): Map<K, V> {
     const m = this.actual;
-    this.actual = new Map();
+    this.actual = this.libre ?? new Map();
+    this.libre = null;
     return m;
   }
   reponer(m: Map<K, V>) {
+    const usada = this.actual;
+    if (usada.size) usada.clear();
+    this.libre = usada;
     this.actual = m;
   }
 }
