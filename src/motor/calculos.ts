@@ -358,7 +358,7 @@ export interface OpcionesAtaque {
 }
 
 /** El Xing Quan da su bono si atacó en su turno, sin defenderse antes, siempre al mismo rival. */
-function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolean {
+export function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolean {
   if (!atk.cap.est.xingQuan || o.esContra || atk.defensasHechas > 0) return false;
   // Sólo ataques normales o apuntados (Inutilizar e Inconsciencia también lo son).
   const m = o.maniobra ?? 'normal';

@@ -11,7 +11,7 @@ import {
 import {
   activo, ALCANCE, bonoCriticoDe, nro, rfCritico, rfDe, ataqueFinal, danoBase, distancia, enAlcance, enLaLinea, posicionDe, cegueraContra,
   modControl, umbralPifiaTurno, penAccion, proximaRanura, puedeActuar, turnoFinal, modProyectil, visionEntre, PEN_COBERTURA, golpeAPuntoVulnerable,
-  quedanAccionesActivas, bonoDeContra,
+  quedanAccionesActivas, bonoDeContra, aplicaXingQuan,
 } from './calculos';
 import {
   atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esNoLetal, gradoPresa, localizacionApuntada,
@@ -701,7 +701,8 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   if (samielAtk) atk.samiel.set(def, (atk.samiel.get(def) ?? 0) - samielAtk);
   if (!a.esContra || !atk.cap.est.contrasIlimitadas) atk.ataquesRestantes--;
   if (!ranura.sinArmas) atk.enfundada = false;
-  if (!a.esContra && atk.cap.est.xingQuan) atk.objetivoUnico = def;
+  // Xing Quan: quien aplica el bono ya no puede atacar a otro (Dominus p.38).
+  if (aplicaXingQuan(atk, def, opcionesAtk)) atk.objetivoUnico = def;
   const godhand = atk.godhandListo;
   atk.godhandListo = false;
   atk.previenePendiente.delete(def);

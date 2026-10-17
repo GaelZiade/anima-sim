@@ -1,6 +1,7 @@
 // Maniobras (Core p.91-92), controles de características (Core p.9) y ventajas de Artes Marciales,
 // Tablas, Ars Magnus y Legados (Dominus Exxet), con los números de los manuales.
 
+import { aplicaXingQuan } from '../src/motor/calculos';
 import { describe, expect, it } from 'vitest';
 import type { Ficha, Rasgos } from '../src/motor/modelo';
 import { crearLuchador } from '../src/motor/combate';
@@ -208,6 +209,11 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     x.objetivoUnico = null;
     x.defensasHechas = 1;
     expect(ataqueFinal(x, def) - 150).toBe(0);
+    // Sólo queda atado a un rival si aplicó el bono (no tras defenderse ni con un Derribo).
+    expect(aplicaXingQuan(x, def, {})).toBe(false);
+    x.defensasHechas = 0;
+    expect(aplicaXingQuan(x, def, { maniobra: 'derribo' })).toBe(false);
+    expect(aplicaXingQuan(x, def, {})).toBe(true);
   });
 
   it('críticos: Tabla de Crítico Incrementado +10, Moai Thai supremo +20, Hakyoukuken +20 / arcano +40', () => {
