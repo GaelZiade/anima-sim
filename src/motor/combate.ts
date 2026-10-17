@@ -1351,7 +1351,7 @@ function defenderse(
     const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${nombreEscudo}` : '';
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(MOTOR, ctx, atk, quienDefiende, o.ranura, resultado <= 0);
+    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(MOTOR, ctx, atk, quienDefiende, o.ranura, resultado <= 0, o.ki?.conjuro ? o.ki.danoFijo : undefined);
   }
 
   // Escudo de energía (Ki): si detiene el golpe recibe su daño base (+10 por punto de TA que reste),

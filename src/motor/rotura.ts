@@ -47,7 +47,12 @@ function controlRotura(ctx: Contexto, rotura: number, entereza: number): number 
  * completa) y recibe 5 de daño por punto que falle, salvo maestría en parada sin armas o Malla-yuddha
  * avanzado (Core p.93, Dominus p.35).
  */
-export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, paro: boolean) {
+export function roturaEnParada(motor: Motor, ctx: Contexto, atk: Luchador, def: Luchador, ranura: Ranura, paro: boolean, descarga?: number) {
+  // Una descarga tiene rotura igual a su daño base entre 20 y puede romper el arma que la para (Core p.122).
+  if (descarga !== undefined) {
+    if (!def.cap.desarmado && controlRotura(ctx, Math.floor(descarga / 20), enterezaArma(def)) > 0) romperArma(motor, ctx, def);
+    return;
+  }
   const atkArmado = !ranura.sinArmas && !atk.cap.desarmado;
   if (!atkArmado) return;
   if (def.cap.desarmado) {
