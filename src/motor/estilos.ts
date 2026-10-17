@@ -7,7 +7,7 @@
 
 import type { Ficha } from './modelo';
 import type { TipoAtaque } from './reglas';
-import { fuerzaPresaArma, gradoArteMarcial, tamanoArmaDe, tiene } from './rasgos';
+import { fuerzaPresaArma, gradoArteMarcial, normalizarRasgo, tamanoArmaDe, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
 /**
@@ -17,6 +17,26 @@ import { bonoCaracteristica } from './maniobras';
 const TA_DE_AEON = {
   Kagutsuchi: 'CAL', Boreas: 'ELE', Niflheim: 'FRI', Rudraksha: 'ELE', Ran: 'FRI', Toa: null, Phandemonium: null, Shephirah: null,
 } as const satisfies Record<string, TipoAtaque | null>;
+
+/**
+ * Legados de Sangre (Dominus cap. 6) por su nombre completo, para no confundirlos con otra ventaja
+ * que comparta una palabra (Mors, el "Límite de la Muerte", no es los Ojos de la Muerte).
+ */
+const LEGADOS: Record<string, RegExp> = {
+  'Ojos de la Muerte': /\bojos de la muerte\b|\bayin apholion\b/,
+  'Sangre Eterna': /\bsangre eterna\b/,
+  Uroboros: /\buroboros\b/,
+  Tsukiyomi: /\btsukiyomi\b|\blegado de la luna\b/,
+  Orochi: /\borochi\b/,
+  ...Object.fromEntries(Object.keys(TA_DE_AEON).map((a) => [a, new RegExp(`\\b${a.toLowerCase()}\\b`)])),
+};
+
+/** Los Legados de Sangre de la ficha, leídos de sus ventajas una sola vez. */
+function legadosDe(ventajas: string[] | undefined): Set<string> {
+  const r = new Set<string>();
+  for (const v of ventajas ?? []) for (const [nombre, re] of Object.entries(LEGADOS)) if (re.test(normalizarRasgo(v))) r.add(nombre);
+  return r;
+}
 
 export interface Estilos {
   // ---------------------------------------------------------------- maniobras (Core p.91-92)
@@ -252,8 +272,8 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
   if (asakusen >= 3) bonoVariable = 40;
   else if (asakusen >= 1) bonoVariable = Math.max(bonoVariable, 10);
 
-  // Los Legados figuran entre las ventajas; se buscan por palabra entera ("Toa" no es "Tocado").
-  const legado = (nombre: string) => (v ?? []).some((x) => new RegExp(`\\b${nombre}\\b`, 'i').test(x));
+  const legados = legadosDe(v);
+  const legado = (nombre: string) => legados.has(nombre);
   const aeon = (Object.keys(TA_DE_AEON) as (keyof typeof TA_DE_AEON)[]).find(legado);
 
   return {
@@ -273,10 +293,10 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     factorEspacioReducido: tiene(tablas, 'espacios reducidos') ? 0.5 : 1,
     defensaSinEspacioReducido: hanja >= 1,
     battoJutsu: tiene(tablas, 'batto') || tiene(tablas, 'iai'),
-    tsukiyomi: legado('Tsukiyomi') || tiene(v, 'legado de la luna'),
-    haima: tiene(ars, 'haima') && legado('Eterna'),
+    tsukiyomi: legado('Tsukiyomi'),
+    haima: tiene(ars, 'haima') && legado('Sangre Eterna'),
     roturaSinArmas: g('Dumah') >= 3 ? 25 : g('Dumah') >= 1 ? 10 : 0,
-    roturaExtra: legado('Muerte') ? 5 : 0,
+    roturaExtra: legado('Ojos de la Muerte') ? 5 : 0,
     enterezaSinArmas: malla >= 1 ? 10 : 0,
     paradaSinArmasSegura: malla >= 2,
     controlPresaDerribo: melkaiah >= 1 ? 3 : 0,
@@ -320,11 +340,11 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     guardian: tiene(ars, 'guardian'),
     samiel: tiene(ars, 'samiel'),
     diferenciaSorpresa: legado('Uroboros') ? 100 : 150,
-    criticoAutomatico: tiene(v, 'ojos de la muerte'),
+    criticoAutomatico: legado('Ojos de la Muerte'),
     bonoRfCritico: legado('Toa') ? 10 : 0,
     bonoRfDano: tiene(r.habilidadesKi, 'dominio fisico') ? 10 : 0,
-    sangreEterna: tiene(v, 'sangre eterna'),
-    orochi: tiene(v, 'orochi'),
+    sangreEterna: legado('Sangre Eterna'),
+    orochi: legado('Orochi'),
     elementoAfin: aeon ? TA_DE_AEON[aeon] : null,
     leo: armaLeo(f, desarmado),
   };

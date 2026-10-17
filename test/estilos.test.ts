@@ -219,6 +219,13 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     expect(danoBase(k, rival, false, undefined, fuego) - danoBase(otro, rival, false, undefined, fuego)).toBe(10);
   });
 
+  it('los Legados se leen por su nombre completo: el Límite de la Muerte no es los Ojos de la Muerte', () => {
+    const ojos = estilos(ficha('Espada', { ventajas: ['Los Ojos de la Muerte'] }), false);
+    const mors = estilos(ficha('Espada', { ventajas: ['Límite de la Muerte'] }), false);
+    expect([ojos.roturaExtra, ojos.criticoAutomatico]).toEqual([5, true]);
+    expect([mors.roturaExtra, mors.criticoAutomatico]).toEqual([0, false]);
+  });
+
   it('Xing Quan: +10/+20/+30 en su turno contra un único rival; no en contras ni después de defenderse (p.38)', () => {
     const def = luchador(ficha('Rival'), 'B');
     const otro = luchador(ficha('Otro'), 'B');
