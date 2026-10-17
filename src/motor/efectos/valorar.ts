@@ -3,7 +3,7 @@
 
 import type { Contexto, Luchador } from '../modelo';
 import type { Conjuro, Grado } from '../conjuros';
-import { golpeDeConjuro, nivelLlamas, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
+import { escudoDetiene, golpeDeConjuro, nivelLlamas, RANURA_MAGIA, bendecir, danoLlamas, deArea, quitarBendicion, rmDe } from '../magia';
 import { rfCritico, rfDe,
   absorcionContra, activo, ataqueMagico, defensaEscudoMagico, defensaFinal, distancia, enAlcance,
   danoEsperado, penAccion, pronostico, tablaPara, visionEntre,
@@ -29,10 +29,14 @@ export function precioZeon(l: Luchador): number {
   return ((0.5 * l.ficha.pv) / inicial) * Math.sqrt(inicial / queda);
 }
 
-/** Defensa de `def` contra un conjuro de ataque de `atk`: su escudo mágico, o parar (si para energía) o esquivar. */
+/**
+ * Defensa de `def` contra un conjuro de ataque de `atk`, como en el motor: con su escudo mágico si lo
+ * detiene y rinde más, y si no parando (si para energía) o esquivando.
+ */
 export function defensaContraConjuro(def: Luchador, atk: Luchador, ki: ModKi, area = 0): number {
-  if (def.magia?.escudo) return defensaEscudoMagico(def, atk, ki);
-  return defensaFinal(def, atk, { kiAtk: ki, proyectil: enAlcance(atk, def) ? undefined : 'disparo', area });
+  const fisica = defensaFinal(def, atk, { kiAtk: ki, proyectil: enAlcance(atk, def) ? undefined : 'disparo', area });
+  if (def.magia?.escudo && escudoDetiene(def, ki.elemento || undefined)) return Math.max(fisica, defensaEscudoMagico(def, atk, ki));
+  return fisica;
 }
 
 /** Lo que vale para `atk` un conjuro de ataque contra `def`: el golpe, el tempo y la contra si lo toca. */
