@@ -242,23 +242,29 @@ function colocar(nA: number, nB: number, distancia: number, e: OpcionesEscenario
   return { mapa, celdas };
 }
 
+/**
+ * Lo que dura un asalto vuelve a cero: todo campo de Luchador que vale sólo para el asalto en curso se
+ * reinicia acá (y en ningún otro lado).
+ */
+function nuevoAsalto(l: Luchador) {
+  l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.camufladoA.clear(); l.defensasHechas = 0; l.cansancioAsalto = 0;
+  // Cargar pide haber corrido hacia un enemigo el asalto anterior, no cualquier paso (Core p.90).
+  l.movioAsaltoAnterior = l.avanzoHaciaEnemigo;
+  l.avanzoHaciaEnemigo = false;
+  l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
+  l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
+  l.planResistir = null;
+  l.repitioControl = false;
+  l.previsionContra = null;
+  l.criticoEnAsalto = false;
+  // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
+  l.godhandListo = l.godhandPreparado;
+  l.godhandPreparado = false;
+}
+
 function jugarAsalto(ctx: Contexto) {
   const vivos = ctx.luchadores.filter(activo);
-  for (const l of vivos) {
-    l.haActuado = false; l.intentoZafarse = false; l.aLaDefensiva = false; l.camufladoA.clear(); l.defensasHechas = 0; l.cansancioAsalto = 0;
-    // Cargar pide haber corrido hacia un enemigo el asalto anterior, no cualquier paso (Core p.90).
-    l.movioAsaltoAnterior = l.avanzoHaciaEnemigo;
-    l.avanzoHaciaEnemigo = false;
-    l.movioActivo = false; l.accionesActivas = 0; l.metrosMovidos = 0; l.sorprendeA.clear(); l.objetivoUnico = null;
-    l.disparo = false; l.ultimoBlanco = null; l.atrapadas = 0;
-    l.planResistir = null;
-    l.repitioControl = false;
-    l.previsionContra = null;
-    l.criticoEnAsalto = false;
-    // Godhand: el ataque sacrificado el asalto anterior potencia el primero de este.
-    l.godhandListo = l.godhandPreparado;
-    l.godhandPreparado = false;
-  }
+  for (const l of vivos) nuevoAsalto(l);
 
   // 1. Declaración simultánea: todos deciden viendo el asalto anterior, después se aplica.
   ctx.ventaja = ia.ventajaEquipos(ctx);
