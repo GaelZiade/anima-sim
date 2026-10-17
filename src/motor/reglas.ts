@@ -53,6 +53,14 @@ export function localizar(d100: number): Localizacion {
 }
 
 /**
+ * Qué extremidad, por la misma tirada de la Tabla 51: 51-60 el brazo derecho (el del arma), 61-70 el
+ * izquierdo, 71-90 una pierna.
+ */
+export function extremidadDe(d100: number): 'brazoArma' | 'brazo' | 'pierna' {
+  return d100 <= 60 ? 'brazoArma' : d100 <= 70 ? 'brazo' : 'pierna';
+}
+
+/**
  * Tabla 48 (Core p.96): dificultad que el ataque final de un disparo debe superar para llegar al
  * blanco, por distancia (Media 80, Difícil 120, Muy difícil 140, Absurdo 180, Casi imposible 240,
  * Imposible 280; Tabla 7). A bocajarro (menos de 1 m), Fácil 40.

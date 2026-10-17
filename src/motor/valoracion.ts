@@ -10,6 +10,9 @@ export interface EfectoCritico {
   pNegativo: number;
   /** Negativo medio a toda acción cuando falla y sigue en pie. */
   negativo: number;
+  /** P(más de 100 en el brazo del arma o en una pierna, y sigue en pie: queda inservible, Core p.98). */
+  pBrazoArma: number;
+  pPierna: number;
 }
 
 /**
@@ -61,7 +64,7 @@ function calcularEfecto(
 ): EfectoCritico {
   const fuera = fueraPorTramo(loc, !!o.inconsciencia, !!o.sinMuerte);
   const cortes = [0, 50, 100, 150, Infinity];
-  let pFuera = 0, pNegativo = 0, sumaNegativo = 0;
+  let pFuera = 0, pNegativo = 0, sumaNegativo = 0, pMiembro = 0;
   for (let x = 1; x <= 100; x++) {
     const c = nivelCritico(base, x, !!o.acumulacion) - rf;
     // Fracaso = c − Y con Y en 1..99 (el 100 resiste). Por tramo (lo, hi]: Y en [c − hi, c − lo − 1].
@@ -72,9 +75,16 @@ function calcularEfecto(
       const n = hasta - desde + 1;
       const suma = n * c - ((desde + hasta) * n) / 2;
       pFuera += (n / 100) * fuera[t];
+      if (t === 2) pMiembro += n / 100;
       pNegativo += (n / 100) * (1 - fuera[t]);
       sumaNegativo += (suma / 100) * (1 - fuera[t]);
     }
   }
-  return { pFuera: pFuera / 100, pNegativo: pNegativo / 100, negativo: pNegativo > 0 ? sumaNegativo / pNegativo : 0 };
+  // De 101 a 150 sigue en pie: al azar, el brazo del arma es 51-60 y una pierna 71-90 (Tabla 51);
+  // Inutilizar apunta al brazo del arma.
+  const [brazo, pierna] = o.inconsciencia ? [0, 0] : loc === 'extremidad' ? [1, 0] : loc === null ? [0.1, 0.2] : [0, 0];
+  return {
+    pFuera: pFuera / 100, pNegativo: pNegativo / 100, negativo: pNegativo > 0 ? sumaNegativo / pNegativo : 0,
+    pBrazoArma: (pMiembro / 100) * brazo, pPierna: (pMiembro / 100) * pierna,
+  };
 }

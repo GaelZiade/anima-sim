@@ -5,7 +5,7 @@ import { crearRng, type Rng } from './rng';
 import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, haySorpresa, localizar, nivelCritico, penPifiaTurno,
+  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, extremidadDe, haySorpresa, localizar, nivelCritico, penPifiaTurno,
   umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia, type TipoAtaque,
 } from './reglas';
 import {
@@ -1838,7 +1838,8 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
     return;
   }
   const fallo = nivel - res;
-  const loc = apuntado ?? localizar(tirarD100Cerrada(ctx.rng));
+  const dadoLoc = apuntado ? 0 : tirarD100Cerrada(ctx.rng);
+  const loc = apuntado ?? localizar(dadoLoc);
   if (fallo <= 50) def.penDolor += fallo;
   else {
     def.penDolor += Math.ceil(fallo / 2);
@@ -1857,6 +1858,18 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   // Sangre Eterna es inmune a la muerte automática por críticos en puntos vulnerables.
   if (fallo > 100 && (loc === 'cabeza' || loc === 'corazon') && !def.cap.est.sangreEterna) caer(ctx, atk, def, 'muerto');
   else if (fallo > 150 || (fallo > 50 && loc === 'cabeza')) caer(ctx, atk, def, 'inconsciente');
+  // Más de 100 en un brazo o una pierna: queda inservible (Core p.98). Inutilizar apunta al brazo del
+  // arma; sin él no puede usarla. Sin una pierna, cae.
+  if (fallo > 100 && loc === 'extremidad' && activo(def)) {
+    const cual = apuntado ? 'brazoArma' : extremidadDe(dadoLoc);
+    if (cual === 'pierna') {
+      def.derribado = true;
+      log(ctx, () => `  La pierna de ${def.ficha.nombre} queda inservible: cae al suelo.`);
+    } else if (cual === 'brazoArma' && !def.cap.desarmado) {
+      log(ctx, () => `  El brazo del arma de ${def.ficha.nombre} queda inservible.`);
+      desarmar(ctx, def, atk);
+    } else log(ctx, () => `  El ${cual === 'brazo' ? 'otro brazo' : 'brazo'} de ${def.ficha.nombre} queda inservible.`);
+  }
 }
 
 /** Sangre de Orochi: al recibir un crítico, control de Voluntad o se desencadena (Dominus p.81). */

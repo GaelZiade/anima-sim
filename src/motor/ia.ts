@@ -311,7 +311,17 @@ function valorCritico(
   // Quien reduce el dolor de los críticos (Inmunidad, Eliminación) sufre más o menos la mitad.
   const negativo = def.cap.mitadDolorCritico ? ef.negativo * 0.6 : ef.negativo;
   const fuera = valorDejarFuera(atk, def, danoPrevio);
-  return pCritica * (ef.pFuera * fuera + ef.pNegativo * valorNegativo(atk, def, negativo, golpes, danoPrevio));
+  // Un brazo del arma inservible lo desarma; una pierna, lo tira al suelo (Core p.98).
+  const miembro = (ef.pBrazoArma ? ef.pBrazoArma * valorDesarmarlo(atk, def) : 0) + (ef.pPierna ? ef.pPierna * 0.3 * amenaza(def, atk) : 0);
+  return pCritica * (ef.pFuera * fuera + ef.pNegativo * valorNegativo(atk, def, negativo, golpes, danoPrevio) + miembro);
+}
+
+/** Lo que vale desarmarlo: cuánto pega menos sin su arma, dos asaltos (Core p.92). */
+export function valorDesarmarlo(atk: Luchador, def: Luchador): number {
+  if (def.cap.desarmado) return 0;
+  const s = def.ficha.sinArmas;
+  const caida = s ? Math.max(0, 1 - s.ataque / Math.max(1, def.ficha.ataque)) : 0.5;
+  return 2 * caida * amenaza(def, atk);
 }
 
 /**
@@ -979,11 +989,7 @@ function mejorManiobra(
         v += pGana * (1.5 * 0.8 * amen + ganancia(80, golpesSiguientes, danoEste));
         if (!e.sinPenalizadorApresando && !ki?.apresamiento) v -= 0.2 * lambda(atk) * amen;
       }
-      if (m === 'desarmar') {
-        const s = def.ficha.sinArmas;
-        const caida = s ? Math.max(0, 1 - s.ataque / Math.max(1, def.ficha.ataque)) : 0.5;
-        v += pGana * 2 * caida * amen;
-      }
+      if (m === 'desarmar') v += pGana * valorDesarmarlo(atk, def);
     }
     if (m === 'engatillar') {
       // Amenazado: −120 a defenderse de él y −20 al atacarlo (Tabla 43). Dura hasta que lo use: si no

@@ -376,3 +376,16 @@ describe('auditoría de combate base (16/10/2026)', () => {
     expect(defensaFinal(def, lejos, { proyectil: 'disparo' })).toBe(defensaFinal(def, lejos, { proyectil: 'disparo', posicion: 'frente' }));
   });
 });
+
+describe('crítico de más de 100 en una extremidad (Core p.98)', () => {
+  it('la tirada de localización también dice qué miembro', async () => {
+    const { extremidadDe } = await import('../src/motor/reglas');
+    expect([extremidadDe(51), extremidadDe(60), extremidadDe(65), extremidadDe(71), extremidadDe(90)]).toEqual(['brazoArma', 'brazoArma', 'brazo', 'pierna', 'pierna']);
+  });
+  it('la IA lo valora: Inutilizar apunta al brazo del arma', async () => {
+    const { efectoCritico } = await import('../src/motor/valoracion');
+    const e = efectoCritico(300, 40, 'extremidad');
+    expect(e.pBrazoArma).toBeGreaterThan(0);
+    expect(e.pPierna).toBe(0);
+  });
+});
