@@ -310,7 +310,11 @@ planillas se leen ahí con el mismo lector de `src/hoja/` y no se suben a ningú
   dorado y un triángulo encima, y se destaca en la barra de iniciativa del asalto (`Evento.turno`,
   `Evento.orden`). Cada ataque dibuja una flecha de quien ataca a quien defiende, roja si impacta,
   gris si falla (punteada si pifia) y dorada si es una contra, con el defensor rodeado del mismo
-  color (`Evento.ataque`); el daño aparece flotando sobre quien lo recibe (`Evento.dano`). Barras
+  color (`Evento.ataque`); el daño aparece flotando sobre quien lo recibe (`Evento.dano`). Las áreas
+  de conjuros y técnicas de Ki se ven como un círculo del color del elemento (fuego naranja, frío
+  celeste, electricidad amarillo, energía violeta) con un aro en el centro y su nombre y radio
+  (`Evento.area`); las zonas que siguen activas (Tormenta de Fuego, una Mina puesta), punteadas
+  (`Evento.zonas`). Barras
   de PV, borde punteado a la defensiva, cruz si cayó (quien huyó deja de verse), un punto violeta si
   tiene algún estado encima. Cada línea guarda la foto de todos (`Evento.foto`: lugar, PV, estados
   visibles, Ki y zeon) y de quién habla (`Evento.sujeto`), que se marca suave en el tablero; la barra

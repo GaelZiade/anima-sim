@@ -3,6 +3,13 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 17/10/2026: áreas a la vista en el combate en vivo
+
+- **Página:** los conjuros y técnicas de Ki con área se dibujan en el tablero (círculo del color del
+  elemento, aro en el centro, nombre y radio); las zonas activas (Tormenta de Fuego, Mina), punteadas.
+- **Motor:** el registro lleva el área de cada línea (`Evento.area`) y las zonas activas
+  (`Evento.zonas`). Los resultados no cambian.
+
 ## 17/10/2026: auditoría de todo el sistema (magia, combate, estructura)
 
 - **Magia** (AUDITORIA.md 10, 72 a 79): sólo Energía daña energía, ACT a la mitad sin gestos,
