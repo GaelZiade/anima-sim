@@ -759,7 +759,9 @@ entero. Se implementa en la parte 3.
     `sirveControl` (`efectos/comun.ts`); la IA paga Control del Espacio sólo si el área la alcanzaría
     a ella o a un aliado.
 
-**Sin decidir:** si la IA usa varios conjuros preparados a la vez (el motor lo permite).
+39. **Varios preparados** (Core p.117): con un conjuro listo puede preparar otro o acumular magia
+    pura; sostiene cada listo tantos asaltos como su Poder (`preparados`, `enPreparacion`,
+    `preparadosListos`). La IA lanza cada listo que rinda.
 
 ## Proyectiles (fase 4)
 

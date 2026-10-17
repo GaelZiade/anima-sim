@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 366 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 368 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
@@ -163,9 +163,7 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 3. Confirmar las interpretaciones propias del Ki (DISENO.md, "Interpretaciones propias"): frenar la
    retirada por Transporte, el arma que crea un Arma física de Ki, cómo reparte los ataques el
    Espejismo y las desventajas de ambientación dadas por cumplidas.
-4. Decidir lo poco que dejó abierto la auditoría del 17/10 (AUDITORIA.md, sección 10): varios
-   conjuros preparados a la vez y el +3 de los cuadrúpedos.
-5. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
+4. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
    Ki"). Las reglas que faltaban de AUDITORIA.md sección 3 están todas.
 
 **Decisiones del usuario que conviene no reabrir:** la Tabla 25 se corre a tope desde parado; el combate desarmado es Precisa y apunta a la

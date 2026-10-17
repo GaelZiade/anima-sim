@@ -329,6 +329,8 @@ tiene test; la huella cambió sólo en los commits de reglas, nunca en los de es
 | 93 | La IA no miraba la Tabla 41 al moverse | No cuenta como alcanzable a quien sólo llega gastando la última acción activa (Core p.85) | `calculos.ts`, `ia.ts` |
 | 94 | La parálisis inducida no quitaba gestos ni anulaba la posición | Una sola parálisis para las reglas, `nivelParalisis` (Core p.117, Dominus p.11) | `condiciones.ts`, `magia.ts`, `calculos.ts` |
 | 96 | Elegir blancos en un área pedía siempre Control del Espacio | Libre salvo que el conjuro lo prohíba; esos alcanzan también al mago si no lo excluyen (Core p.123, decidido por el usuario) | `efectos/comun.ts`, `conjuros.ts`, `ia-magia.ts` |
+| 97 | Un solo conjuro preparado: preparar otro tiraba el listo con −10 | Varios: los listos y uno en preparación (Core p.117) | `magia.ts`, `ia-magia.ts` |
+| 98 | Sin el +3 de los cuadrúpedos al Derribo | Dato de la ficha `cuadrupedo` (Core p.91) | `maniobras.ts`, `modelo.ts` |
 | 95 | Ceguera de la planilla y del destello contadas distinto en cada lugar | Una sola, `nivelCeguera`; el último asalto del destello, parcial (Core p.233) | `condiciones.ts`, `calculos.ts`, `ia-ki.ts` |
 
 **Estructura y velocidad (huella idéntica):** `combate.ts` partido (`combate-defensa.ts`,
@@ -338,5 +340,4 @@ tiene test; la huella cambió sólo en los commits de reglas, nunca en los de es
 
 **Decidido por el usuario (17/10/2026):** blancos libres salvo prohibición, y el mago entra en el área
 sólo si el conjuro lo dice (96); zafarse fallido pierde el asalto; la IA no usa el Sacrificio de
-Características. **Abierto:** varios conjuros preparados a la vez; el +3 de los cuadrúpedos (las
-planillas no lo dicen). Verificado en el manual: zafarse lleva el −3 (Core p.92; 5 con Pankration).
+Características. Cerrados por el manual: varios conjuros preparados (97) y el +3 de los cuadrúpedos (98). Verificado en el manual: zafarse lleva el −3 (Core p.92; 5 con Pankration).

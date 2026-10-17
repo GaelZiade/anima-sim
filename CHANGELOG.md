@@ -17,6 +17,7 @@ retomar el trabajo, empezar por README.md.
 - **Velocidad:** `dijkstra`, `cegueraContra`, `vistaPrevia` y `base().prep` sin trabajo repetido.
 - **Decisiones del usuario:** blancos libres en un área salvo que el conjuro lo prohíba (96, una sola
   regla: `afectaElArea`); zafarse fallido pierde el asalto; la IA no usa el Sacrificio de Características.
+- **Reglas que faltaban:** varios conjuros preparados a la vez (97); +3 de los cuadrúpedos al Derribo (98).
 - **Segunda pasada** (93 a 95): la IA mira la Tabla 41 al moverse; una sola parálisis
   (`nivelParalisis`) y una sola ceguera (`nivelCeguera`); `combate.ts` partido en defensa, distancia
   y movimiento.
