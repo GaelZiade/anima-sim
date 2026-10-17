@@ -362,6 +362,7 @@ Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambi�
 | 109 | Detección del Ki calculada dos veces y sin Percepción del Ki | Una, `baseDeteccionKi`, +10 por nivel (Dominus p.18) | `calculos.ts`, `combate-ki.ts` |
 
 | 110 | Eliminación de penalizadores e Inmunidad al dolor dividían todo junto | Tres bolsas: críticos (las dos), Dolor (Inmunidad), Estados sobrenaturales (ninguna) (Core p.21, p.104) | `calculos.ts`, `combate-ki.ts`, `efectos/estados.ts` |
+| 112 | Xing Quan no miraba la Iniciativa | Sólo si actúa antes que ese rival (`puestoIniciativa`, Dominus p.38) | `calculos.ts`, `combate.ts` |
 | 111 | Aikido sumaba la Fuerza del rival con el daño de otro arte y contra cualquiera; Hakyoukuken y Mushin contra cualquiera | `danoSinArmasDe`, `humanoide`, `organico` (Dominus p.29, p.31-32, p.42). Cambia Kiran (siete artes, daño de otra) | `estilos.ts`, `calculos.ts`, `ia.ts` |
 
 **Supuesto anotado:** el simulador trata el Ki como una sola reserva (Unificación de puntos de Ki,

@@ -351,6 +351,8 @@ export interface Luchador {
 
   // --- estado del asalto ---
   iniciativa: number;
+  /** Puesto en el orden de iniciativa del asalto (0 el primero; los que pifian, al final). */
+  puestoIniciativa: number;
   haActuado: boolean;
   aLaDefensiva: boolean;
   defensaTotal: boolean;

@@ -242,6 +242,10 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     x.defensasHechas = 0;
     expect(aplicaXingQuan(x, def, { maniobra: 'derribo' })).toBe(false);
     expect(aplicaXingQuan(x, def, {})).toBe(true);
+    // Sin la Iniciativa sobre ese rival, no (Dominus p.38).
+    def.puestoIniciativa = 0;
+    x.puestoIniciativa = 1;
+    expect(aplicaXingQuan(x, def, {})).toBe(false);
   });
 
   it('críticos: Tabla de Crítico Incrementado +10, Moai Thai supremo +20, Hakyoukuken +20 / arcano +40', () => {

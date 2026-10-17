@@ -265,7 +265,7 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
   turno incluido (Dominus p.33); la RF de la planilla (con el +10 de Dominio físico) vale contra todo;
   el Aura de combate cobra 1 de Ki al encenderse y después cada 5 asaltos.
 - **Supuestos sin confirmar (la regla no lo precisa):** Selene dobla el bono después del tope de
-  +150 y también con una técnica de Ki; Xing Quan no comprueba que lleve la iniciativa; un arma de dos
+  +150 y también con una técnica de Ki; un arma de dos
   tipos ("Arma corta / Cuerda") toma el tamaño del más grande; Sangre de Toa, Phandemonium y
   Shephirah no tienen TA propia; el Ki es una sola reserva (Unificación, Dominus p.8).
 - **Datos de la ficha para reglas que dependen del rival o del estilo:** `organico` y `humanoide` (por

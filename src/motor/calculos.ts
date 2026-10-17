@@ -372,7 +372,9 @@ export interface OpcionesAtaque {
 
 /** El Xing Quan da su bono si atacó en su turno, sin defenderse antes, siempre al mismo rival. */
 export function aplicaXingQuan(atk: Luchador, def: Luchador, o: OpcionesAtaque): boolean {
-  if (!atk.cap.est.xingQuan || o.esContra || atk.defensasHechas > 0) return false;
+  // Lleva la Iniciativa sobre él (Dominus p.38): actúa antes en el asalto (antes de la primera
+  // iniciativa los dos están en 0 y no se distingue).
+  if (!atk.cap.est.xingQuan || o.esContra || atk.defensasHechas > 0 || atk.puestoIniciativa > def.puestoIniciativa) return false;
   // Sólo ataques normales o apuntados (Inutilizar e Inconsciencia también lo son).
   const m = o.maniobra ?? 'normal';
   return (m === 'normal' || esApuntado(m)) && (atk.objetivoUnico === null || atk.objetivoUnico === def);

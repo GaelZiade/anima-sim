@@ -75,7 +75,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
     movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, avanzoHaciaEnemigo: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
-    derribado: false, paralisisPresa: 0, apresadoPor: null, apresando: null, desarmado: false,
+    puestoIniciativa: 0, derribado: false, paralisisPresa: 0, apresadoPor: null, apresando: null, desarmado: false,
     condiciones: {}, auras: new Map(), curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
@@ -403,6 +403,7 @@ function jugarAsalto(ctx: Contexto) {
       Number(pifiados.has(a)) - Number(pifiados.has(b)) || b.iniciativa - a.iniciativa ||
       turnos.get(b)! - turnos.get(a)! || desempate.get(b)! - desempate.get(a)!,
   );
+  orden.forEach((l, i) => (l.puestoIniciativa = i));
   log(ctx, () => `Iniciativa: ${orden.map((l) => `${l.ficha.nombre} ${l.iniciativa} [${tiradas!.get(l)}]${l.defensaTotal ? ' (defensa total)' : ` (${l.ataquesDeclarados} at.)`}`).join(', ')}`,
     () => ({ orden: orden.map((l) => nro(ctx, l)) }));
   for (const a of vivos)
