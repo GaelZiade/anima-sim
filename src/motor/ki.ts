@@ -712,7 +712,13 @@ function conValorAparte(e0: EfectoTecnica): EfectoTecnica {
   const delante = /^([+\-]?\d+)\s+(.+)$/.exec(e.nombre);
   const detras = /^(.+?)\s+((?:calidad\s+|rf\s+|presa\s+)?[+\-x]?\s?\d[\d.]*(?:\s*(?:metros?|kil[oó]metros?|km|pv|rf|ta))?)$/i.exec(e.nombre);
   const [nombre, valor] = delante ? [delante[2], delante[1]] : detras ? [detras[1], detras[2]] : [e.nombre, ''];
-  return valor && CATALOGO[normalizarRasgo(nombre)] ? { ...e, nombre, opciones: [valor, ...e.opciones] } : e;
+  if (valor && CATALOGO[normalizarRasgo(nombre)]) return { ...e, nombre, opciones: [valor, ...e.opciones] };
+  // Un Estado escrito suelto con su Resistencia ("Drenaje de Ki 160 RF", "Miedo RF 120"): es un
+  // efecto de Estados sobrenaturales (Dominus p.66).
+  const estado = /^(.+?)\s+(?:(\d+)\s*rf|rf\s*(\d+))$/i.exec(e.nombre);
+  if (estado && NOMBRES_ESTADO.some(([re]) => re.test(normalizarRasgo(estado[1]))))
+    return { ...e, nombre: 'estados sobrenaturales', opciones: [estado[1], `RF ${estado[2] ?? estado[3]}`, ...e.opciones] };
+  return e;
 }
 
 /** Efectos de una técnica, ya interpretados. */

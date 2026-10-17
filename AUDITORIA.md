@@ -367,6 +367,7 @@ Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambi�
 | 114 | Una planilla sin Unificación de puntos de Ki se simulaba en silencio | Se avisa en el registro (Dominus p.8; decisión del usuario) | `hoja/ficha.ts`, `combate.ts` |
 | 115 | Tabla 51: los tramos se tomaban de la tabla publicada | Verificados en el manual (Core p.96, la tabla lleva el título debajo) | `reglas.ts` |
 | 116 | Custodium, Armas adicionales y Proyectiles de las Armas físicas de Ki sin simular | Simulados (Dominus p.29, p.63) | `ki.ts`, `combate.ts`, `rotura.ts`, `combate-ki.ts` |
+| 117 | "Drenaje de Ki 160 RF" (un Estado suelto con su RF) no se leía | Se lee como Estados sobrenaturales: las 132 técnicas de ejemplo se leen (Dominus p.66) | `ki.ts` |
 | 111 | Aikido sumaba la Fuerza del rival con el daño de otro arte y contra cualquiera; Hakyoukuken y Mushin contra cualquiera | `danoSinArmasDe`, `humanoide`, `organico` (Dominus p.29, p.31-32, p.42). Cambia Kiran (siete artes, daño de otra) | `estilos.ts`, `calculos.ts`, `ia.ts` |
 
 **Decisiones del usuario** sobre lo que la regla no precisa: DISENO.md, "Auditoría del combate"

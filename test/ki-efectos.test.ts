@@ -743,6 +743,13 @@ describe('Espejismo y Armas físicas de Ki (Dominus p.63-66)', () => {
     expect([f.ataque, f.danoBase, f.arma!.calidad]).toEqual([armado.ataque + 10, armado.danoBase + 20, 10]);
   });
 
+  it('un Estado escrito suelto con su RF ("Drenaje de Ki 160 RF") es un Estado sobrenatural (Dominus p.66)', async () => {
+    const { efectosDe } = await import('../src/motor/ki');
+    const m = efectosDe(tecnica('Sombra', 'Drenaje de Ki 160 RF, Ataque indirecto'));
+    expect(m.accion.estados).toMatchObject([{ estado: 'drenajeKi', rf: 160 }]);
+    expect(m.desconocidos).toEqual([]);
+  });
+
   it('ventajas: Armas adicionales empuña dos iguales (segunda arma); Proyectiles, sus armas a distancia con munición ilimitada (Dominus p.63)', async () => {
     const { capacidades } = await import('../src/motor/rasgos');
     const { fichaConArmaKi } = await import('../src/motor/rotura');

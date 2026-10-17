@@ -1102,8 +1102,8 @@ Custodium da 30 de Ki cuando un aliado queda gravemente herido (bajo un cuarto d
 Caelum: interpretación) y 40 si muere. Armas adicionales empuña dos armas iguales (segunda arma);
 Proyectiles hace también sus armas a distancia, de esa calidad y con munición ilimitada. La IA valora la rotura (la del arma y Aumentar rotura) con la
 misma cuenta que el motor (`pRompe`).
-De las 132 técnicas de ejemplo del Dominus sólo queda sin leer "Drenaje de Ki 160 RF" (un Estado
-escrito fuera de su efecto). Las técnicas a distancia miran la línea de visión y la cobertura, como
+Las 132 técnicas de ejemplo del Dominus se leen todas (un Estado escrito suelto con su RF, como
+"Drenaje de Ki 160 RF", cuenta como Estados sobrenaturales). Las técnicas a distancia miran la línea de visión y la cobertura, como
 los proyectiles.
 
 Velocidad: con Ki la IA evalúa cada técnica con cada maniobra. Tras las optimizaciones exactas (huella
