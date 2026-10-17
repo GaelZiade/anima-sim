@@ -237,6 +237,29 @@ Criterio general: si una regla no dice algo, se aplica la regla general.
    PV si su equipo pierde claramente.
 6. **Rotura**: las armas se controlan en cada parada; la parada sin armas sólo si la defensa tuvo
    éxito; las armas grandes cuentan como a dos manos para Batto jutsu.
+7. **Crítico de más de 100 en un miembro** (Core p.98): queda inservible. El brazo del arma la suelta
+   (desarmado); la pierna lo deja derribado. Qué zona es brazo o pierna sale de la Tabla 51 publicada
+   (51-60, 61-70, 71-90), porque la copia del manual no la trae.
+
+### Auditoría del combate (17/10/2026)
+
+- **Presa:** quien no pudo actuar en el asalto se zafa al final; apresado, atado o con lazos no huye
+  (Core p.92, p.94). Un zafarse fallido le hace perder el asalto (a confirmar).
+- **Flanco y espalda:** un ataque a distancia o en área de quien no está trabado llega de frente
+  (Core p.90).
+- **Contra:** la pifia la da sólo en cuerpo a cuerpo y en alcance; el fascinado no contraataca
+  (Core p.98, p.233).
+- **Proyectiles:** recarga y cadencia con Trucos de manos; el motor valida la forma de disparar que
+  propone la IA (Core p.94, p.97).
+- **Inconsciencia:** el −40 mira el tipo de crítico del golpe (Core p.92).
+- **Soo Bahk:** el modo base sólo reduce lo de defensa; el supremo conserva el −10 al turno derribado
+  (Dominus p.38).
+- **Rotura de armadura:** se recalcula con las capas combinadas (Core p.83).
+- **Carga:** sólo si el asalto anterior corrió hacia un enemigo (Core p.90).
+- **Tabla 41:** máximo de acciones activas por Destreza + Agilidad, si la planilla las trae (Core p.85).
+  La IA todavía no lo mira al moverse.
+- **Acrobacias** al escapar sufre la columna Acción física de la Tabla 43 (Core p.90).
+- **Engatillar:** atacar al amenazado es una acción pasiva, al empezar su turno (Core p.92).
 
 ### Pendiente
 
@@ -400,8 +423,10 @@ diez lugares.
   (Tabla 76) y `rotura.ts` (opcional). Todos reciben el `Motor`.
 - **La defensa en etapas:** `EVITAN_EL_GOLPE` (lista ordenada: intangible, holograma), la tirada,
   los escudos, `defensaGana` y `golpeQueEntra`.
-- **IA:** `ia.ts` (cuerpo a cuerpo, Ki, distancia), `ia-magia.ts` (turno de magia, escudos) y
-  `efectos/valorar.ts` (lo que comparten las valoraciones de conjuros). Las hipótesis ("¿y si lo
+- **IA:** `ia.ts` (cuerpo a cuerpo, distancia, amenaza), `ia-ki.ts` (técnicas, acumular, defensas
+  del Ki), `ia-magia.ts` (turno de magia, escudos) y `efectos/valorar.ts` (lo que comparten las
+  valoraciones de conjuros). `ia.ts` reexporta `ia-ki`, así que todo se sigue llamando `ia.xxx`.
+  Los cachés de decisión viven en `cache-decision.ts`, que no importa nada (sin ciclos). Las hipótesis ("¿y si lo
   bendigo?") se prueban con `conCambio`, que siempre deshace.
 - **La IA valora con las reglas del motor, no con copias:** `pierdeElAsalto` (tempo),
   `puedeContraatacar` y `riesgoContra` (la contra), `costoTecnica`/`netoTecnica` (una técnica),
@@ -422,6 +447,12 @@ diez lugares.
   entre su golpe con el arma y cada fuente registrada: su mejor técnica de Ki (`ia.ts`) y su mejor
   conjuro con daño repartido entre los asaltos que tarda en juntar el zeon (`ia-magia.ts`). Un dominio
   nuevo (psíquicos) registra la suya y toda la IA lo ve como amenaza.
+- **Lo que vuelve a cero cada asalto** está en `nuevoAsalto(l)` (`combate.ts`), un solo lugar.
+- **Toda técnica pasa por `usarTecnica` y `trasLaTecnica`** (`combate-ki.ts`): pagar, desventajas,
+  usos, sobrecarga y lo que deja. Un camino nuevo que ejecute una técnica las llama y no repite nada.
+- **Sin listas a mano:** `valorEstado` es exhaustivo (un estado nuevo sin valor no compila); qué
+  efectos de Ki cambian el asalto se deriva del catálogo; los opcionales del Ki son un `Record` con
+  tipo.
 - **Controles del compilador:** `noUnusedLocals` y `noUnusedParameters` en `tsconfig.json`.
 
 Para los psíquicos, la idea es copiar el patrón: un catálogo de poderes con datos, un registro de
@@ -695,6 +726,27 @@ combate.
 **Tabla 57 (choque de descargas)**, dada por el usuario (la copia del manual está cortada): diferencia
 1-50, se anulan; 51-100, la ganadora pasa con la mitad del daño base; 101 o más, pasa con el daño
 entero. Se implementa en la parte 3.
+
+### Auditoría de la magia (17/10/2026)
+
+29. Sólo un ataque en Energía (TA ENE) daña energía (Core p.122); el resto de los conjuros no daña a
+    lo que sólo se toca con energía.
+30. Sin poder gesticular (apresado, atado, lazos, parálisis 2 o más) la ACT se reduce a la mitad
+    (Core p.117).
+31. El choque de descargas sólo entre descargas con daño (Core p.119). Escudo de Luz detiene el doble
+    contra la oscuridad (dato del catálogo, `naturaleza`).
+32. Un escudo lanzado con pifia fracasa, salvo Seguridad Defensiva (Core p.118, Arcana p.27).
+33. Éxtasis y los demás efectos que se resisten cada tanto: RM cada 5 asaltos, o cada 10 con Efectos
+    Persistentes (Core p.123, Arcana p.24).
+34. Una descarga parada controla rotura con daño/20 (Core p.122).
+35. Varias esferas de Conjuro Especialista sobre el mismo conjuro se suman (Arcana p.30).
+36. El cupo de Campeón es un dato del catálogo (`cupoPorGrupo`).
+37. La IA defiende contra un conjuro con lo mejor entre la defensa física y el escudo, si el escudo
+    lo detiene (la regla del motor).
+
+**Pendiente de decidir (preguntado al usuario):** si elegir blancos dentro de un área es libre salvo
+que el conjuro lo prohíba (hoy pide Control del Espacio, como generalizó DISENO), si la Bola de Fuego
+alcanza a quien la lanza, y si la IA usa varios conjuros preparados a la vez.
 
 ## Proyectiles (fase 4)
 
@@ -1017,7 +1069,8 @@ Lo que todavía no se simula: el Sacrificio de Características del Aumento de d
 los valores finales y no se recalculan al perder atributos), las Habilidades psíquicas (Interrupción
 y RP sólo cuentan para lo que existe), Armas adicionales y Proyectiles de las Armas físicas de Ki,
 Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices, Custodium y la
-Transmisión del Ki (marionetas). La IA no valora la rotura (ni la del arma ni Aumentar rotura).
+Transmisión del Ki (marionetas). La IA valora la rotura (la del arma y Aumentar rotura) con la
+misma cuenta que el motor (`pRompe`).
 De las 132 técnicas de ejemplo del Dominus sólo queda sin leer "Drenaje de Ki 160 RF" (un Estado
 escrito fuera de su efecto). Las técnicas a distancia miran la línea de visión y la cobertura, como
 los proyectiles.

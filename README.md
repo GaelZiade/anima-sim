@@ -28,7 +28,7 @@ npm test
 ## Cómo correrlo
 
 ```bash
-npm test                                     # 354 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
+npm test                                     # 363 tests: reglas, flujo del combate, mapa, Ki, magia, planillas
 npm run dev                                  # la página en http://localhost:5173
 npm run sim -- ejemplos/duelo.json           # Monte Carlo por consola, todos los núcleos
 npm run sim -- ejemplos/mesa.json 20000 --hilos=4 --semilla=7
@@ -115,7 +115,8 @@ src/motor/      el motor (sin DOM)
   calculos.ts     habilidades finales con todos los modificadores (Tabla 43, Dominus Tabla 1, ceguera, Ki)
   combate.ts      el combate: iniciativa, sorpresa, turnos, atacar/defender, daño, críticos, registro
   golpe.ts        tipos del golpe que se resuelve contra una defensa (físico, Ki, conjuro)
-  ia.ts           decisiones de la IA (declarar, objetivo, maniobra, cansancio, resistir, Ki)
+  ia.ts           decisiones de la IA (declarar, objetivo, maniobra, cansancio, resistir, distancia)
+  ia-ki.ts        IA del Ki: técnicas, acumular, defensas; cache-decision.ts: memoria por decisión
   ia-magia.ts     IA de la magia: qué lanzar, acumular o preparar, escudos
   magia.ts        zeon, ACT, lanzar y mantener, beneficios (bendecir), Tabla 76
   conjuros.ts, grimorio.ts   catálogo de conjuros (datos) y grimorio generado de la planilla
@@ -143,7 +144,7 @@ fichas/         planillas reales de la mesa
 Tabla 43 entera con la Tabla 1 del Dominus), combate con proyectiles (arcos, ballestas, armas de
 fuego, arrojadizas) y línea de visión, Ki completo (todos los efectos del Dominus cap. 5 con sus
 ventajas y desventajas, Combinables, Forzar, habilidades activas del Ki y su Detección, Límites, Leo),
-auditoría contra los manuales (tres tandas: reglas, estructura, y la IA valorando con las mismas reglas que el motor), mapa en grilla con paredes y terreno infranqueable, página con compendio, editor de mapa,
+auditoría contra los manuales (cuatro tandas, la última de todo el sistema: reglas, estructura, y la IA valorando con las mismas reglas que el motor), mapa en grilla con paredes y terreno infranqueable, página con compendio, editor de mapa,
 Monte Carlo en paralelo y combate en vivo animado.
 
 **Personajes de la mesa** (`fichas/`): Kaito, Teseo, Kiran, Kael, Isana (tao), Stéphan, Rita (planilla
@@ -161,7 +162,10 @@ habilidades del Ki (Absorción, Armadura mayor, Aura, Curación).
 3. Confirmar las interpretaciones propias del Ki (DISENO.md, "Interpretaciones propias"): frenar la
    retirada por Transporte, el arma que crea un Arma física de Ki, cómo reparte los ataques el
    Espejismo y las desventajas de ambientación dadas por cumplidas.
-4. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
+4. Decidir lo que dejó abierto la auditoría del 17/10 (AUDITORIA.md, sección 10): blancos dentro de
+   un área, la Bola de Fuego sobre el mago, zafarse fallido, el costo del Sacrificio de
+   Características.
+5. Detalles abiertos: lo poco que no se simula del Ki y de los proyectiles (DISENO.md, "Pendiente del
    Ki"). Las reglas que faltaban de AUDITORIA.md sección 3 están todas.
 
 **Decisiones del usuario que conviene no reabrir:** la Tabla 25 se corre a tope desde parado; el combate desarmado es Precisa y apunta a la

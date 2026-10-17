@@ -296,3 +296,42 @@ cambia; todos tienen tests en `test/ki-efectos.test.ts`.
 
 Interpretaciones nuevas y lo que sigue sin simular: DISENO.md, "Ki", "Interpretaciones" y
 "Pendiente del Ki".
+
+## 10. Cuarta auditoría: todo el sistema (17/10/2026)
+
+Tres revisiones en paralelo (magia, combate, estructura y velocidad) contra los manuales. Cada regla
+tiene test; la huella cambió sólo en los commits de reglas, nunca en los de estructura o velocidad.
+
+| # | Qué estaba mal | Cómo quedó | Dónde |
+|---|---|---|---|
+| 71 | La IA no valoraba la rotura | Probabilidad de romper con la regla del motor (`pRompe`) (Core p.93) | `rotura.ts`, `ia.ts` |
+| 72 | Todo conjuro dañaba energía | Sólo con TA ENE (Core p.122) | `combate-magia.ts` |
+| 73 | ACT entera sin poder gesticular | A la mitad apresado, atado, con lazos o parálisis 2+ (Core p.117) | `magia.ts` |
+| 74 | Choque de descargas sin daño; Escudo de Luz igual contra todo | Sólo con daño (Core p.119); doble contra oscuridad | `combate-magia.ts`, `conjuros.ts` |
+| 75 | Escudo lanzado con pifia funcionaba | Fracasa salvo Seguridad Defensiva (Core p.118, Arcana p.27) | `combate-magia.ts`, `hoja/ficha.ts` |
+| 76 | Éxtasis no se volvía a resistir | RM cada 5 asaltos, 10 con Efectos Persistentes (Core p.123, Arcana p.24) | `efectos/` |
+| 77 | La descarga parada no rompía armas | Rotura con daño/20 (Core p.122) | `rotura.ts` |
+| 78 | Conjuro Especialista repetido contaba una vez | Se suman (Arcana p.30) | `conjuros.ts` |
+| 79 | La IA de escudos copiaba la regla | Usa la del motor; usos y metamagia una vez por decisión | `ia-magia.ts` |
+| 80 | Presa: el que no actuó no se zafaba; apresado huía | Se zafa al final del asalto; no huye (Core p.92, p.94) | `combate.ts` |
+| 81 | Ataque a distancia de quien no está trabado contaba flanco | Llega de frente (Core p.90) | `combate.ts` |
+| 82 | Pifia daba contra a distancia; el fascinado contraatacaba | Sólo en alcance; no contraataca (Core p.98, p.233) | `combate.ts` |
+| 83 | Trucos de manos no acortaba recarga ni cadencia | Sí; el motor valida la forma de disparar (Core p.94, p.97) | `proyectiles.ts` |
+| 84 | Inconsciencia miraba el crítico del arma | El del golpe (Core p.92) | `maniobras.ts` |
+| 85 | Crítico de más de 100 en un miembro sin efecto | Inservible: desarma o derriba (Core p.98) | `combate.ts`, `valoracion.ts` |
+| 86 | Soo Bahk base reducía también el ataque | Sólo defensa; supremo conserva el −10 derribado (Dominus p.38) | `estilos.ts` |
+| 87 | Rotura de armadura ignoraba las capas | Recalcula con `combinarTA` (Core p.83) | `rotura.ts` |
+| 88 | Carga sin haber corrido | Sólo tras avanzar hacia un enemigo (Core p.90) | `maniobras.ts` |
+| 89 | Sin límite de acciones activas | Tabla 41 por DES + AGI (Core p.85) | `reglas.ts`, `combate.ts` |
+| 90 | Acrobacias al escapar sin la Tabla 43 | Columna Acción física (Core p.90) | `calculos.ts` |
+| 91 | Engatillar gastaba una acción activa | Pasiva, al empezar el turno del amenazado (Core p.92) | `combate.ts` |
+| 92 | Caminos de técnicas que no pagaban todo | Todos por `usarTecnica`/`trasLaTecnica` | `combate-ki.ts` |
+
+**Estructura y velocidad (huella idéntica):** `ia.ts` partido (`ia-ki.ts`, `cache-decision.ts`);
+`nuevoAsalto`; registros exhaustivos sin listas a mano; `dijkstra` sólo recorre las celdas que tocó;
+`cegueraContra` y `vistaPrevia` sin trabajo repetido; la IA reusa la preparación de cada base.
+
+**Abierto, a decidir por el usuario:** blancos dentro de un área (libre o con Control del Espacio);
+si la Bola de Fuego alcanza al mago; varios conjuros preparados; si zafarse fallido pierde el asalto;
+el +3 de los cuadrúpedos (las planillas no lo dicen); el costo para la IA del Sacrificio de
+Características. **Sigue en estructura:** partir `combate.ts`, un registro único de estados.

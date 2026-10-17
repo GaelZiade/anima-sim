@@ -3,6 +3,19 @@
 Todo lo que cambió desde que el proyecto pasó a GitHub (13/10/2026), lo más nuevo arriba. Para
 retomar el trabajo, empezar por README.md.
 
+## 17/10/2026: auditoría de todo el sistema (magia, combate, estructura)
+
+- **Magia** (AUDITORIA.md 10, 72 a 79): sólo Energía daña energía, ACT a la mitad sin gestos,
+  choque sólo con daño, Escudo de Luz contra oscuridad, escudo con pifia, Éxtasis resistido cada 5
+  asaltos, rotura por descargas, Conjuro Especialista sumado, IA de escudos con la regla del motor.
+- **Combate** (80 a 92): presa y zafarse, frente para quien dispara de lejos, pifia y contra,
+  Trucos de manos, inconsciencia, miembros inservibles, Soo Bahk, rotura de armadura, carga,
+  Tabla 41, Acrobacias, Engatillar.
+- **IA:** valora la rotura de armas; habilidad fija en una sola cuenta (`sinDado`).
+- **Estructura:** `ia-ki.ts` y `cache-decision.ts`; `nuevoAsalto`; toda técnica por `usarTecnica`;
+  registros exhaustivos.
+- **Velocidad:** `dijkstra`, `cegueraContra`, `vistaPrevia` y `base().prep` sin trabajo repetido.
+
 ## 16/10/2026: Ki completo (todos los efectos del Dominus)
 
 - **Detección del Ki:** una tirada por asalto; localiza hasta el radio que da.
