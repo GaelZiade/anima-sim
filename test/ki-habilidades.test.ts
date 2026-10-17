@@ -77,10 +77,10 @@ describe('Recuperación (Core p.105)', () => {
 });
 
 describe('Dominio físico (Dominus p.22)', () => {
-  it('+10 a la RF contra críticos', () => {
-    const l = crearLuchador(maestro(['Dominio fisico']), 'A', 0, 0);
-    expect(l.cap.est.bonoRfDano).toBe(10);
-    expect(crearLuchador(maestro([]), 'A', 0, 0).cap.est.bonoRfDano).toBe(0);
+  it('el +10 a la RF ya viene en la planilla: no se suma de nuevo', async () => {
+    const { rfDe } = await import('../src/motor/calculos');
+    const con = crearLuchador(maestro(['Dominio fisico']), 'A', 0, 0);
+    expect(rfDe(con)).toBe(con.ficha.rf);
   });
 });
 

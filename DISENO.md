@@ -907,7 +907,7 @@ Forzar Técnicas, la versión forzada de cada una. La IA elige entre todas con l
 | Armadura de energía mayor | La planilla ya trae TA 4 contra energía; apagada vuelve a TA 2. La IA la enciende (1 de Ki al encenderla y cada 5 asaltos) si algún rival ataca con energía | Dominus p.19 |
 | Armadura de energía arcana | TA 4 gratis; TA 6 pagando como la mayor | Dominus p.19 |
 | Recuperación | 5 de Ki por 1 de cansancio, uno por asalto | Core p.105 |
-| Dominio físico | +10 a la RF contra críticos y estados | Dominus p.22 |
+| Dominio físico | +10 a la RF: ya viene en la de la planilla (no se suma de nuevo) | Dominus p.22 |
 | Aura de combate | Control de Presencia + d100 de los enemigos sensibles (Presencia menor a la suya −10) contra la dificultad; afectado (−10), miedo o parálisis según el fracaso, desvanecido con 100 o más. Gratis, 1 de Ki cada 5 asaltos | Dominus p.20-22, Tabla 9 |
 | Absorción de energía | 1 de Ki por cada 5 de daño de energía | Dominus p.20 |
 | Curación por Ki / superior | 2 o 5 PV por Ki, nunca más de la mitad del daño sufrido; una acción activa en lugar de un ataque | Core p.104, Dominus p.20 |

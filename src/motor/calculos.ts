@@ -974,9 +974,12 @@ export function frialdadDe(l: Luchador): number {
 
 // --------------------------------------------------------------------------- Resistencias
 
-/** RF de la ficha con lo que la sube contra el daño (ventajas y artes marciales). Las Resistencias no sufren el negativo a toda acción (Core p.232). */
+/**
+ * RF de la ficha. La de la planilla ya trae el +10 de Dominio físico (Dominus p.22): no se vuelve a
+ * sumar. Las Resistencias no sufren el negativo a toda acción (Core p.232).
+ */
 export function rfBase(l: Luchador): number {
-  return l.ficha.rf + l.cap.est.bonoRfDano;
+  return l.ficha.rf;
 }
 
 /**

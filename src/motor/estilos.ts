@@ -182,8 +182,6 @@ export interface Estilos {
   criticoAutomatico: boolean;
   /** Sangre de Toa: +10 a la RF contra críticos (p.78). */
   bonoRfCritico: number;
-  /** Dominio físico: +10 a la RF contra cualquier tipo de daño (Dominus p.22). */
-  bonoRfDano: number;
   /** Sangre Eterna: sin puntos vulnerables; consciente hasta −20×CON (p.80). */
   sangreEterna: boolean;
   /** Sangre de Orochi: puede despertar la sangre (+20 combate y turno, −2 PV por asalto) (p.81). */
@@ -342,7 +340,6 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     diferenciaSorpresa: legado('Uroboros') ? 100 : 150,
     criticoAutomatico: legado('Ojos de la Muerte'),
     bonoRfCritico: legado('Toa') ? 10 : 0,
-    bonoRfDano: tiene(r.habilidadesKi, 'dominio fisico') ? 10 : 0,
     sangreEterna: legado('Sangre Eterna'),
     orochi: legado('Orochi'),
     elementoAfin: aeon ? TA_DE_AEON[aeon] : null,
