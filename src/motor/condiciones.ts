@@ -31,6 +31,18 @@ export function nivelParalisis(l: Luchador): 0 | 1 | 2 | 3 {
   return Math.max(l.paralisisPresa, nivelCondicion(l, 'paralisis')) as 0 | 1 | 2 | 3;
 }
 
+/**
+ * Ceguera propia que vale para las reglas (0 nada, 1 parcial, 2 absoluta): la peor entre la de la
+ * planilla y la condición. Cegado por un destello, el asalto previo a recuperar la vista es sólo
+ * parcial (Core p.233). La oscuridad y la invisibilidad dependen del rival: `cegueraContra`.
+ */
+export function nivelCeguera(l: Luchador): 0 | 1 | 2 {
+  const c = l.condiciones.ceguera;
+  const deCondicion = !c ? 0 : c.destello && c.asaltos === 1 ? 1 : c.nivel >= 2 ? 2 : 1;
+  const dePlanilla = l.ficha.estados?.ceguera === 'absoluta' ? 2 : l.ficha.estados?.ceguera ? 1 : 0;
+  return Math.max(deCondicion, dePlanilla) as 0 | 1 | 2;
+}
+
 /** Le pone (o reemplaza) una condición. Cómo se combina con la que ya tenía lo decide quien la impone. */
 export function imponer(l: Luchador, tipo: TipoCondicion, c: Condicion) {
   l.condiciones[tipo] = c;
@@ -79,8 +91,9 @@ export function estadoVisible(l: Luchador): string[] {
     if (e) r.push(e);
   }
   for (const tipo of Object.keys(NOMBRE_NIVEL) as TipoCondicion[]) {
-    // La parálisis de una presa y la inducida se muestran como una, la peor.
-    const nivel = tipo === 'paralisis' ? nivelParalisis(l) : nivelCondicion(l, tipo);
+    // La parálisis de una presa y la inducida se muestran como una, la peor; la ceguera de la
+    // planilla y la de un destello, también.
+    const nivel = tipo === 'paralisis' ? nivelParalisis(l) : nivelCeguera(l);
     if (nivel) r.push(NOMBRE_NIVEL[tipo][nivel]);
   }
   return r;

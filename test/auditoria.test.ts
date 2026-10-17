@@ -12,7 +12,7 @@ import { roturaEnParada } from '../src/motor/rotura';
 import { crearRng } from '../src/motor/rng';
 import { SIN_KI } from '../src/motor/ki';
 import { actDe, hacerOtraAccion } from '../src/motor/magia';
-import { imponer } from '../src/motor/condiciones';
+import { imponer, nivelCeguera } from '../src/motor/condiciones';
 import { aplicarEstado } from '../src/motor/efectos/estados';
 import type { Motor } from '../src/motor/efectos/tipos';
 import type { Contexto } from '../src/motor/modelo';
@@ -148,6 +148,14 @@ describe('respuestas a la auditoría', () => {
     def.paralisisPresa = 3;
     expect(defensaFinal(def, espalda)).toBe(defensaFinal(def, frente));
     def.paralisisPresa = 0;
+    // La ceguera de la planilla y la de un destello son una sola (la peor); el último asalto del destello, parcial (Core p.233).
+    const ciego = crearLuchador(ficha('Ciego'), 'A', 0, 0);
+    imponer(ciego, 'ceguera', { nivel: 2, asaltos: 2, destello: true });
+    expect(nivelCeguera(ciego)).toBe(2);
+    ciego.condiciones.ceguera!.asaltos = 1;
+    expect(nivelCeguera(ciego)).toBe(1);
+    ciego.ficha = { ...ciego.ficha, estados: { ceguera: 'absoluta' } };
+    expect(nivelCeguera(ciego)).toBe(2);
     // La inducida (Mushin, un Estado) vale igual.
     imponer(def, 'paralisis', { nivel: 3, asaltos: 2 });
     expect(defensaFinal(def, espalda)).toBe(defensaFinal(def, frente));

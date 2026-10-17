@@ -15,7 +15,7 @@ import { MEDIA_TIRADA, sinDado } from './dados';
 import type { ParadaArea } from './golpe';
 import { fichaConArmaKi } from './rotura';
 import { rpDe } from './magia';
-import { nivelCondicion } from './condiciones';
+import { nivelCeguera } from './condiciones';
 import { ESTADOS_DE_ANIMO } from './efectos/estados';
 import {
   asaltosParaJuntar, combinar, costeKi, curable, efectosDe, presenciaBase, fichaConAumento, habilidadesKi, modDeAccion, sensibleAlAura, radioAura, puedeEjecutar, puedePonerEnEspera, SIN_KI, tecnicasPara,
@@ -205,7 +205,7 @@ function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golp
     case 'dolor': return def.ficha.estados?.dolor ? 0 : p * valorNegativo(atk, def, 40, golpes, 0) * 2;
     case 'dolorExtremo': return def.ficha.estados?.dolor === 'extremo' ? 0 : p * valorNegativo(atk, def, 80, golpes, 0) * 2;
     case 'miedo': return def.ficha.estados?.miedo ? 0 : p * valorNegativo(atk, def, 60, golpes, 0) * 2;
-    case 'ceguera': return def.ficha.estados?.ceguera === 'absoluta' || nivelCondicion(def, 'ceguera') >= 2 ? 0 : p * valorNegativo(atk, def, 90, golpes, 0) * 2;
+    case 'ceguera': return nivelCeguera(def) >= 2 ? 0 : p * valorNegativo(atk, def, 90, golpes, 0) * 2;
     case 'penalizacionMenor': return p * valorNegativo(atk, def, medio, golpes, 0);
     case 'penalizacionMayor': return p * valorNegativo(atk, def, medio, golpes, 0) * 2;
     case 'paralisisParcial': return p * valorNegativo(atk, def, 80, golpes, 0) * Math.min(2, medio / 2);

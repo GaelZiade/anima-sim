@@ -13,7 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
-import { condicion, nivelParalisis } from './condiciones';
+import { nivelCeguera, nivelParalisis } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
 
@@ -211,8 +211,7 @@ export function quedanAccionesActivas(l: Luchador, mas = 0): boolean {
  * reducido −20. Las parálisis no se suman: vale la peor.
  */
 export function penAccionFisica(l: Luchador): number {
-  const c = condicion(l, 'ceguera');
-  const ceguera = (c && c.nivel >= 2) || l.ficha.estados?.ceguera === 'absoluta' ? 90 : c || l.ficha.estados?.ceguera ? 30 : 0;
+  const ceguera = [0, 30, 90][nivelCeguera(l)];
   const paralisis = nivelParalisis(l);
   return ceguera + (l.derribado ? 30 : 0) + [0, 40, 60, 200][paralisis] + (l.amenazadoPor ? 100 : 0) +
     (l.ficha.estados?.levitando ? 60 : 0) + (l.entorno.espacioReducido ? 20 : 0);
@@ -271,13 +270,10 @@ function cegueraPorOscuridad(l: Luchador): Ceguera {
  */
 export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): Ceguera {
   // Lo más común (está en el camino más caliente): nada que lo ciegue.
-  const c = condicion(l, 'ceguera');
-  if (!c && !invisible && !l.ficha.estados?.ceguera && !rival.bono?.invisible && !l.entorno.oscuridad) return SIN_CEGUERA;
-  // Cegado por un destello: el asalto previo a recuperar la vista, sólo ceguera parcial (Core p.233).
-  const destello = !c ? undefined : c.destello && c.asaltos === 1 ? 'parcial' : c.nivel >= 2 ? 'absoluta' : 'parcial';
-  const propia = destello === 'absoluta' || l.ficha.estados?.ceguera === 'absoluta' ? 'absoluta' : destello ?? l.ficha.estados?.ceguera;
+  if (!l.condiciones.ceguera && !invisible && !l.ficha.estados?.ceguera && !rival.bono?.invisible && !l.entorno.oscuridad) return SIN_CEGUERA;
+  const propia = nivelCeguera(l);
   const casos: Ceguera[] = [
-    propia ? { nivel: propia === 'absoluta' ? 2 : 1, factor: 1, localiza: false } : SIN_CEGUERA,
+    propia ? { nivel: propia, factor: 1, localiza: false } : SIN_CEGUERA,
     cegueraPorOscuridad(l),
     invisible ? { nivel: 2, factor: 1, localiza: false } : SIN_CEGUERA,
     // Invisibilidad (Core p.190): si no superó Advertir no lo ve; si lo superó, nota las alteraciones (parcial).
@@ -288,7 +284,7 @@ export function cegueraContra(l: Luchador, rival: Luchador, invisible = false): 
   // Detección del Ki: si este asalto lo localiza (`detectarPresencias`), pelea como con ceguera parcial (Dominus p.11).
   if (peor.nivel === 2 && l.radioDeteccionKi > 0 && distancia(l, rival) <= l.radioDeteccionKi) return { nivel: 1, factor: 1, localiza: true };
   // Ojos de la Muerte ve las líneas de los invisibles: contra ellos, sólo ceguera parcial (Dominus p.78).
-  if (peor.nivel === 2 && l.cap.est.criticoAutomatico && (invisible || rival.bono?.invisible) && propia !== 'absoluta' && cegueraPorOscuridad(l).nivel < 2)
+  if (peor.nivel === 2 && l.cap.est.criticoAutomatico && (invisible || rival.bono?.invisible) && propia < 2 && cegueraPorOscuridad(l).nivel < 2)
     return { nivel: 1, factor: 1, localiza: false };
   return peor;
 }
