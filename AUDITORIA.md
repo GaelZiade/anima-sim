@@ -373,3 +373,12 @@ Las dos partes que faltaban revisar. Cada regla con test; la huella sólo cambi�
 **Decisiones del usuario** sobre lo que la regla no precisa: DISENO.md, "Auditoría del combate"
 (posición superior, Pankration, Dominio físico, Aura, Selene, armas de dos tipos, Aeones sin TA,
 Unificación del Ki). No queda ninguna interpretación abierta de esta auditoría.
+
+## Cierre (17/10/2026)
+
+Decidido por el usuario: la auditoría termina acá. Ya no quedan reglas mal aplicadas conocidas ni
+interpretaciones abiertas. Lo que no se simula es un dominio nuevo (poderes psíquicos, el próximo
+paso del README) o reglas sin efecto en un combate del simulador (Transmisión del Ki con marionetas,
+Modificación de aspecto del Espejismo, Visión radial, de magia y de matrices). `organico` y
+`humanoide` valen sí por defecto (todos los de la mesa son humanos); para criaturas se cargan en el
+JSON de la ficha.
