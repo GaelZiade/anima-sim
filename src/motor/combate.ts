@@ -75,7 +75,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
     ataquesDeclarados: 1, planAtaques: [], ataquesRestantes: 0, defensasHechas: 0, cansancioAsalto: 0,
     movioActivo: false, accionesActivas: 0, metrosMovidos: 0, movioAsaltoAnterior: false, avanzoHaciaEnemigo: false, cargando: false, sorprendeA: new Set(), previene: new Set(), previenePendiente: new Set(), planResistir: null,
-    derribado: false, paralisis: 0, apresadoPor: null, apresando: null, desarmado: false,
+    derribado: false, paralisisPresa: 0, apresadoPor: null, apresando: null, desarmado: false,
     condiciones: {}, aura: null, curado: 0, amenazadoPor: null, enfundada: false, huyendo: false,
     estiloDefensivo: false,
     modo: { seraphite: 0, berserker: false, ataqueFinal: false },
@@ -901,9 +901,9 @@ function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derrib
     soltar(def);
     def.apresadoPor = atk;
     def.presaExistencial = !!kiAtk?.presaExistencial && !!apresamiento;
-    def.paralisis = gradoPresa(dif);
+    def.paralisisPresa = gradoPresa(dif);
     atk.apresando = def;
-    log(ctx, () => `  ${def.ficha.nombre} queda apresado (${['', 'parálisis menor', 'parálisis parcial', 'parálisis completa'][def.paralisis]}).`);
+    log(ctx, () => `  ${def.ficha.nombre} queda apresado (${['', 'parálisis menor', 'parálisis parcial', 'parálisis completa'][def.paralisisPresa]}).`);
   } else desarmar(ctx, def, atk);
 }
 
@@ -932,7 +932,7 @@ function soltar(l: Luchador) {
   if (l.apresadoPor) l.apresadoPor.apresando = null;
   l.apresadoPor = null;
   l.presaExistencial = false;
-  l.paralisis = 0;
+  l.paralisisPresa = 0;
   l.atadura = 0;
 }
 
@@ -962,7 +962,7 @@ function zafarse(ctx: Contexto, l: Luchador): boolean {
     soltar(l);
     return true;
   }
-  if (l.paralisis >= 3) return false; // presa perfecta: ya no puede librarse
+  if (l.paralisisPresa >= 3) return false; // presa perfecta: ya no puede librarse
   const yo = mejorCaracteristica(l, l.presaExistencial ? ['POD'] : ['FUE', 'AGI']) - captor.cap.est.penZafarse + l.cap.est.resistePresaDerribo + modControl(l);
   // Quien presa con un arma con regla Presa sostiene con la Fuerza del arma (Core p.76); con una
   // técnica de Apresamiento mantenida, con su valor (Dominus p.65).

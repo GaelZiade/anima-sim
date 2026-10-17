@@ -26,6 +26,11 @@ export function nivelCondicion(l: Luchador, tipo: TipoCondicion): number {
   return condicion(l, tipo)?.nivel ?? 0;
 }
 
+/** Parálisis que vale para las reglas: la peor entre la de una presa y la inducida (no se suman). */
+export function nivelParalisis(l: Luchador): 0 | 1 | 2 | 3 {
+  return Math.max(l.paralisisPresa, nivelCondicion(l, 'paralisis')) as 0 | 1 | 2 | 3;
+}
+
 /** Le pone (o reemplaza) una condición. Cómo se combina con la que ya tenía lo decide quien la impone. */
 export function imponer(l: Luchador, tipo: TipoCondicion, c: Condicion) {
   l.condiciones[tipo] = c;
@@ -74,8 +79,8 @@ export function estadoVisible(l: Luchador): string[] {
     if (e) r.push(e);
   }
   for (const tipo of Object.keys(NOMBRE_NIVEL) as TipoCondicion[]) {
-    // La parálisis de una presa (l.paralisis) y la inducida se muestran como una, la peor.
-    const nivel = tipo === 'paralisis' ? Math.max(l.paralisis, nivelCondicion(l, tipo)) : nivelCondicion(l, tipo);
+    // La parálisis de una presa y la inducida se muestran como una, la peor.
+    const nivel = tipo === 'paralisis' ? nivelParalisis(l) : nivelCondicion(l, tipo);
     if (nivel) r.push(NOMBRE_NIVEL[tipo][nivel]);
   }
   return r;

@@ -15,7 +15,7 @@ import { planDeAtaques, type Ranura } from './rasgos';
 import { dificultadAtrapar, formasDeDisparar, puedeAtrapar, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import { enterezaArma, pRompe, roturaDe } from './rotura';
-import { nivelCondicion } from './condiciones';
+import { nivelParalisis } from './condiciones';
 import {
   nivelMenos, dificultadDestruccion, presenciaBase, habilidadesKi, modDeAccion, SIN_KI, tecnicasPara,
   vistaPrevia, type ModKi } from './ki';
@@ -1405,7 +1405,7 @@ export function retroceso(ctx: Contexto, l: Luchador, blanco: Luchador, i: numbe
 
 /** Puede moverse este asalto (no está apresado ni paralizado del todo). */
 function puedeAvanzar(e: Luchador): boolean {
-  return !e.apresadoPor && e.paralisis < 3 && nivelCondicion(e, 'paralisis') < 3 && metrosTotales(e) > 0;
+  return !e.apresadoPor && nivelParalisis(e) < 3 && metrosTotales(e) > 0;
 }
 
 /** Contraataque a quien lo atacó desde lejos: con un arma a distancia cargada que lo alcance y lo vea. */

@@ -10,6 +10,7 @@ import { penAccion } from './calculos';
 import { umbralPifia, type TipoAtaque } from './reglas';
 import { conIncremento, SIN_KI, type ModKi } from './ki';
 import { normalizarRasgo, type Ranura } from './rasgos';
+import { nivelParalisis } from './condiciones';
 
 /** Un conjuro mantenido: lo paga cada asalto de la reserva, sin tocar el ACT (Core p.121). */
 export interface Mantenido {
@@ -174,9 +175,9 @@ export function actDe(l: Luchador): number {
   return Math.max(0, base - pen);
 }
 
-/** No puede mover los brazos: apresado, atado, con Lazos de Luz o con parálisis parcial o completa. */
+/** No puede mover los brazos: apresado, atado, con Lazos de Luz o con parálisis parcial o completa (de una presa o inducida). */
 function sinGestos(l: Luchador): boolean {
-  return !!l.apresadoPor || l.atadura > 0 || !!l.lazos || l.paralisis >= 2;
+  return !!l.apresadoPor || l.atadura > 0 || !!l.lazos || nivelParalisis(l) >= 2;
 }
 
 /** Su ACT este asalto preparando ese conjuro: +10 por cada esfera de Conjuro Especialista en él (Arcana p.30). */

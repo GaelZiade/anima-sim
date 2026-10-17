@@ -105,7 +105,7 @@ describe('maniobras (Core p.91-92)', () => {
     l.derribado = true;
     expect(modEstados(l)).toEqual({ ataque: -30, parada: -30, esquiva: -30, turno: -10 });
     l.derribado = false;
-    l.paralisis = 2;
+    l.paralisisPresa = 2;
     expect(modEstados(l).ataque).toBe(-80);
   });
 
@@ -129,7 +129,7 @@ describe('maniobras (Core p.91-92)', () => {
 
   it('Hanja arcano: sin penalizador a la defensa por parálisis menor o parcial (p.44); Soo Bahk supremo sin penalizador derribado (p.38)', () => {
     const h = luchador(ficha('Desarmado', arte('Hanja (Arcano)')));
-    h.paralisis = 2;
+    h.paralisisPresa = 2;
     expect(modEstados(h)).toEqual({ ataque: -80, parada: 0, esquiva: 0, turno: -30 });
     const s = luchador(ficha('Desarmado', arte('Soo Bahk (Supremo)')));
     s.derribado = true;

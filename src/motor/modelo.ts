@@ -364,8 +364,11 @@ export interface Luchador {
 
   // --- estados que duran más de un asalto (Core p.89-92, Tabla 43) ---
   derribado: boolean;
-  /** 0 nada, 1 parálisis menor, 2 parcial, 3 completa. */
-  paralisis: 0 | 1 | 2 | 3;
+  /**
+   * Parálisis por una presa: 0 nada, 1 menor, 2 parcial, 3 completa. La inducida (Mushin, Estados)
+   * es una condición; la que vale para las reglas es la peor de las dos: `nivelParalisis`.
+   */
+  paralisisPresa: 0 | 1 | 2 | 3;
   /** Quién lo tiene apresado, y a quién apresa él. */
   apresadoPor: Luchador | null;
   apresando: Luchador | null;

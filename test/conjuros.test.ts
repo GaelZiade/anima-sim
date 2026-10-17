@@ -367,6 +367,16 @@ describe('auditoría de magia (16/10/2026)', () => {
     m.apresadoPor = k;
     expect(actDe(m)).toBe(Math.floor(act / 2));
   });
+
+  it('la parálisis parcial inducida quita los gestos como la de una presa (Core p.117)', async () => {
+    const { actDe } = await import('../src/motor/magia');
+    const presa = crearLuchador(mago({ libres: ['Arma Ígnea'] }), 'A', 0, 0);
+    const inducida = crearLuchador(mago({ libres: ['Arma Ígnea'] }), 'A', 0, 0);
+    presa.paralisisPresa = 2;
+    imponer(inducida, 'paralisis', { nivel: 2, asaltos: 3 });
+    expect(actDe(inducida)).toBe(actDe(presa));
+    expect(actDe(inducida)).toBeLessThan(actDe(crearLuchador(mago({ libres: ['Arma Ígnea'] }), 'A', 0, 0)) / 2 + 1);
+  });
 });
 
 describe('Conjuro Especialista (Arcana p.30)', () => {

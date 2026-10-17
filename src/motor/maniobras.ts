@@ -3,7 +3,7 @@
 
 import type { Atributo, Luchador } from './modelo';
 import type { ModKi } from './ki';
-import { nivelCondicion } from './condiciones';
+import { nivelParalisis } from './condiciones';
 import type { Localizacion, TipoAtaque } from './reglas';
 import type { Rng } from './rng';
 import { dado } from './rng';
@@ -232,7 +232,7 @@ function enElAire(l: Luchador): ModEstado | null {
 export function modEstados(l: Luchador): Readonly<ModEstado> {
   const aire = l.ficha.tipoVuelo || l.ficha.estados?.levitando ? enElAire(l) : null;
   // Lo más común: ni derribado, ni paralizado, ni apresando, ni en el aire, ni cargando.
-  if (!l.derribado && l.paralisis === 0 && !nivelCondicion(l, 'paralisis') && !l.apresando && !aire && !l.cargando) return SIN_ESTADOS;
+  if (!l.derribado && !nivelParalisis(l) && !l.apresando && !aire && !l.cargando) return SIN_ESTADOS;
   const m: ModEstado = { ataque: 0, parada: 0, esquiva: 0, turno: 0 };
   const sumar = (x: ModEstado, sinDefensa = false) => {
     m.ataque += x.ataque;
@@ -247,9 +247,7 @@ export function modEstados(l: Luchador): Readonly<ModEstado> {
   if (l.derribado) sumar(e.derribadoSinPenalizador ? DERRIBADO_SOO_BAHK : DERRIBADO);
   // Las parálisis no se suman: vale la peor entre la de una presa (sufrida o hecha: quien apresa
   // queda en parálisis menor, salvo Pankration avanzado) y la inducida por Mushin arcano.
-  const deLaPresa = Math.max(l.paralisis, l.apresando && !e.sinPenalizadorApresando ? 1 : 0);
-  const inducida = nivelCondicion(l, 'paralisis');
-  const paralisis = Math.max(deLaPresa, inducida) as 0 | 1 | 2 | 3;
+  const paralisis = Math.max(nivelParalisis(l), l.apresando && !e.sinPenalizadorApresando ? 1 : 0) as 0 | 1 | 2 | 3;
   if (paralisis > 0) sumar(PARALISIS[paralisis as 1 | 2 | 3], e.defensaSinParalisis && paralisis < 3);
   if (aire) sumar(aire);
   if (l.cargando) sumar(CARGANDO);

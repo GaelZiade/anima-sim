@@ -145,9 +145,13 @@ describe('respuestas a la auditoría', () => {
     trabar(def, rivales);
     const espalda = rivales[5];
     const frente = rivales[0];
-    def.paralisis = 3;
+    def.paralisisPresa = 3;
     expect(defensaFinal(def, espalda)).toBe(defensaFinal(def, frente));
-    def.paralisis = 0;
+    def.paralisisPresa = 0;
+    // La inducida (Mushin, un Estado) vale igual.
+    imponer(def, 'paralisis', { nivel: 3, asaltos: 2 });
+    expect(defensaFinal(def, espalda)).toBe(defensaFinal(def, frente));
+    def.condiciones = {};
     // Velez arcano ataca invisible (ceguera absoluta, −80). Quien esquiva no queda anulado como al parar.
     const esquiva = crearLuchador(ficha('Esquivador', {}, { tipoDefensa: 'esquiva' }), 'A', 0, 0);
     const velez = crearLuchador(ficha('Velez', { artesMarciales: ['Velez (Arcano)'] }, { arma: { nombre: 'Desarmado', desarmado: true } }), 'B', 1, 0);

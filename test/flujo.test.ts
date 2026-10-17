@@ -92,7 +92,7 @@ describe('acciones activas acumulables (Core p.87)', () => {
 describe('parálisis (Tabla 43)', () => {
   it('no se suman: vale la peor entre la de una presa y la inducida', () => {
     const l: Luchador = crearLuchador(ficha('Preso'), 'A', 0, 0);
-    l.paralisis = 1;
+    l.paralisisPresa = 1;
     imponer(l, 'paralisis', { nivel: 2, asaltos: 3 });
     expect(modEstados(l).ataque).toBe(-80);
   });

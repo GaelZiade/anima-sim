@@ -13,7 +13,7 @@ import {
 } from './maniobras';
 import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
-import { condicion, nivelCondicion } from './condiciones';
+import { condicion, nivelParalisis } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
 import { modVelocidadBlanco } from './proyectiles';
 
@@ -213,7 +213,7 @@ export function quedanAccionesActivas(l: Luchador, mas = 0): boolean {
 export function penAccionFisica(l: Luchador): number {
   const c = condicion(l, 'ceguera');
   const ceguera = (c && c.nivel >= 2) || l.ficha.estados?.ceguera === 'absoluta' ? 90 : c || l.ficha.estados?.ceguera ? 30 : 0;
-  const paralisis = Math.max(l.paralisis, nivelCondicion(l, 'paralisis'));
+  const paralisis = nivelParalisis(l);
   return ceguera + (l.derribado ? 30 : 0) + [0, 40, 60, 200][paralisis] + (l.amenazadoPor ? 100 : 0) +
     (l.ficha.estados?.levitando ? 60 : 0) + (l.entorno.espacioReducido ? 20 : 0);
 }
@@ -413,7 +413,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (o.maniobra === 'presa' && ki?.apresamiento ? 0 : Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra, tipo) - (ki?.precision ?? 0))) +
     (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
-    (atk.paralisis === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
+    (nivelParalisis(atk) === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
     // Contra un rival derribado se suma la posición superior (Tabla 43, Dominus p.38).
     (def.derribado ? BONO_POSICION_SUPERIOR : 0) -
     (atk.previenePendiente.has(def) ? PEN_PREVER_SORPRESA : 0) +
@@ -496,7 +496,7 @@ function noVeElAtaque(def: Luchador, atk: Luchador, kiAtk?: ModKi): boolean {
  * su −200 (ni posición ni ceguera suman más).
  */
 function situacionDefensa(def: Luchador, atk: Luchador, pos: Posicion, factorPos: number, campo: 'parada' | 'esquiva', kiAtk?: ModKi): number {
-  if (def.paralisis === 3) return 0;
+  if (nivelParalisis(def) === 3) return 0;
   const posicion = MOD_POSICION[pos].defensa * factorPos;
   return conCeguera(pos, posicion, cegueraContra(def, atk, noVeElAtaque(def, atk, kiAtk)), campo);
 }
