@@ -10,7 +10,7 @@ import {
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
 import {
   actDe, actPara, actPorCansancio, escudoDetiene, golpeSobrenatural, gradoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
-  preparadoListo, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
+  enPreparacion, preparadosListos, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
 } from './magia';
 import {
   danoAEscudo, rfCritico, activo, ataqueMagico, defensaEscudoMagico, ALCANCE, defensaFinal, distancia, danoEsperado, pronostico,
@@ -165,9 +165,9 @@ export function accionMagica(ctx: Contexto, l: Luchador): { lanzar: Lanzamiento[
     }
     if (enemigosDentro && v > 0) res.push({ conjuro: mina.conjuro, grado: mina.grado, objetivo: null, detonar: mina, control });
   }
-  // El preparado: lo lanza si rinde algo; si no, lo sigue sosteniendo.
-  const pr = preparadoListo(e);
-  if (pr && lanzable(e, pr.conjuro, res)) {
+  // Los preparados listos: lanza cada uno que rinda algo; los demás los sigue sosteniendo.
+  for (const pr of preparadosListos(e)) {
+    if (!lanzable(e, pr.conjuro, res)) continue;
     const uso = mejorUso(ctx, l, pr.conjuro, pr.grado, alcance, res);
     const extra = precioZeon(l) * (pr.conjuro.grados[pr.grado].mantenimiento ?? 0) * (ASALTOS_EFECTO - 1);
     if (uso && uso.valor - uso.extra - extra > 0 && (!uso.l.control || zeonLibre(e) >= ZEON_CONTROL_DEL_ESPACIO)) res.push({ ...uso.l, preparado: true });
@@ -276,13 +276,13 @@ function calcularMeta(ctx: Contexto, l: Luchador, alcance: number): Meta | null 
     if (!lanzable(e, c, []) || efecto(c.efecto).noEsMeta) continue;
     for (const i of gradosPosibles(c, l.ficha.inteligencia ?? 6, l.ficha.magia)) {
       const g = c.grados[i];
-      if (g.zeon > zeonLibre(e) + e.acumulado + (e.preparado?.zeon ?? 0)) continue;
+      const pr = enPreparacion(e);
+      if (g.zeon > zeonLibre(e) + e.acumulado + (pr?.zeon ?? 0)) continue;
       const uso = mejorUso(ctx, l, c, i, alcance, []);
       if (!uso) continue;
       const zeon = costeConjuro(g, uso.l.control);
       const neto = uso.valor - precioZeon(l) * (zeon + (g.mantenimiento ?? 0) * (ASALTOS_EFECTO - 1));
       if (neto <= 0) continue;
-      const pr = e.preparado;
       const reunido = pr && pr.conjuro === c && pr.grado === i ? pr.zeon : e.acumulado;
       const falta = Math.max(0, zeon - reunido);
       const porAsalto = neto / (1 + Math.ceil(falta / Math.max(1, actPara(l, c))));

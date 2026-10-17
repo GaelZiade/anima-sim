@@ -337,8 +337,8 @@ function jugarAsalto(ctx: Contexto) {
       }
       const e = l.magia;
       if (plan.innato) log(ctx, () => `${l.ficha.nombre} se dispone a usar su magia innata (no acumula).`);
-      else if (e.ganado && e.ganadoEn === 'preparado' && e.preparado)
-        log(ctx, () => `${l.ficha.nombre} prepara ${e.preparado!.conjuro.nombre} (${GRADOS[e.preparado!.grado]}): ${e.preparado!.zeon} de ${e.preparado!.conjuro.grados[e.preparado!.grado].zeon} (reserva ${e.reserva}).`);
+      else if (e.ganado && e.ganadoEn)
+        log(ctx, () => `${l.ficha.nombre} prepara ${e.ganadoEn!.conjuro.nombre} (${GRADOS[e.ganadoEn!.grado]}): ${e.ganadoEn!.zeon} de ${e.ganadoEn!.conjuro.grados[e.ganadoEn!.grado].zeon} (reserva ${e.reserva}).`);
       else if (e.ganado) log(ctx, () => `${l.ficha.nombre} acumula zeon: ${e.acumulado} (reserva ${e.reserva}).`);
     }
     // Ki: suelta lo que ya no conviene mantener, paga mantenidas y técnicas en espera, y acumula

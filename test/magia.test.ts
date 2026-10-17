@@ -139,21 +139,32 @@ describe('parte 3: preparar, innata, cansancio y sacrificios (Core p.117-118, p.
     const inc = conjuro('Incinerar');
     empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: inc, grado: 0 } });
     empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: inc, grado: 0 } });
-    expect([l.magia!.preparado?.zeon, l.magia!.acumulado]).toEqual([100, 0]);
+    expect([l.magia!.preparados[0]?.zeon, l.magia!.acumulado]).toEqual([100, 0]);
     lanzar(l, inc, 0);
-    expect([l.magia!.preparado, l.magia!.reserva]).toEqual([null, 500]);
+    expect([l.magia!.preparados.length, l.magia!.reserva]).toEqual([0, 500]);
   });
 
   it('un conjuro listo se sostiene tantos asaltos como su Poder; después vuelve a la reserva menos 10', () => {
     const l = crearLuchador(mago({ atributos: { POD: 2 }, magia: { zeon: 600, act: 60, proyeccion: 130, vias: { Luz: 40 } } }), 'A', 0, 0);
     const d = conjuro('Descarga de Luz');
     empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: d, grado: 0 } });
-    expect(l.magia!.preparado?.zeon).toBe(50);
+    expect(l.magia!.preparados[0]?.zeon).toBe(50);
     empezarAsaltoMagia(l, { acumula: true });
     empezarAsaltoMagia(l, { acumula: true });
-    expect(l.magia!.preparado).not.toBeNull();
+    expect(l.magia!.preparados).toHaveLength(1);
     empezarAsaltoMagia(l, { acumula: true });
-    expect([l.magia!.preparado, l.magia!.reserva]).toEqual([null, 590]);
+    expect([l.magia!.preparados.length, l.magia!.reserva]).toEqual([0, 590]);
+  });
+
+  it('con uno listo puede preparar otro: sostiene los dos y los lanza por separado (Core p.117)', () => {
+    const l = crearLuchador(mago({ atributos: { POD: 8 }, magia: { zeon: 600, act: 60, proyeccion: 130, vias: { Luz: 40 } } }), 'A', 0, 0);
+    const d = conjuro('Descarga de Luz');
+    empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: d, grado: 0 } });
+    empezarAsaltoMagia(l, { acumula: true, preparar: { conjuro: d, grado: 0 } });
+    expect(l.magia!.preparados.map((p) => p.zeon)).toEqual([50, 50]);
+    expect(l.magia!.reserva).toBe(600);
+    lanzar(l, d, 0);
+    expect([l.magia!.preparados.length, l.magia!.reserva]).toEqual([1, 550]);
   });
 
   it('cansancio al ACT: +15, +40 con dos esferas de Explotación de la Energía Física', () => {

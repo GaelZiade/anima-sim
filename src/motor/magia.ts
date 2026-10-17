@@ -91,12 +91,15 @@ export interface EstadoMagia {
   armadura: { energia: number; resto: number } | null;
   /** Hizo este asalto algo que no es lanzar conjuros (atacar, defenderse sin escudo, moverse): ACT a la mitad. */
   otraAccion: boolean;
-  /** Conjuro determinado que prepara o tiene listo. Su zeon está en la reserva, aparte de lo acumulado. */
-  preparado: Preparado | null;
+  /**
+   * Conjuros determinados: los listos y, a lo sumo, uno que prepara (con uno listo puede preparar otro
+   * o acumular magia pura, Core p.117). Su zeon está en la reserva, aparte de lo acumulado.
+   */
+  preparados: Preparado[];
   /** Este asalto usa la magia innata (no acumula ni lanza otros conjuros). */
   innato: boolean;
-  /** A dónde fue lo acumulado este asalto: magia pura o el conjuro preparado. */
-  ganadoEn: 'puro' | 'preparado';
+  /** A dónde fue lo acumulado este asalto: el conjuro que prepara, o null si es magia pura. */
+  ganadoEn: Preparado | null;
 }
 
 export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
@@ -106,7 +109,7 @@ export function crearEstadoMagia(l: Luchador): EstadoMagia | null {
   if (!conjuros.length) return null;
   return {
     reserva: m.zeon, acumulado: 0, ganado: 0, acumulando: false, lanzo: false, conjuros, mantenidos: [],
-    escudo: null, armadura: null, otraAccion: false, preparado: null, innato: false, ganadoEn: 'puro',
+    escudo: null, armadura: null, otraAccion: false, preparados: [], innato: false, ganadoEn: null,
   };
 }
 
@@ -187,7 +190,29 @@ export function actPara(l: Luchador, c?: Conjuro | null): number {
 
 /** Zeon libre de la reserva: lo que no está acumulado ni en un conjuro preparado. */
 export function zeonLibre(e: EstadoMagia): number {
-  return e.reserva - e.acumulado - (e.preparado?.zeon ?? 0);
+  let libre = e.reserva - e.acumulado;
+  for (const p of e.preparados) libre -= p.zeon;
+  return libre;
+}
+
+function estaListo(p: Preparado): boolean {
+  return p.zeon >= p.conjuro.grados[p.grado].zeon;
+}
+
+/** El conjuro determinado que todavía prepara (uno solo a la vez), o null. */
+export function enPreparacion(e: EstadoMagia): Preparado | null {
+  return e.preparados.find((p) => !estaListo(p)) ?? null;
+}
+
+/** Los conjuros preparados listos para lanzarse. */
+export function preparadosListos(e: EstadoMagia): Preparado[] {
+  return e.preparados.filter(estaListo);
+}
+
+/** Deja de sostener un preparado: con `perdida`, su zeon vuelve a la reserva menos 10 (Core p.117). */
+function quitarPreparado(e: EstadoMagia, p: Preparado, perdida: boolean) {
+  if (perdida) e.reserva -= Math.min(PERDIDA_AL_SOLTAR, p.zeon);
+  e.preparados.splice(e.preparados.indexOf(p), 1);
 }
 
 /**
@@ -205,6 +230,7 @@ export function empezarAsaltoMagia(l: Luchador, plan: PlanMagia | boolean) {
   e.ganado = 0;
   e.otraAccion = false;
   e.innato = !!p.innato;
+  e.ganadoEn = null;
   // Consumir Vida por Magia: PV por zeon a la reserva (Core p.159).
   if (p.consumirVida) {
     l.pv -= p.consumirVida;
@@ -224,12 +250,8 @@ export function empezarAsaltoMagia(l: Luchador, plan: PlanMagia | boolean) {
     e.reserva -= coste;
     return true;
   });
-  // Un conjuro listo: un asalto más de espera; pasado su Poder, vuelve a la reserva menos 10.
-  const pr = e.preparado;
-  if (pr && pr.zeon >= pr.conjuro.grados[pr.grado].zeon && ++pr.esperando > atributo(l, 'POD')) {
-    e.reserva -= Math.min(PERDIDA_AL_SOLTAR, pr.zeon);
-    e.preparado = null;
-  }
+  // Cada conjuro listo: un asalto más de espera; pasado su Poder, vuelve a la reserva menos 10.
+  for (const pr of preparadosListos(e)) if (++pr.esperando > atributo(l, 'POD')) quitarPreparado(e, pr, true);
   e.acumulando = p.acumula && !p.innato;
   const prepara = p.preparar && !p.innato ? p.preparar : null;
   if (!e.acumulando || prepara) soltar(e);
@@ -239,17 +261,19 @@ export function empezarAsaltoMagia(l: Luchador, plan: PlanMagia | boolean) {
   e.reserva -= sacrificio;
   const act = actPara(l, prepara?.conjuro) + actPorCansancio(l) * (p.cansancio ?? 0) + Math.floor(sacrificio / 10) * 5;
   if (prepara) {
-    if (!e.preparado || e.preparado.conjuro !== prepara.conjuro || e.preparado.grado !== prepara.grado) {
-      if (e.preparado) e.reserva -= Math.min(PERDIDA_AL_SOLTAR, e.preparado.zeon);
-      e.preparado = { conjuro: prepara.conjuro, grado: prepara.grado, zeon: 0, esperando: 0 };
+    // Cambiar de conjuro a medio preparar lo suelta (menos 10); los que ya están listos siguen.
+    let pr = enPreparacion(e);
+    if (pr && (pr.conjuro !== prepara.conjuro || pr.grado !== prepara.grado)) {
+      quitarPreparado(e, pr, true);
+      pr = null;
     }
-    const falta = prepara.conjuro.grados[prepara.grado].zeon - e.preparado.zeon;
+    if (!pr) e.preparados.push((pr = { conjuro: prepara.conjuro, grado: prepara.grado, zeon: 0, esperando: 0 }));
+    const falta = prepara.conjuro.grados[prepara.grado].zeon - pr.zeon;
     e.ganado = Math.max(0, Math.min(act, falta, zeonLibre(e)));
-    e.preparado.zeon += e.ganado;
-    e.ganadoEn = 'preparado';
+    pr.zeon += e.ganado;
+    e.ganadoEn = pr;
     return;
   }
-  e.ganadoEn = 'puro';
   e.ganado = Math.max(0, Math.min(act, zeonLibre(e)));
   e.acumulado += e.ganado;
 }
@@ -275,7 +299,7 @@ export function hacerOtraAccion(l: Luchador) {
   e.otraAccion = true;
   if (!e.ganado) return;
   const pierde = Math.floor(e.ganado / 2);
-  if (e.ganadoEn === 'preparado' && e.preparado) e.preparado.zeon -= Math.min(pierde, e.preparado.zeon);
+  if (e.ganadoEn) e.ganadoEn.zeon -= Math.min(pierde, e.ganadoEn.zeon);
   else e.acumulado -= Math.min(pierde, e.acumulado);
   e.ganado -= pierde;
 }
@@ -302,12 +326,6 @@ export function proyeccionDeterminada(l: Luchador, habilidad: number): { valor: 
 /** Paga la Proyección Determinada: de la reserva, sin acumular. */
 export function pagarDeterminada(l: Luchador, d: { zeon: number }) {
   l.magia!.reserva -= d.zeon;
-}
-
-/** El conjuro preparado está listo para lanzarse. */
-export function preparadoListo(e: EstadoMagia): Preparado | null {
-  const p = e.preparado;
-  return p && p.zeon >= p.conjuro.grados[p.grado].zeon ? p : null;
 }
 
 /** Puede lanzarlo en ese grado: le alcanza lo acumulado y su Inteligencia (Core p.121). */
@@ -365,14 +383,14 @@ export function lanzar(l: Luchador, c: Conjuro, grado: number, extra: Omit<Mante
   const e = l.magia!;
   const g = c.grados[grado];
   const coste = costeConjuro(g, control);
-  const pr = preparadoListo(e);
+  const pr = preparadosListos(e).find((p) => p.conjuro === c && p.grado === grado);
   if (extra.innato) {
     // Innato: no gasta zeon (Core p.117); Control del Espacio, sí, de la reserva.
     e.reserva -= coste - g.zeon;
-  } else if (pr && pr.conjuro === c && pr.grado === grado) {
+  } else if (pr) {
     // El conjuro preparado: se paga con lo reunido para él (Core p.117).
     e.reserva -= coste;
-    e.preparado = null;
+    quitarPreparado(e, pr, false);
   } else {
     e.acumulado -= coste;
     e.reserva -= coste;
@@ -512,7 +530,8 @@ export function mantenidoCon(l: Luchador, c: Conjuro): Mantenido | undefined {
 export function danoAlAcumular(l: Luchador, dano: number, rng: Rng, critico = false): { tirada: number; resultado: 'conserva' | 'vuelve' | 'pierde' } | null {
   const e = l.magia;
   // Un conjuro determinado que todavía prepara también está en juego; uno listo, no (ya no acumula).
-  const prep = e?.preparado && !preparadoListo(e) && e.preparado.zeon > 0 ? e.preparado : null;
+  const enJuego = e && enPreparacion(e);
+  const prep = enJuego && enJuego.zeon > 0 ? enJuego : null;
   // Con acumulación de daño no lo hace, salvo que el ataque le cause un crítico (Core p.118).
   if (!e || (e.acumulado <= 0 && !prep) || dano <= 0 || (l.ficha.acumulacion && !critico)) return null;
   // Preparando un conjuro determinado (y sin magia pura en juego), +40 (Core p.118).
@@ -523,15 +542,12 @@ export function danoAlAcumular(l: Luchador, dano: number, rng: Rng, critico = fa
   if (!t.pifia && tirada >= dano) {
     // Vuelve a la reserva, con los 10 que se pierden al interrumpir la acumulación (Core p.117).
     soltar(e);
-    if (prep) {
-      e.reserva -= Math.min(PERDIDA_AL_SOLTAR, prep.zeon);
-      e.preparado = null;
-    }
+    if (prep) quitarPreparado(e, prep, true);
     return { tirada, resultado: 'vuelve' };
   }
   e.reserva -= e.acumulado + (prep?.zeon ?? 0);
   e.acumulado = 0;
-  if (prep) e.preparado = null;
+  if (prep) quitarPreparado(e, prep, false);
   return { tirada, resultado: 'pierde' };
 }
 
