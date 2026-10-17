@@ -268,7 +268,7 @@ function valorCritico(
   golpes: number, danoPrevio: number, bonoKi = 0,
 ): number {
   if (pCritica <= 0) return 0;
-  const base = danoPleno + bonoCriticoDe(atk, m, bonoKi);
+  const base = danoPleno + bonoCriticoDe(atk, def, m, bonoKi);
   const ef = efectoCritico(base, rfCritico(def), loc, {
     inconsciencia: m === 'inconsciencia', sinMuerte: def.cap.est.sangreEterna, acumulacion: !!def.ficha.acumulacion,
   });
@@ -1071,7 +1071,8 @@ function opcionesDeManiobra(
     if (!def.cap.desarmado) opciones.push('desarmar');
     if (!def.cap.est.sangreEterna) opciones.push('cabeza', 'corazon', 'inutilizar');
     opciones.push('inconsciencia', 'engatillar');
-    if (e.mushin) opciones.push('puntosPresion');
+    // Mushin sólo afecta a seres orgánicos (Dominus p.42).
+    if (e.mushin && def.ficha.organico !== false) opciones.push('puntosPresion');
   }
   if (e.leo && atk.balas > 0 && !aDistancia) opciones.push('combinado');
   if (e.criticoAutomatico && !soloNormal && !def.ficha.acumulacion) opciones.push('lineas');

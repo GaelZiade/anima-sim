@@ -732,8 +732,10 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
   if (atk.bono?.dano && !ki?.conjuro) d += atk.bono.dano;
   if (atk.godhandListo && e.godhand) d += e.godhand.dano;
   // Aikido: en un contraataque suma 2× (supremo 4×) el bono de FUE del rival, mínimo +5 (Dominus p.31).
-  if (esContra && e.aikidoMultiplicadorFue)
-    d += Math.max(5, e.aikidoMultiplicadorFue * bonoCaracteristica(atributo(def, 'FUE')));
+  if (esContra && e.aikidoMultiplicadorFue && def.ficha.humanoide !== false) {
+    const fue = e.aikidoMultiplicadorFue * bonoCaracteristica(atributo(def, 'FUE'));
+    d += e.aikidoDanoPropio ? Math.max(5, fue) : fue;
+  }
   return d;
 }
 
@@ -1045,12 +1047,13 @@ export const nro = (ctx: { luchadores: Luchador[] }, l: Luchador) => ctx.luchado
  * a los puntos vitales, Enuth para dejar inconsciente (+20, arcano +50, Dominus p.43) y Potenciar
  * Crítico del Ki (Dominus p.70). Lo usan el motor y la IA.
  */
-export function bonoCriticoDe(atk: Luchador, m: Maniobra, bonoKi = 0): number {
+export function bonoCriticoDe(atk: Luchador, def: Luchador, m: Maniobra, bonoKi = 0): number {
   const e = atk.cap.est;
   const vital = m === 'cabeza' || m === 'corazon';
   const enuth = m === 'inconsciencia' ? (e.enuth >= 3 ? 50 : e.enuth >= 1 ? 20 : 0) : 0;
   // Ojos de la Muerte apuntando a las líneas existenciales: +40 al nivel del crítico (Dominus p.78).
   const lineas = m === 'lineas' ? 40 : 0;
-  return atk.cap.bonoCritico + e.bonoCriticoEstilos + (vital ? e.bonoCriticoVital : 0) + enuth + lineas + bonoKi;
+  const organico = def.ficha.organico !== false ? e.bonoCriticoOrganico : 0;
+  return atk.cap.bonoCritico + e.bonoCriticoEstilos + organico + (vital ? e.bonoCriticoVital : 0) + enuth + lineas + bonoKi;
 }
 

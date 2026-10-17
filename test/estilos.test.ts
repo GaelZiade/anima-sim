@@ -247,7 +247,28 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
   it('críticos: Tabla de Crítico Incrementado +10, Moai Thai supremo +20, Hakyoukuken +20 / arcano +40', () => {
     expect(estilos(ficha('Espada', { tablas: ['Tabla de Critico Incrementado'] }), false).bonoCriticoEstilos).toBe(10);
     expect(estilos(ficha('Desarmado', arte('Moai Thai (Supremo)')), true).bonoCriticoEstilos).toBe(20);
-    expect(estilos(ficha('Desarmado', arte('Hakyoukuken (Arcano)')), true).bonoCriticoEstilos).toBe(40);
+    expect(estilos(ficha('Desarmado', arte('Hakyoukuken (Arcano)')), true).bonoCriticoOrganico).toBe(40);
+  });
+
+  it('Hakyoukuken y Mushin sólo contra seres orgánicos; Aikido sólo contra humanoides y con su propio daño (Dominus p.31-32, p.42)', async () => {
+    const { bonoCriticoDe, danoBase } = await import('../src/motor/calculos');
+    const hak = luchador(ficha('Desarmado', arte('Hakyoukuken (Arcano)')));
+    const vivo = luchador(ficha('Rival'), 'B');
+    const golem = luchador({ ...ficha('Golem'), organico: false }, 'B');
+    expect(bonoCriticoDe(hak, vivo, 'normal') - bonoCriticoDe(hak, golem, 'normal')).toBe(40);
+    // Aikido como única arte: ×2 la Fuerza del rival (mín. +5); contra un no humanoide, nada.
+    const fuerte = luchador({ ...ficha('Fuerte'), atributos: { FUE: 9 } }, 'B');
+    const bestia = luchador({ ...ficha('Bestia'), atributos: { FUE: 9 }, humanoide: false }, 'B');
+    const aiki = luchador(ficha('Desarmado', arte('Aikido (Base)')));
+    expect(danoBase(aiki, fuerte, true) - danoBase(aiki, fuerte, false)).toBe(20);
+    expect(danoBase(aiki, bestia, true) - danoBase(aiki, bestia, false)).toBe(0);
+    // Con el daño de otro arte: en base nada; en supremo, la Fuerza una vez.
+    const mixto = luchador(ficha('Desarmado', arte('Aikido (Avanzado)', 'Shotokan (Base)')));
+    expect(danoBase(mixto, fuerte, true) - danoBase(mixto, fuerte, false)).toBe(0);
+    const supremo = luchador(ficha('Desarmado', arte('Aikido (Supremo)', 'Shotokan (Base)')));
+    expect(danoBase(supremo, fuerte, true) - danoBase(supremo, fuerte, false)).toBe(10);
+    const elegido = luchador({ ...ficha('Desarmado', arte('Aikido (Avanzado)', 'Shotokan (Base)')), danoSinArmasDe: 'Aikido' });
+    expect(danoBase(elegido, fuerte, true) - danoBase(elegido, fuerte, false)).toBe(20);
   });
 
   it('Godhand: +30 / +50 (arcano +60 / +100) al ataque potenciado (p.43)', () => {

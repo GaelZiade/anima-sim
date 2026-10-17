@@ -67,6 +67,15 @@ export interface Ficha {
   tipoVuelo?: number;
   /** Criatura cuadrúpeda: +3 a sus controles de Derribo, por la estabilidad de sus patas (Core p.91). */
   cuadrupedo?: boolean;
+  /** Ser orgánico (por defecto sí): sólo a ellos los afectan el crítico de Hakyoukuken y Mushin (Dominus p.42). */
+  organico?: boolean;
+  /** Forma humanoide (por defecto sí): sólo contra ellos suma el Aikido la Fuerza del rival (Dominus p.31). */
+  humanoide?: boolean;
+  /**
+   * Arte marcial cuyo Daño Base usa sin armas (Dominus p.29: se elige uno, no se combinan). Sin el dato,
+   * el Aikido cuenta como el suyo sólo si es su única arte marcial.
+   */
+  danoSinArmasDe?: string;
   /** Tamaño (Core p.14). Si falta, Fuerza + Constitución; sin esas características no se compara. */
   tamano?: number;
   /** Armas de proyectiles y arrojadizas (Core p.94-96, Tabla 34). */

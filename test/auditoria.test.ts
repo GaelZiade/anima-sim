@@ -416,7 +416,7 @@ describe('decisiones del usuario (15/10/2026)', () => {
     invisible.bono = { invisible: 120 } as unknown as typeof invisible.bono;
     expect(penManiobra(ojos, 'lineas', false)).toBe(10);
     expect(penManiobra(comun, 'lineas', false)).toBe(Infinity);
-    expect(bonoCriticoDe(ojos, 'lineas') - bonoCriticoDe(ojos, 'normal')).toBe(40);
+    expect(bonoCriticoDe(ojos, comun, 'lineas') - bonoCriticoDe(ojos, comun, 'normal')).toBe(40);
     expect(cegueraContra(ojos, invisible).nivel).toBe(1);
     expect(cegueraContra(comun, invisible).nivel).toBe(2);
   });

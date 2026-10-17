@@ -181,7 +181,9 @@ function golpeQueEntra(motor: MotorCombate,
   }
   // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
   if (m === 'puntosPresion') {
-    if (dano > 0) puntosDePresion(motor, ctx, atk, def, dano, o.estadoMushin ?? null);
+    // Sólo los seres orgánicos tienen puntos de presión (Dominus p.42).
+    if (dano > 0 && def.ficha.organico !== false) puntosDePresion(motor, ctx, atk, def, dano, o.estadoMushin ?? null);
+    else if (dano > 0) motor.log(ctx, () => `  ${def.ficha.nombre} no es un ser orgánico: no tiene puntos de presión.`);
     else motor.log(ctx, () => `  No alcanza los puntos de presión.`);
     avisar();
     return { defensor: def, contra: null, impacto: true };

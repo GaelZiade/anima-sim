@@ -119,9 +119,13 @@ export interface Estilos {
   contrasIlimitadas: boolean;
   /** Aikido: al contraatacar suma 2× el bono de FUE del rival (mín. +5); supremo 4× (p.31-32). */
   aikidoMultiplicadorFue: number;
+  /** El daño sin armas es el del Aikido (con su mínimo de +5 de la Fuerza del rival). */
+  aikidoDanoPropio: boolean;
+  /** Hakyoukuken: +20 (arcano +40) al crítico contra seres orgánicos (Dominus p.42). */
+  bonoCriticoOrganico: number;
   /** Xing Quan: bono contra un único adversario si lleva la iniciativa: +10/+20/+30 (p.37). */
   xingQuan: number;
-  /** Bono al nivel de crítico: Tabla de Crítico Incrementado +10, Moai Thai supremo +20, Hakyoukuken +20/+40. */
+  /** Bono al nivel de crítico: Tabla de Crítico Incrementado +10, Moai Thai supremo +20. */
   bonoCriticoEstilos: number;
   /** Asakusen arcano: +20 al crítico de ataques apuntados a puntos vitales (p.41). */
   bonoCriticoVital: number;
@@ -263,8 +267,10 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
 
   let bonoCriticoEstilos = tiene(tablas, 'critico incrementado') ? 10 : 0;
   if (g('Moai Thai') >= 3) bonoCriticoEstilos += 20;
-  // El crítico de Hakyoukuken sólo vale contra seres orgánicos: se asume que el rival lo es.
-  if (hakyou >= 1) bonoCriticoEstilos += hakyou >= 3 ? 40 : 20;
+  // Aikido: la Fuerza del rival es parte de su Daño (×2, supremo ×4, mínimo +5); en supremo, con el
+  // daño de otro arte, la suma una vez (Dominus p.31-32).
+  const artesConGrado = (artes ?? []).filter((x) => gradoArteMarcial([x], x.replace(/\s*\(.*$/, '')) > 0);
+  const danoDeAikido = f.danoSinArmasDe ? /aikido/i.test(f.danoSinArmasDe) : artesConGrado.length === 1;
 
   let bonoVariable = kungFu >= 3 ? 20 : kungFu === 2 ? 10 : 0;
   if (asakusen >= 3) bonoVariable = 40;
@@ -309,7 +315,10 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     bonoContraataque: g('Boxeo') >= 2 ? 10 : 0,
     doblaBonoContra: g('Selene') >= 1,
     contrasIlimitadas: g('Selene') >= 3,
-    aikidoMultiplicadorFue: aikido >= 3 ? 4 : aikido >= 1 ? 2 : 0,
+    aikidoMultiplicadorFue: !aikido ? 0 : danoDeAikido ? (aikido >= 3 ? 4 : 2) : aikido >= 3 ? 1 : 0,
+    aikidoDanoPropio: aikido >= 1 && danoDeAikido,
+    // El crítico de Hakyoukuken sólo vale contra seres orgánicos (Dominus p.42): `bonoCriticoDe` lo mira.
+    bonoCriticoOrganico: hakyou >= 3 ? 40 : hakyou >= 1 ? 20 : 0,
     xingQuan: [0, 10, 20, 30][g('Xing Quan')],
     bonoCriticoEstilos,
     bonoCriticoVital: asakusen >= 3 ? 20 : 0,

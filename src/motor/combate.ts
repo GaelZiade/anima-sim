@@ -1120,7 +1120,7 @@ function critico(ctx: Contexto, atk: Luchador, def: Luchador, dano: number, resi
   if (alRecibirCritico(def)) log(ctx, () => `  ${def.ficha.nombre} activa su Límite Cruor: recupera 10 de Ki.`);
   const apuntado = localizacionApuntada(m);
   // Un crítico que no viene del arma del atacante (el choque de un Impacto) no suma sus bonos (Dominus p.12).
-  let bono = o.sinBonos ? 0 : bonoCriticoDe(atk, m, bonoKi);
+  let bono = o.sinBonos ? 0 : bonoCriticoDe(atk, def, m, bonoKi);
   // Aumentar el Crítico: conjuro pasivo que se declara antes de tirar (Core p.157).
   const aumento = nivelFijo === undefined && !o.sinBonos && atk.magia ? iaMagia.aumentarCritico(ctx, atk, def, dano + bono) : null;
   if (aumento) {
