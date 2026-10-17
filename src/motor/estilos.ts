@@ -10,6 +10,14 @@ import type { TipoAtaque } from './reglas';
 import { fuerzaPresaArma, gradoArteMarcial, tamanoArmaDe, tiene } from './rasgos';
 import { bonoCaracteristica } from './maniobras';
 
+/**
+ * Aeones elementales y la TA de su elemento (Dominus p.63, p.75-76): Fuego CAL, Aire y Electricidad ELE,
+ * Agua y Frío FRI. Tierra, Oscuridad y Luz no tienen una TA propia.
+ */
+const TA_DE_AEON = {
+  Kagutsuchi: 'CAL', Boreas: 'ELE', Niflheim: 'FRI', Rudraksha: 'ELE', Ran: 'FRI', Toa: null, Phandemonium: null, Shephirah: null,
+} as const satisfies Record<string, TipoAtaque | null>;
+
 export interface Estilos {
   // ---------------------------------------------------------------- maniobras (Core p.91-92)
   /** Penalizador a Derribo (positivo). Core −30; Sambo y Grappling a la mitad; Grappling avanzado 0. */
@@ -160,8 +168,11 @@ export interface Estilos {
   sangreEterna: boolean;
   /** Sangre de Orochi: puede despertar la sangre (+20 combate y turno, −2 PV por asalto) (p.81). */
   orochi: boolean;
-  /** Sangre de Aeon: daño a la mitad de su elemento. */
-  elementoAfin: string | null;
+  /**
+   * Sangre de Aeon, Afinidad elemental (Dominus p.76): la TA de su elemento. Recibe la mitad de ese
+   * daño, +20 a las Resistencias de su elemento y +10 al daño base de sus ataques de Ki o Magia en él.
+   */
+  elementoAfin: TipoAtaque | null;
   /**
    * Leo, Armas-pistola (Ars Magnus, Dominus p.101): daño y crítico del disparo. La bala no suma la
    * Fuerza del usuario sino la del arma (pistola 10, rifle 11, cañón 12, +1 por cada +5 de calidad);
@@ -243,8 +254,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
 
   // Los Legados figuran entre las ventajas; se buscan por palabra entera ("Toa" no es "Tocado").
   const legado = (nombre: string) => (v ?? []).some((x) => new RegExp(`\\b${nombre}\\b`, 'i').test(x));
-  const aeon = ['Kagutsuchi', 'Boreas', 'Niflheim', 'Rudraksha', 'Toa', 'Phandemonium', 'Shephirah'].find(legado);
-  const ELEMENTO: Record<string, string> = { Kagutsuchi: 'CAL', Niflheim: 'FRI', Rudraksha: 'ELE' };
+  const aeon = (Object.keys(TA_DE_AEON) as (keyof typeof TA_DE_AEON)[]).find(legado);
 
   return {
     penDerribo, penPresa, puedePresar: desarmado || presaInusual || fuerzaPresa > 0, fuerzaPresaArma: fuerzaPresa, penDesarmar, penArea, blancosArea,
@@ -315,7 +325,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     bonoRfDano: tiene(r.habilidadesKi, 'dominio fisico') ? 10 : 0,
     sangreEterna: tiene(v, 'sangre eterna'),
     orochi: tiene(v, 'orochi'),
-    elementoAfin: aeon ? (ELEMENTO[aeon] ?? null) : null,
+    elementoAfin: aeon ? TA_DE_AEON[aeon] : null,
     leo: armaLeo(f, desarmado),
   };
 }

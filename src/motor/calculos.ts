@@ -710,7 +710,9 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     if (ki.danaEnergia && atk.cap.danaEnergia) arma += 10;
     // Daño límite: + los PV que ya perdió; no con acumulación (Dominus p.54).
     if (ki.danoLimite && !atk.ficha.acumulacion) arma += Math.max(0, atk.ficha.pv - atk.pv);
-    if (ki.elemento && ELEMENTALES.has(perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque)) arma += 10;
+    if (ki.elemento && !ki.conjuro && ELEMENTALES.has(perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque)) arma += 10;
+    // Afinidad elemental (Sangre de Aeon): +10 a sus ataques de Ki o Magia en su elemento (Dominus p.76).
+    if (ki.elemento && ki.elemento === e.elementoAfin) arma += 10;
   }
   let d = arma + bonoVariable(atk, 'dano');
   // Conjuros de Guerra (Destrucción Desencadenada, Campeón): al daño de sus ataques, no de los conjuros.
@@ -995,7 +997,8 @@ export function rfCritico(l: Luchador): number {
  * que es inmune (Inmunidad contra el Fuego, Core p.156, p.158).
  */
 export function resistenciaCalor(l: Luchador): number {
-  return (l.bono?.resCalor ?? 0) + 5 * (l.bono?.inmuneFuego ?? 0);
+  // Afinidad elemental al Fuego: +20 a las Resistencias contra él (Dominus p.76).
+  return (l.bono?.resCalor ?? 0) + 5 * (l.bono?.inmuneFuego ?? 0) + (l.cap.est.elementoAfin === 'CAL' ? 20 : 0);
 }
 
 /** TA de la armadura mágica contra ese tipo de ataque (0 sin armadura). */

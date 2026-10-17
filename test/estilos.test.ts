@@ -205,6 +205,20 @@ describe('ventajas de Artes Marciales (Dominus cap.4)', () => {
     expect(planDeAtaques(cap, 1).map((r) => [r.pen, r.sinArmas])).toEqual([[0, false], [10, false], [0, true]]);
   });
 
+  it('Sangre de Aeon: la TA de su elemento, +20 a resistir el fuego y +10 al daño de sus técnicas en él (Dominus p.63, p.76)', async () => {
+    const { danoBase, resistenciaCalor } = await import('../src/motor/calculos');
+    const { SIN_KI } = await import('../src/motor/ki');
+    expect(estilos(ficha('Espada', { ventajas: ['Sangre de Boreas'] }), false).elementoAfin).toBe('ELE');
+    expect(estilos(ficha('Espada', { ventajas: ['Sangre de Ran'] }), false).elementoAfin).toBe('FRI');
+    expect(estilos(ficha('Espada', { ventajas: ['Sangre de Shephirah'] }), false).elementoAfin).toBe(null);
+    const k = luchador(ficha('Espada', { ventajas: ['Sangre de Kagutsuchi'] }));
+    const otro = luchador(ficha('Espada'));
+    const rival = luchador(ficha('Rival'), 'B');
+    expect(resistenciaCalor(k) - resistenciaCalor(otro)).toBe(20);
+    const fuego = { ...SIN_KI, elemento: 'CAL' as const };
+    expect(danoBase(k, rival, false, undefined, fuego) - danoBase(otro, rival, false, undefined, fuego)).toBe(10);
+  });
+
   it('Xing Quan: +10/+20/+30 en su turno contra un único rival; no en contras ni después de defenderse (p.38)', () => {
     const def = luchador(ficha('Rival'), 'B');
     const otro = luchador(ficha('Otro'), 'B');
