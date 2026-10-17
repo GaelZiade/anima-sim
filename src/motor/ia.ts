@@ -913,7 +913,7 @@ function mejorManiobra(
     let h = habNormal.get(tipo);
     if (h === undefined) habNormal.set(tipo, (h = ataqueFinal(atk, def, { bono, maniobra: 'normal', esContra, tipo, ki, ranura })));
     if (m === 'normal' || (m === 'presa' && ki?.apresamiento)) return Math.min(tope, h);
-    return Math.min(tope, h - Math.max(0, penManiobra(atk, m, esContra) - (ki?.precision ?? 0)));
+    return Math.min(tope, h - Math.max(0, penManiobra(atk, m, esContra, tipo ?? perfilDe(atk, ranura ?? proximaRanura(atk)).tipoAtaque) - (ki?.precision ?? 0)));
   };
   // Tabla, absorción y daño base sólo cambian con la zona (o la maniobra de control), el tipo de
   // crítico y el factor de daño: se preparan una vez por combinación.

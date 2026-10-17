@@ -4,7 +4,7 @@
 import type { Atributo, Luchador } from './modelo';
 import type { ModKi } from './ki';
 import { nivelCondicion } from './condiciones';
-import type { Localizacion } from './reglas';
+import type { Localizacion, TipoAtaque } from './reglas';
 import type { Rng } from './rng';
 import { dado } from './rng';
 
@@ -67,7 +67,7 @@ function arriba5(x: number): number {
 }
 
 /** Penalizador (positivo) de la maniobra para este luchador; Infinity si no puede hacerla. */
-export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean): number {
+export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean, tipo: TipoAtaque = l.ficha.tipoAtaque): number {
   const e = l.cap.est;
   switch (m) {
     case 'normal': return 0;
@@ -83,8 +83,8 @@ export function penManiobra(l: Luchador, m: Maniobra, esContra: boolean): number
     case 'inutilizar':
       return arriba5(PEN_APUNTADO[m] * e.factorApuntado);
     case 'inconsciencia':
-      // Sin un crítico Contundente, −40 adicional (Core p.92).
-      return arriba5(PEN_APUNTADO.inconsciencia * e.factorApuntado) + (l.ficha.tipoAtaque === 'CON' ? 0 : 40);
+      // Sin un crítico Contundente (el del golpe, no el del arma), −40 adicional (Core p.92).
+      return arriba5(PEN_APUNTADO.inconsciencia * e.factorApuntado) + (tipo === 'CON' ? 0 : 40);
     case 'engatillar': return e.penEngatillar;
     case 'puntosPresion': return e.mushin ? 0 : Infinity;
     case 'combinado': return e.leo ? 20 : Infinity;

@@ -385,7 +385,7 @@ export function ataqueFinal(atk: Luchador, def: Luchador, o: OpcionesAtaque = {}
     (ranura.sinArmas ? 0 : penDesenfundar(atk, 'ataque')) -
     // Maniobras de combate y apuntar (Ki) reduce el penalizador de la maniobra, hasta 0.
     // Apresamiento (Ki): la Presa no tiene penalizador (Dominus p.64).
-    (o.maniobra === 'presa' && ki?.apresamiento ? 0 : Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra) - (ki?.precision ?? 0))) +
+    (o.maniobra === 'presa' && ki?.apresamiento ? 0 : Math.max(0, penManiobra(atk, o.maniobra ?? 'normal', !!o.esContra, tipo) - (ki?.precision ?? 0))) +
     (ki ? ki.ataque + (o.esContra ? ki.contraataque : 0) : 0) +
     // Parálisis completa + flanco o espalda se queda en −200 (Dominus p.11, Tabla 1).
     (atk.paralisis === 3 ? 0 : situacionAtaque(atk, def, ki)) + modEstados(atk).ataque + desequilibrio(atk, def) - chico +
