@@ -299,7 +299,7 @@ export function puntosDePresion(motor: Motor, ctx: Contexto, atk: Luchador, def:
     return;
   }
   const fallo = dif - res;
-  def.penDolor += fallo;
+  def.penEstado += fallo;
   def.pv -= 2 * fallo;
   motor.limitePorDano(ctx, def, 2 * fallo);
   atk.stats.danoCausado += 2 * fallo;
@@ -309,8 +309,8 @@ export function puntosDePresion(motor: Motor, ctx: Contexto, atk: Luchador, def:
   if (estado) {
     // Estados de la Tabla del Mushin arcano. Las parálisis duran tantos asaltos como el fracaso.
     if (estado === 'debilidad') aplicarEstado(motor, ctx, atk, def, 'debilidad', fallo, { dificultad: dif });
-    else if (estado === 'dolor') def.penDolor += 40;
-    else if (estado === 'dolorExtremo') def.penDolor += 80;
+    else if (estado === 'dolor') def.penDolorEstado += 40;
+    else if (estado === 'dolorExtremo') def.penDolorEstado += 80;
     else if (estado === 'paralisisMenor' || estado === 'paralisisParcial') {
       imponer(def, 'paralisis', { nivel: estado === 'paralisisMenor' ? 1 : 2, asaltos: fallo });
     } else if (estado === 'paralisisCompleta' || estado === 'coma') motor.caer(ctx, atk, def, 'inconsciente');

@@ -326,8 +326,12 @@ export interface Luchador {
   mapa: MapaListo | null;
   pv: number;
   cansancio: number;
-  /** Negativo por dolor: baja 5 por asalto. */
+  /** Negativo por el dolor de los críticos: baja 5 por asalto. */
   penDolor: number;
+  /** Negativo del estado Dolor que impone una técnica (Mushin): baja 5 por asalto. */
+  penDolorEstado: number;
+  /** Negativo de un Estado sobrenatural (Penalización menor, puntos de presión): baja 5 por asalto. */
+  penEstado: number;
   /** Negativo físico de críticos graves: dura todo el combate. */
   penFisico: number;
   /** Penalizador a toda Acción de una técnica (desventaja): baja 10 por asalto (Dominus p.74). */

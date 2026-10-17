@@ -94,13 +94,15 @@ export function penAccion(l: Luchador): number {
   // Éxtasis: −20 a toda acción en lugar de los demás negativos, salvo los físicos (Core p.128).
   if (l.extasis) return 20 + l.penFisico + l.penTecnica - luna;
   // El penalizador de una técnica (desventaja) no lo quita nada sobrenatural (Dominus p.74).
-  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + l.penTecnica + negativos + miedo - luna;
-  // Dolor como estado (Core p.233): no baja con los asaltos como el de los críticos.
-  const estadoDolor = l.ficha.estados?.dolor ? PEN_DOLOR[l.ficha.estados.dolor] : 0;
+  if (c.sinDolorNiCansancio || l.modo.berserker) return l.penFisico + l.penTecnica + l.penEstado + negativos + miedo - luna;
+  // Dolor como estado (Core p.233; el de la planilla no baja con los asaltos): Inmunidad al dolor lo
+  // divide (Core p.21). Los Estados sobrenaturales (Penalización menor) no los divide nada (p.104).
+  const estadoDolor = (l.ficha.estados?.dolor ? PEN_DOLOR[l.ficha.estados.dolor] : 0) + l.penDolorEstado;
+  const dolorDeEstado = c.mitadDolor ? Math.trunc(estadoDolor / 2) : estadoDolor;
   let cansancio = negativoCansancio(l.cansancio, max) * (c.dobleCansancio ? 2 : 1);
   if (c.mitadCansancio) cansancio = Math.trunc(cansancio / 2);
   const dolor = c.mitadDolorCritico ? Math.trunc(l.penDolor / 2) : l.penDolor;
-  return dolor + estadoDolor + l.penFisico + l.penTecnica + cansancio + negativos + miedo - luna;
+  return dolor + dolorDeEstado + l.penEstado + l.penFisico + l.penTecnica + cansancio + negativos + miedo - luna;
 }
 
 /**

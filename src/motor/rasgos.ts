@@ -232,6 +232,8 @@ export interface Capacidades {
   mitadCansancio: boolean;
   dobleCansancio: boolean;
   mitadDolorCritico: boolean;
+  /** Inmunidad al dolor: también el estado Dolor (Core p.21); Eliminación de penalizadores, no (p.104). */
+  mitadDolor: boolean;
   sinDolorNiCansancio: boolean;
   /** Cansancio que puede gastar por asalto: 2; con Uso de la energía necesaria, 5 (Core p.104). */
   maxCansancioAsalto: number;
@@ -336,9 +338,10 @@ function calcularCapacidades(f: Ficha): Capacidades {
     bonoCritico: arma.bonoCritico ?? 0,
     mitadCansancio: inmunidad || eliminacion,
     dobleCansancio: tiene(r.desventajas, 'exhausto'),
-    // El Core dice "dolor" para Inmunidad: incluye la parte de dolor de un crítico. El toolkit
-    // sólo la reduce con Eliminación de penalizadores.
+    // Los negativos de un crítico los dividen las dos: Inmunidad (dolor, Core p.21) y Eliminación
+    // (cansancio o críticos, nunca lo mágico o psíquico, Core p.104).
     mitadDolorCritico: inmunidad || eliminacion,
+    mitadDolor: inmunidad,
     sinDolorNiCansancio: tiene(r.habilidadesKi, 'esencia de vacio'),
     maxCansancioAsalto: tiene(r.habilidadesKi, 'uso de la energia necesaria') ? 5 : MAX_CANSANCIO_ASALTO,
     buenaSuerte,

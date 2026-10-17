@@ -69,7 +69,7 @@ export function crearLuchador(ficha: Ficha, equipo: Equipo, x: number, y: number
     ficha, equipo, pos: { x, y }, mapa: null, cap: capacidades(ficha), entorno: {},
     pv: ficha.pv,
     cansancio: ficha.cansancio ?? ficha.constitucion,
-    penDolor: 0, penFisico: 0, penTecnica: 0, marcas: new Map(), escudoKi: 0, pantallaKi: 0, fascinado: 0,
+    penDolor: 0, penDolorEstado: 0, penEstado: 0, penFisico: 0, penTecnica: 0, marcas: new Map(), escudoKi: 0, pantallaKi: 0, fascinado: 0,
     estado: 'activo',
     trabados: [],
     iniciativa: 0, haActuado: false, aLaDefensiva: false, defensaTotal: false,
@@ -432,6 +432,8 @@ function jugarAsalto(ctx: Contexto) {
     // Quien está apresado y no pudo actuar puede intentar zafarse igual (Core p.92).
     if (l.apresadoPor && !l.intentoZafarse) zafarse(ctx, l);
     l.penDolor = Math.max(0, l.penDolor - 5);
+    l.penDolorEstado = Math.max(0, l.penDolorEstado - 5);
+    l.penEstado = Math.max(0, l.penEstado - 5);
     l.penTecnica = Math.max(0, l.penTecnica - 10);
     // Condiciones con duración: un asalto menos (parálisis inducida, ceguera).
     if (pasarAsalto(l).includes('ceguera')) log(ctx, () => `${l.ficha.nombre} vuelve a ver.`);

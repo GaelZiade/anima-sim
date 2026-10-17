@@ -223,6 +223,24 @@ describe('segunda auditoría: ataques sobrenaturales (Core p.99-101)', () => {
 describe('segunda auditoría: magia y negativos (Core p.232)', () => {
   const mago = () => ficha('Mago', {}, { magia: { zeon: 500, act: 60, proyeccion: 150, vias: {} } });
 
+  it('Eliminación de penalizadores divide críticos, no Estados sobrenaturales; Inmunidad al dolor divide también el estado Dolor (Core p.21, p.104)', async () => {
+    const { penAccion } = await import('../src/motor/calculos');
+    const elim = crearLuchador(ficha('E', { habilidadesKi: ['Eliminación de penalizadores'] }), 'A', 0, 0);
+    const inm = crearLuchador(ficha('I', { ventajas: ['Inmunidad al dolor'] }), 'A', 0, 0);
+    for (const l of [elim, inm]) l.penDolor = 40;
+    expect([penAccion(elim), penAccion(inm)]).toEqual([20, 20]);
+    for (const l of [elim, inm]) {
+      l.penDolor = 0;
+      l.penEstado = 40; // Penalización menor de un conjuro o una técnica
+    }
+    expect([penAccion(elim), penAccion(inm)]).toEqual([40, 40]);
+    for (const l of [elim, inm]) {
+      l.penEstado = 0;
+      l.penDolorEstado = 40; // Dolor del Mushin
+    }
+    expect([penAccion(elim), penAccion(inm)]).toEqual([40, 20]);
+  });
+
   it('el ACT sufre la mitad del negativo, redondeada hacia arriba de a 5; un bono no lo sube', () => {
     const l = crearLuchador(mago(), 'A', 0, 0);
     expect(actDe(l)).toBe(60);

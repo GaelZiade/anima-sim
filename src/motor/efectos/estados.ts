@@ -79,7 +79,7 @@ export function aplicarEstado(
       return;
     }
     case 'penalizacionMenor':
-      def.penDolor += fracaso;
+      def.penEstado += fracaso;
       m.log(ctx, () => `  ${def.ficha.nombre} sufre −${fracaso} a toda acción (baja 5 por asalto).`);
       return;
     case 'penalizacionMayor':
