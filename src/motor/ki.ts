@@ -4,7 +4,9 @@
 
 import { CARACTERISTICAS_KI, type Atributo, type CaracteristicaKi, type EfectoTecnica, type Ficha, type Luchador, type Tecnica } from './modelo';
 import type { TipoAtaque } from './reglas';
-import { capacidades, normalizarRasgo, tamanoArmaDe, tiene } from './rasgos';
+import { capacidades, normalizarRasgo, presenciaBase, tamanoArmaDe, tiene } from './rasgos';
+
+export { presenciaBase };
 import { bonoCaracteristica } from './maniobras';
 
 /** Lo que las técnicas le suman a una acción o a todo el asalto. Los efectos iguales no se suman. */
@@ -959,14 +961,6 @@ export function dificultadDestruccion(l: Luchador, extra: number): number {
 /** Usa alguna habilidad que gaste Ki durante el combate. */
 function gastaKiEnCombate(h: HabilidadesKi): boolean {
   return h.armaduraMayor || h.recuperacion || h.aura || h.absorcion || h.curacion > 0 || h.aumento > 0 || h.destruccion;
-}
-
-/**
- * Presencia base (Core p.25, Tabla 5): la de la planilla; si falta, la RF menos el bono de
- * Constitución, que es como se calcula la RF.
- */
-export function presenciaBase(f: Ficha): number {
-  return f.presencia ?? f.rf - bonoCaracteristica(f.atributos?.CON ?? f.constitucion);
 }
 
 /** Tabla 8 (Dominus p.21): bono a la dificultad del Aura según la suma de las acumulaciones. */

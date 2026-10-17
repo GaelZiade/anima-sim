@@ -11,7 +11,7 @@ import {
   AMENAZADO, atributo, bonoCaracteristica, esApuntado, esManiobraDeControl, ESTADOS_MUSHIN, modEstados, penManiobra,
   type EstadoMushin, type Maniobra,
 } from './maniobras';
-import { localizacionArmadura, tamanoArmaDe, type Ranura } from './rasgos';
+import { localizacionArmadura, presenciaBase, tamanoArmaDe, type Ranura } from './rasgos';
 import { ajusteTaEnergia, conIncremento, type ModKi } from './ki';
 import { hayAura, nivelCeguera, nivelParalisis } from './condiciones';
 import { adyacentes, campoHacia, indice, lineaDeVision, type Vision } from './mapa';
@@ -704,7 +704,7 @@ export function danoBase(atk: Luchador, def: Luchador, esContra = false, ranura?
     // Presencia base más el bono de Poder (Dominus p.55, p.58). El multiplicador va antes de sumar
     // cualquier otro bono (p.55).
     if (ki.danoFijo) arma = ki.danoFijo;
-    if (ki.area || ki.distancia) arma = Math.max(arma, 2 * (atk.ficha.presencia ?? 0) + bonoCaracteristica(atributo(atk, 'POD')));
+    if (ki.area || ki.distancia) arma = Math.max(arma, 2 * presenciaBase(atk.ficha) + bonoCaracteristica(atributo(atk, 'POD')));
     arma = arma * ki.multDano + ki.dano;
     // Dañar energía o Ataque elemental en quien ya lo hace por sí mismo (su habilidad o su arma): +10
     // al daño base de la técnica (Dominus p.63).

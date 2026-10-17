@@ -6,6 +6,7 @@
 import type { ArmaDistancia, DetalleArma, Ficha } from './modelo';
 import { MAX_CANSANCIO_ASALTO, umbralPifia, type TamanoArma } from './reglas';
 import { estilos, type Estilos } from './estilos';
+import { bonoCaracteristica } from './maniobras';
 
 // Los textos que se normalizan son nombres de fichas y catálogos: pocos y repetidos en cada decisión.
 // Se recuerdan (con un tope, por si alguien normaliza texto libre en un bucle).
@@ -30,6 +31,14 @@ export function normalizarRasgo(texto: string): string {
 export function tiene(lista: string[] | undefined, texto: string): boolean {
   const buscado = normalizarRasgo(texto);
   return (lista ?? []).some((x) => normalizarRasgo(x).includes(buscado));
+}
+
+/**
+ * Presencia base (Core p.25, Tabla 5): la de la planilla; si falta, la RF menos el bono de
+ * Constitución, que es como se calcula la RF. Una sola cuenta para todo lo que la usa.
+ */
+export function presenciaBase(f: Ficha): number {
+  return f.presencia ?? f.rf - bonoCaracteristica(f.atributos?.CON ?? f.constitucion);
 }
 
 /** "Sambo (Avanzado)" → 2. Base o sin grado 1, Avanzado 2, Supremo o Arcano 3. */
@@ -295,7 +304,7 @@ function calcularCapacidades(f: Ficha): Capacidades {
   const barrera = Math.max(
     f.barreraDanio ?? 0,
     rexFrame > 0 ? (rexFrame >= 3 ? 200 : 60) : 0,
-    tiene(r.habilidadesKi, 'escudo fisico') ? (f.presencia ?? 0) : 0,
+    tiene(r.habilidadesKi, 'escudo fisico') ? presenciaBase(f) : 0,
   );
 
   // Dañar energía: arma mágica, Extensión del aura al arma, Extrusión de presencia sin armas.
