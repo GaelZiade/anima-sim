@@ -4,7 +4,7 @@ import type { ArmaDistancia, CapaArmadura, Ficha, Luchador } from './modelo';
 import {
   absorcion, BONO_CANSANCIO, bonoFrialdad, MOD_POSICION, MOD_SORPRESA_DEFENSA,
   metrosPorAsalto, negativoCansancio, PEN_ACCION_ACTIVA, PEN_RESISTIR_GOLPE,
-  esMaestro, penDefensaAdicional, penDefensaProyectil, posicionPorOrden, type Posicion, type TipoAtaque,
+  esMaestro, maxAccionesActivas, penDefensaAdicional, penDefensaProyectil, posicionPorOrden, type Posicion, type TipoAtaque,
 } from './reglas';
 import { tabla } from './probabilidades';
 import {
@@ -193,6 +193,16 @@ function tipoMovimientoKi(l: Luchador): number {
   if (!ki || (!ki.movimiento && !ki.lentitud)) return tm;
   for (let i = 0; i < ki.movimiento; i++) tm += tm < 13 ? 1 : 0.5;
   return Math.max(Math.floor(l.ficha.tipoMovimiento / 2), Math.floor(tm) - ki.lentitud);
+}
+
+/**
+ * Tabla 41 (Core p.85): ¿le quedan acciones activas después de hacer `mas` más? Sin Destreza y
+ * Agilidad en la ficha no hay tope.
+ */
+export function quedanAccionesActivas(l: Luchador, mas = 0): boolean {
+  const a = l.ficha.atributos;
+  if (a?.DES === undefined || a.AGI === undefined) return true;
+  return l.accionesActivas + mas < maxAccionesActivas(a.DES + a.AGI);
 }
 
 /**

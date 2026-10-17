@@ -8,7 +8,7 @@ import { buscarCamino, campoHacia, celdaDe, indice, lineaDeVision, type Celda } 
 import {
   activo, bonoCriticoDe, rfCritico, rfDe, alcanceMaximo, modProyectil, visionEntre, ataqueFinal, defensaFinal, distancia, enAlcance, faltaParaLlegar, metrosTotales,
   danoCon, danoEsperado, modControl, penAccion, preparacion, preparacionCon, pronosticoDesde, zonaDe, type Preparacion, pronostico, umbralPifiaTurno, puedeActuar, puedeManiobraEspecial, turnoFinal, PEN_PREVER_SORPRESA, type Pronostico,
-  perfilDe, proximaRanura, golpeAPuntoVulnerable } from './calculos';
+  perfilDe, proximaRanura, golpeAPuntoVulnerable, quedanAccionesActivas } from './calculos';
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { planDeAtaques, type Ranura } from './rasgos';
@@ -85,11 +85,15 @@ export function trabadoConAlguien(l: Luchador): boolean {
   return l.trabados.some((e) => activo(e) && enAlcance(l, e));
 }
 
-/** ¿Puede atacar a `e` este asalto? Si está trabado no se retira. */
+/**
+ * ¿Puede atacar a `e` este asalto? Si está trabado no se retira; si correr hasta él le gasta la
+ * última acción activa de la Tabla 41, llega pero no ataca (Core p.85).
+ */
 export function alcanzable(l: Luchador, e: Luchador): boolean {
-  if (enAlcance(l, e)) return true;
+  if (enAlcance(l, e)) return quedanAccionesActivas(l);
   if (trabadoConAlguien(l)) return false;
-  return faltaParaLlegar(l, e) <= metrosTotales(l) - l.metrosMovidos;
+  if (faltaParaLlegar(l, e) > metrosTotales(l) - l.metrosMovidos) return false;
+  return quedanAccionesActivas(l, necesitaMovimientoActivo(l, e) && !l.cargando ? 1 : 0);
 }
 
 export function necesitaMovimientoActivo(l: Luchador, e: Luchador): boolean {

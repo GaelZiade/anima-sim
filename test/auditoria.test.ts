@@ -401,4 +401,15 @@ describe('Tabla 41 (Core p.85)', () => {
     const r = simularCombate([torpe], [{ ...torpe, id: 'o', nombre: 'Otro', turno: 10 }], { semilla: 1, registrar: true, distanciaInicial: 15, maxAsaltos: 2 });
     expect(r.registro!.some((e) => e.texto.includes('Tabla 41'))).toBe(true);
   });
+  it('la IA sabe que correr con la última acción activa no le deja atacar', async () => {
+    const ia = await import('../src/motor/ia');
+    const base = { id: 't', nombre: 'Torpe', pv: 100, turno: 80, ataque: 100, defensa: 50, danoBase: 40, tipoAtaque: 'FIL' as const, ta: {}, rf: 30, constitucion: 6, tipoMovimiento: 6 };
+    const torpe = crearLuchador({ ...base, atributos: { DES: 5, AGI: 5 } }, 'A', 0, 0);
+    const agil = crearLuchador({ ...base, id: 'a', nombre: 'Ágil', atributos: { DES: 10, AGI: 10 } }, 'A', 0, 0);
+    const lejos = crearLuchador({ ...base, id: 'o', nombre: 'Otro' }, 'B', 10, 0);
+    const cerca = crearLuchador({ ...base, id: 'c', nombre: 'Cerca' }, 'B', 2, 0);
+    expect(ia.alcanzable(torpe, lejos)).toBe(false); // corre: gasta su única acción activa
+    expect(ia.alcanzable(agil, lejos)).toBe(true);
+    expect(ia.alcanzable(torpe, cerca)).toBe(true); // llega sin correr
+  });
 });
