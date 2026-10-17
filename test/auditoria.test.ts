@@ -364,3 +364,15 @@ describe('decisiones del usuario (15/10/2026)', () => {
   });
 });
 
+
+describe('auditoría de combate base (16/10/2026)', () => {
+  it('un disparo de quien no está trabado llega de frente aunque el blanco esté rodeado (Core p.90)', async () => {
+    const { crearLuchador } = await import('../src/motor/combate');
+    const { defensaFinal } = await import('../src/motor/calculos');
+    const f = { id: 'x', nombre: 'X', pv: 100, turno: 50, ataque: 100, defensa: 100, danoBase: 40, tipoAtaque: 'FIL' as const, ta: {}, rf: 30, constitucion: 6, tipoMovimiento: 6 };
+    const def = crearLuchador(f, 'B', 0, 0);
+    const lejos = crearLuchador({ ...f, id: 'l' }, 'A', 20, 0);
+    for (let i = 0; i < 5; i++) def.trabados.push(crearLuchador({ ...f, id: `t${i}` }, 'A', 1, 0));
+    expect(defensaFinal(def, lejos, { proyectil: 'disparo' })).toBe(defensaFinal(def, lejos, { proyectil: 'disparo', posicion: 'frente' }));
+  });
+});
