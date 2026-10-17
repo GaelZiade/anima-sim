@@ -165,7 +165,9 @@ export function capacidad(ki: ModKi | undefined, a: Atributo): number {
  * efectos de Ki del golpe (la Capacidad incrementada de la técnica).
  */
 export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk: Luchador, def: Luchador, apresamiento = 0, kiAtk: ModKi | undefined = atk.ki?.activo) {
-  const mejor = (l: Luchador, as: readonly Atributo[]) => mejorCaracteristica(l, as, l === atk ? kiAtk : l.ki?.activo);
+  // Los cuadrúpedos suman +3 a sus controles de Derribo (Core p.91).
+  const patas = (l: Luchador) => (m === 'derribo' && l.ficha.cuadrupedo ? BONO_CUADRUPEDO : 0);
+  const mejor = (l: Luchador, as: readonly Atributo[]) => mejorCaracteristica(l, as, l === atk ? kiAtk : l.ki?.activo) + patas(l);
   if (m === 'desarmar') return { atk: mejor(atk, ['FUE', 'DES']), def: mejor(def, ['FUE', 'DES']) };
   // Apresamiento (Ki): usa el valor de la técnica en lugar de su Fuerza o Destreza (Dominus p.64).
   // Presa existencial: el apresado controla con su Poder (Dominus p.64).
@@ -179,6 +181,8 @@ export function caracteristicasControl(m: 'derribo' | 'presa' | 'desarmar', atk:
     def: mejor(def, ['FUE', 'AGI']),
   };
 }
+
+const BONO_CUADRUPEDO = 3;
 
 /** Modificador por el % de daño logrado: <100% −3, >200% +3 (Core p.91). */
 export function modificadorPorResultado(porcentaje: number): number {

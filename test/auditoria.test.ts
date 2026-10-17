@@ -363,6 +363,14 @@ describe('decisiones del usuario (15/10/2026)', () => {
     expect(caracteristicasControl('derribo', otro, velez)).toEqual({ atk: 8, def: 12 });
   });
 
+  it('los cuadrúpedos suman +3 a sus controles de Derribo, no a los de Presa (Core p.91)', () => {
+    const caballo = crearLuchador(ficha('Caballo', {}, { atributos: { FUE: 8, DES: 6, AGI: 6 }, cuadrupedo: true }), 'A', 0, 0);
+    const otro = crearLuchador(ficha('O', {}, { atributos: { FUE: 8, DES: 6, AGI: 6 } }), 'B', 1, 0);
+    expect(caracteristicasControl('derribo', otro, caballo)).toEqual({ atk: 8, def: 11 });
+    expect(caracteristicasControl('derribo', caballo, otro)).toEqual({ atk: 11, def: 8 });
+    expect(caracteristicasControl('presa', otro, caballo).def).toBe(8);
+  });
+
   it('Ojos de la Muerte: apuntar a las líneas (−10, +40 al crítico) y sólo ceguera parcial contra invisibles (Dominus p.78)', () => {
     const ojos = crearLuchador(ficha('O', { ventajas: ['Los Ojos de la Muerte'] }), 'A', 0, 0);
     const comun = crearLuchador(ficha('C'), 'A', 0, 0);

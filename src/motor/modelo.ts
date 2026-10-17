@@ -60,6 +60,8 @@ export interface Ficha {
   estados?: EstadosFicha;
   /** Tipo de vuelo: de 7 a 14 o de 15 en adelante da bonos con espacio para maniobrar (Tabla 43). */
   tipoVuelo?: number;
+  /** Criatura cuadrúpeda: +3 a sus controles de Derribo, por la estabilidad de sus patas (Core p.91). */
+  cuadrupedo?: boolean;
   /** Tamaño (Core p.14). Si falta, Fuerza + Constitución; sin esas características no se compara. */
   tamano?: number;
   /** Armas de proyectiles y arrojadizas (Core p.94-96, Tabla 34). */
