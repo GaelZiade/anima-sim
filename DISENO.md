@@ -417,10 +417,14 @@ diez lugares.
 - **Modificadores propios** (`propioAtaque`, `propioDefensa`, `propioTurno` en `calculos.ts`): lo que
   el luchador tiene sin importar contra quién (modos de estilo, bono variable, Orochi, beneficios). Lo
   que depende del rival o de la maniobra sigue siendo un término de cada fórmula.
-- **El motor partido por dominio:** `combate.ts` (asalto, turno, ataque, defensa, daño, críticos),
+- **El motor partido por dominio:** `combate.ts` (asalto, turno, ataque, daño, críticos),
+  `combate-defensa.ts` (la defensa en etapas), `combate-distancia.ts` (disparar, recargar, atrapar),
+  `combate-movimiento.ts` (acercarse, retirarse, huir, Transporte),
   `combate-magia.ts` (lanzar, choque de descargas, anímicos, zonas, invisibles), `combate-ki.ts`
   (Aura, Estados, Impacto, Destrucción, Interrupción, Reflectar, puntos de presión), `llamas.ts`
-  (Tabla 76) y `rotura.ts` (opcional). Todos reciben el `Motor`.
+  (Tabla 76) y `rotura.ts` (opcional). Todos reciben el `Motor`; las partes del combate, el
+  `MotorCombate` (lo mismo más atacar, controles y Resistencias), que importan como tipo: sin ciclos
+  al cargar.
 - **La defensa en etapas:** `EVITAN_EL_GOLPE` (lista ordenada: intangible, holograma), la tirada,
   los escudos, `defensaGana` y `golpeQueEntra`.
 - **IA:** `ia.ts` (cuerpo a cuerpo, distancia, amenaza), `ia-ki.ts` (técnicas, acumular, defensas

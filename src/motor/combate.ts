@@ -2,49 +2,47 @@
 
 import type { Contexto, Equipo, Evento, Ficha, FotoLuchador, Luchador, OpcionesEscenario, Tecnica } from './modelo';
 import { crearRng, type Rng } from './rng';
-import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, valorTirada, type TiradaD100 } from './dados';
+import { DADO_FIJO, textoTirada, tirarD100, tirarD100Cerrada, type TiradaD100 } from './dados';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
 import {
-  absorcion, bonoContraataque, danoFinal, dificultadDisparo, esCritico, extremidadDe, haySorpresa, localizar, nivelCritico, penPifiaTurno,
-  umbralPifia, porcentajeDano, resultadoResistencia, type Resistencia, type TipoAtaque,
+  dificultadDisparo, esCritico, extremidadDe, haySorpresa, localizar, nivelCritico, penPifiaTurno, umbralPifia, resultadoResistencia,
+  type Resistencia,
 } from './reglas';
 import {
-  absorcionContra, activo, ALCANCE, bonoCriticoDe, nro, areaDoblaDano, danoAEscudo, rfCritico, rfDe, ataqueFinal, barreraFrena, danoBase,
-  defensaFinal, distancia, enAlcance, enLaLinea, inmuneAlGolpe, posicionDe, cegueraContra, penAccionFisica, metrosTotales, modControl, reduccionFuego, umbralPifiaTurno, penAccion,
-  perfilDe, proximaRanura, puedeActuar, turnoFinal, zonaDe, defensaEscudoMagico, modProyectil, visionEntre, PEN_COBERTURA,
-  golpeAPuntoVulnerable, quedanAccionesActivas,
+  activo, ALCANCE, bonoCriticoDe, nro, rfCritico, rfDe, ataqueFinal, danoBase, distancia, enAlcance, enLaLinea, posicionDe, cegueraContra,
+  modControl, umbralPifiaTurno, penAccion, proximaRanura, puedeActuar, turnoFinal, modProyectil, visionEntre, PEN_COBERTURA, golpeAPuntoVulnerable,
+  quedanAccionesActivas,
 } from './calculos';
 import {
-  atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esManiobraDeControl, esNoLetal,
-  gradoPresa, localizacionApuntada, modificadorPorResultado, type Maniobra,
+  atributo, caracteristicasControl, mejorCaracteristica, controlCaracteristica, controlEnfrentado, esNoLetal, gradoPresa, localizacionApuntada,
+  modificadorPorResultado, type Maniobra,
 } from './maniobras';
-import type { Golpe, OpcionesCritico, ParadaArea, ResultadoDefensa } from './golpe';
+import type { Golpe, OpcionesCritico } from './golpe';
 import { estadoVisible, pasarAsalto } from './condiciones';
 import * as ia from './ia';
 import * as iaMagia from './ia-magia';
-import { efectoAnimico, interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
+import { interceptar, lanzarConjuro, percibirInvisibles, zonasMagicas } from './combate-magia';
 import {
-  aplicarAuras, ataquesDeIlusiones, destruccionPorKi, detectarPresencias, efectosAlImpactar, efectosDeAsalto, estadosAutomaticos, fusion, golpeAIlusion, moverHacia, trasLaTecnica, usarTecnica, puntosDePresion, reflectar, repetirFascinacion,
+  aplicarAuras, ataquesDeIlusiones, detectarPresencias, efectosDeAsalto, estadosAutomaticos, golpeAIlusion, trasLaTecnica, usarTecnica,
 } from './combate-ki';
-import { roturaDeArmadura, roturaEnParada } from './rotura';
-import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas';
-import { cruzarMuros, transportar, type Motor } from './efectos';
+import { apagarse, arder, mitigarFuego, prender } from './llamas';
+import { type Motor } from './efectos';
+import { accionADistancia, recargaTrasDisparar, disparoParalelo, armaDeFuegoFalla, disparoCombinado } from './combate-distancia';
+import { retirarse, huir, mover, moverEnLinea, llegarJunto, aparecerJunto } from './combate-movimiento';
+import { resolverDefensa } from './combate-defensa';
 import { GRADOS } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, golpeSobrenatural, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
-  rmDe, rpDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
-  proyeccionDeterminada,
+  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, empezarAsaltoMagia, lanzar, rmDe, terminarAsaltoMagia, terminarMantenidos, zeonLibre,
+  actPorCansancio,
 } from './magia';
-import { completarArma, dificultadAtrapar, estadoProyectiles, formasDeDisparar, puedeAtrapar, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
+import { completarArma, estadoProyectiles, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import {
-  buscarCamino, campoHacia, caminoHasta, celdaDe, celdasAlcanzadas, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
-  type Celda, type MapaListo,
+  celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable, type Celda, type MapaListo,
 } from './mapa';
 import {
-  ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv,
-  alRecibirCritico, crearEstadoKi, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi,
-  recuperarKi, type ModKi,
-  nivelMenos, vistaPrevia, conIncremento, apresamientoMantenido, efectosDe, cumpleCircunstancias, defensaSirve,
+  ajusteTaEnergia, alMatar, curable, fichaConAumento, habilidadesKi, type DecisionKi, dificultadAura, radioAura, alPerderPv, alRecibirCritico,
+  crearEstadoKi, empezarAsalto, modDeAccion, ponerEnEspera, terminarAsalto, textoKi, costeKi, type ModKi, nivelMenos, vistaPrevia,
+  apresamientoMantenido, efectosDe, cumpleCircunstancias,
 } from './ki';
 
 export interface OpcionesCombate {
@@ -146,14 +144,31 @@ function sujetoDe(ctx: Contexto, texto: string): number | undefined {
   return mejor?.i;
 }
 
-/** Lo que el motor le presta a los efectos de conjuro (efectos/). */
-const MOTOR: Motor = {
-  log, tirar, tirarResistencia, tirarRf, perderPv, huir, caer, soltar, desarmar, critico, resolverDefensa, terminado, cambiarFicha,
+/**
+ * Lo que el motor le presta a sus partes por dominio (combate-defensa, combate-distancia,
+ * combate-movimiento): lo de `Motor` más lo que sólo usa el combate. Se importa como tipo, así que
+ * no hay ciclo al cargar los módulos.
+ */
+export interface MotorCombate extends Motor {
+  atacar(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque): void;
+  avisarPifia(ctx: Contexto, atk: Luchador): void;
+  advertir(ctx: Contexto, atk: Luchador, blanco: Luchador, dif: number, que: string): boolean;
+  controlResistencia(ctx: Contexto, l: Luchador, cual: string, base: number, dificultad: number, que: string): Resistencia;
+  gastarCansancio(l: Luchador, puntos: number): void;
+  liberarAmenazados(ctx: Contexto, l: Luchador): void;
+  resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento?: number, kiAtk?: ModKi): void;
+}
+
+/** Lo que el motor le presta a los efectos de conjuro (efectos/) y a sus partes por dominio. */
+const MOTOR: MotorCombate = {
+  log, tirar, tirarResistencia, tirarRf, perderPv, caer, soltar, desarmar, critico, terminado, cambiarFicha,
   verificarCaida, ofrecerContra, aplicarDano, limitePorDano, moverEnLinea,
+  huir: (ctx, l) => huir(MOTOR, ctx, l),
+  resolverDefensa: (ctx, atk, def, habAtk, tA, o, etiqueta) => resolverDefensa(MOTOR, ctx, atk, def, habAtk, tA, o, etiqueta),
+  atacar, avisarPifia, advertir, controlResistencia, gastarCansancio, liberarAmenazados, resolverControl,
   prender: (ctx, atk, l, valor) => prender(MOTOR, ctx, atk, l, valor),
   mitigarFuego: (ctx, l, intensidades) => mitigarFuego(MOTOR, ctx, l, intensidades),
 };
-
 
 function equipoVivo(ctx: Contexto, equipo: Equipo): boolean {
   return ctx.luchadores.some((l) => l.equipo === equipo && activo(l));
@@ -462,7 +477,7 @@ function turno(ctx: Contexto, l: Luchador) {
     log(ctx, () => `${l.ficha.nombre} está a la defensiva: no puede actuar este asalto.`);
   // Retirarse es moverse: apresado, atado o con Lazos, primero tiene que librarse (Core p.92, p.94).
   if (puedeActuar(l) && ctx.opciones.huida && !l.bono?.ira && !l.apresadoPor && !l.atadura && !l.lazos && ia.quiereHuir(ctx, l)) {
-    retirarse(ctx, l);
+    retirarse(MOTOR, ctx, l);
     l.haActuado = true;
     return;
   }
@@ -486,7 +501,7 @@ function turno(ctx: Contexto, l: Luchador) {
       l.disparo = true;
     }
     const distancia0 = l.ataquesRestantes > 0 && puedeActuar(l) ? ia.accionADistancia(ctx, l) : null;
-    if (distancia0) accionADistancia(ctx, l, distancia0);
+    if (distancia0) accionADistancia(MOTOR, ctx, l, distancia0);
     while (l.ataquesRestantes > 0 && puedeActuar(l) && !terminado(ctx)) {
       // Curación por Ki: una acción activa en lugar de un ataque (interpretación, Core p.104).
       const cura = ia.curacionKi(ctx, l);
@@ -511,7 +526,7 @@ function turno(ctx: Contexto, l: Luchador) {
       }
       if (!obj) break;
       if (!enAlcance(l, obj)) {
-        mover(ctx, l, obj);
+        mover(MOTOR, ctx, l, obj);
         if (!enAlcance(l, obj)) break;
       }
       // Atacar es otra acción activa: con todas las de la Tabla 41 gastadas (correr, levantarse,
@@ -530,7 +545,7 @@ function turno(ctx: Contexto, l: Luchador) {
     // Sin ataques pero sin trabarse: igual se acerca (salvo quien usó un arma a distancia).
     if (l.ataquesRestantes === 0 && !l.disparo && puedeActuar(l) && !l.trabados.some(activo) && !l.apresadoPor) {
       const obj = ia.elegirObjetivo(ctx, l);
-      if (obj && !enAlcance(l, obj)) mover(ctx, l, obj);
+      if (obj && !enAlcance(l, obj)) mover(MOTOR, ctx, l, obj);
     }
   }
   l.sorprendeA.clear();
@@ -575,126 +590,6 @@ function curar(ctx: Contexto, l: Luchador, quien: Luchador, ki: number) {
   quien.pv += pv;
   quien.curado += pv;
   log(ctx, () => `${l.ficha.nombre} usa Curación por Ki${quien === l ? '' : ` en ${quien.ficha.nombre}`}: ${ki} de Ki, recupera ${pv} PV (${quien.pv}/${quien.ficha.pv}) [reserva ${l.ki!.reserva}].`);
-}
-
-/**
- * Retirarse del combate (Core p.94): acción activa. Cada enemigo trabado con ataques disponibles
- * tiene una Acción Respuesta contra él, con el modificador de flanco; si alguna le hace daño, no
- * puede irse este asalto. Si sorprendió a todos, se va sin que lo ataquen. Con Acrobacias puede
- * escapar sin recibir ataques si gana por más de 40 a la habilidad ofensiva de cada uno.
- */
-function retirarse(ctx: Contexto, l: Luchador) {
-  const trabados = ctx.luchadores.filter((e) => e.equipo !== l.equipo && activo(e) && enAlcance(l, e));
-  l.ataquesRestantes = 0;
-  if (trabados.every((e) => l.sorprendeA.has(e))) return huir(ctx, l);
-  if (l.ficha.acrobacias !== undefined) {
-    // Acrobacias es una acción física: sufre la columna correspondiente de la Tabla 43 (Core p.90).
-    const base = conIncremento(l.ficha.acrobacias, l.ki?.activo.acrobacias ?? 0) - penAccion(l) - penAccionFisica(l);
-    const t = tirar(ctx, umbralPifia(l.ficha.acrobacias, l.cap.ajustePifia));
-    const acrobacias = base + valorTirada(t);
-    const supera = trabados.every((e) => acrobacias - (ataqueFinal(e, l, { esContra: true }) + valorTirada(tirar(ctx, e.cap.umbralAtaque))) > 40);
-    log(ctx, () => `${l.ficha.nombre} intenta escapar con Acrobacias (${textoTirada(base, t)} = ${acrobacias})${supera ? ' y lo logra' : ''}.`);
-    if (supera) return huir(ctx, l);
-  }
-  log(ctx, () => `${l.ficha.nombre} intenta retirarse.`);
-  l.huyendo = true;
-  let danado = false;
-  for (const e of trabados) {
-    if (!activo(l)) break;
-    if (e.ataquesRestantes <= 0 || !puedeActuar(e)) continue;
-    const antes = l.pv;
-    atacar(ctx, e, l, { esContra: true, bono: 0 });
-    if (l.pv < antes) danado = true;
-  }
-  l.huyendo = false;
-  if (!activo(l)) return;
-  if (danado) log(ctx, () => `  ${l.ficha.nombre} no logra retirarse.`);
-  else huir(ctx, l);
-}
-
-function huir(ctx: Contexto, l: Luchador) {
-  l.estado = 'huido';
-  soltar(l);
-  if (l.apresando) soltar(l.apresando);
-  liberarAmenazados(ctx, l);
-  for (const x of ctx.luchadores) x.trabados = x.trabados.filter((e) => e !== l);
-  log(ctx, () => `${l.ficha.nombre} huye del combate.`);
-}
-
-function mover(ctx: Contexto, l: Luchador, obj: Luchador) {
-  if (l.apresadoPor || l.apresando) return;
-  if (l.trabados.some((e) => activo(e) && enAlcance(l, e))) return; // trabado: no se retira
-  const total = metrosTotales(l);
-  const disponible = total - l.metrosMovidos;
-  if (disponible <= 0) return;
-  const desde = { ...l.pos };
-  const celdas: { x: number; y: number }[] = [];
-  const paso = l.mapa ? moverEnMapa(ctx, l, obj, l.mapa, disponible, celdas) : moverEnLinea(l, obj, disponible);
-  if (!celdas.length) celdas.push(desde, { ...l.pos });
-  if (paso <= 0) return;
-  cruzarMuros(MOTOR, ctx, l, desde);
-  l.metrosMovidos += paso;
-  if (obj.equipo !== l.equipo) l.avanzoHaciaEnemigo = true;
-  ctx.movimientosEnAsalto++;
-  const yaActivo = l.movioActivo;
-  if (l.metrosMovidos > total / 4 && !yaActivo) {
-    l.movioActivo = true;
-    hacerOtraAccion(l);
-    // En carga, correr no penaliza el ataque (Core p.90).
-    if (!l.cargando) l.accionesActivas++;
-  }
-  const nota = l.movioActivo && !yaActivo ? (l.cargando ? ' (a la carga)' : ' (acción activa, −25)') : '';
-  log(ctx, () => `${l.ficha.nombre} avanza ${paso.toFixed(1)} m${nota}.`, () => ({ camino: { quien: nro(ctx, l), celdas } }));
-  for (const e of ctx.luchadores) {
-    if (e.equipo === l.equipo || !activo(e) || !enAlcance(l, e)) continue;
-    if (!e.trabados.includes(l)) e.trabados.push(l);
-    if (!l.trabados.includes(e)) l.trabados.push(e);
-  }
-}
-
-/**
- * En el mapa: entre las celdas a las que llega con lo que le queda de movimiento, sin pisar muros
- * ni a otros, va a la que lo deja más cerca de trabarse con `obj` (y, a igual distancia, a la que
- * le cuesta menos). Devuelve los metros caminados.
- */
-function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, disponible: number, camino: Celda[]): number {
-  const ocupadas = m.ocupadas.fill(0);
-  for (const x of ctx.luchadores) if (x !== l && activo(x)) ocupadas[indice(m, x.pos)] = 1;
-  const falta = campoHacia(m, obj.pos);
-  // La primera celda trabada con el objetivo que sale de la búsqueda es la más barata: ahí termina.
-  let mejor = buscarCamino(m, l.pos, ocupadas, disponible + 1e-6, (i) => falta[i] === 0);
-  const costo = m.costos;
-  if (mejor < 0) {
-    // No llega este asalto: la celda alcanzable que más lo acerca (y, a igual distancia, la más barata).
-    mejor = indice(m, l.pos);
-    for (const i of celdasAlcanzadas(m)) {
-      if (falta[i] < falta[mejor] - 1e-6 || (Math.abs(falta[i] - falta[mejor]) < 1e-6 && costo[i] < costo[mejor])) mejor = i;
-    }
-  }
-  if (mejor === indice(m, l.pos)) return 0;
-  const hasta = celdaDe(m, mejor);
-  // El recorrido sólo hace falta para verlo en vivo.
-  if (ctx.registro) camino.push(...caminoHasta(m, l.pos, hasta));
-  l.pos = hasta;
-  return costo[mejor];
-}
-
-/** Sin mapa: en línea recta hacia el objetivo, ubicándose alrededor de él al llegar. */
-function moverEnLinea(l: Luchador, obj: Luchador, disponible: number): number {
-  const d = distancia(l, obj);
-  const falta = d - ALCANCE * 0.75;
-  const paso = Math.min(Math.max(0, falta), disponible);
-  if (paso <= 0) return 0;
-  if (paso >= falta) {
-    // Llega: se ubica alrededor del objetivo, repartiendo el ángulo entre los que ya están.
-    const base = Math.atan2(l.pos.y - obj.pos.y, l.pos.x - obj.pos.x);
-    const k = obj.trabados.length;
-    const ang = base + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 4);
-    l.pos = { x: obj.pos.x + Math.cos(ang) * ALCANCE * 0.75, y: obj.pos.y + Math.sin(ang) * ALCANCE * 0.75 };
-  } else {
-    l.pos = { x: l.pos.x + ((obj.pos.x - l.pos.x) / d) * paso, y: l.pos.y + ((obj.pos.y - l.pos.y) / d) * paso };
-  }
-  return paso;
 }
 
 function gastarCansancio(l: Luchador, puntos: number) {
@@ -744,7 +639,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // Transporte automático (Ki): con una técnica que lo lleva hasta el blanco aparece junto a él y lo
   // golpea cuerpo a cuerpo (Dominus p.59).
   const transporte = a.tecnica && !enAlcance(atk, def) ? vistaPrevia(atk, a.tecnica).transporte : 0;
-  if (transporte && distancia(atk, def) <= transporte + ALCANCE) aparecerJunto(ctx, atk, def);
+  if (transporte && distancia(atk, def) <= transporte + ALCANCE) aparecerJunto(MOTOR, ctx, atk, def);
   // Fuera del cuerpo a cuerpo sólo se ataca con una técnica a distancia (Dominus p.57) o un arma a
   // distancia (Core p.94): hace falta verlo, y la cobertura resta 40.
   const aDistancia = !enAlcance(atk, def);
@@ -829,13 +724,13 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   // Estela de destrucción: alcanza también a quien esté en la línea recta hasta el blanco; con
   // Proyección, el atacante viaja con su ataque hasta él (Dominus p.58).
   const estela = aDistancia && ki?.estela ? enLaLinea(ctx.luchadores, atk, def) : [];
-  if (aDistancia && ki?.proyeccion && !arma) llegarJunto(ctx, atk, def, 'viaja con su ataque');
+  if (aDistancia && ki?.proyeccion && !arma) llegarJunto(MOTOR, ctx, atk, def, 'viaja con su ataque');
   for (let g = 0; g < golpes; g++) {
     if (!activo(atk) || !activo(def) || (g > 0 && atk.aLaDefensiva)) break;
     // Se le fue del alcance (se retiró con un Transporte, lo despidió un Impacto): la serie se corta.
     if (g > 0 && !aDistancia && !enAlcance(atk, def)) break;
     const tA = fijo ? DADO_FIJO : tirar(ctx, atk.cap.umbralAtaque + compleja);
-    if (tA.pifia && arma?.fuego) armaDeFuegoFalla(ctx, atk, a.proyectil!.arma, tA.nivelPifia);
+    if (tA.pifia && arma?.fuego) armaDeFuegoFalla(MOTOR, ctx, atk, a.proyectil!.arma, tA.nivelPifia);
     if (tA.pifia) {
       atk.aLaDefensiva = true; // la pifia le niega el resto de acciones activas
       atk.sorprendeA.clear();
@@ -876,7 +771,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       // Disparos paralelos (opcional, Core p.95): quien recibe un disparo sin haber actuado y con menos
       // de 25 de diferencia de turno puede disparar a su vez antes de defenderse.
       if (g === 0 && arma && aDistancia && ctx.opciones.disparosParalelos) {
-        disparoParalelo(ctx, blanco, atk);
+        disparoParalelo(MOTOR, ctx, blanco, atk);
         if (!activo(atk) || !activo(blanco)) continue;
       }
       // Una técnica de Ki a distancia es una descarga: un mago la puede interceptar (Core p.117).
@@ -890,7 +785,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
       if (ki?.area) opciones = { ...opciones, centroArea: { ...def.pos } };
       // Camuflar ataque: si no lo advierte, se defiende con el penalizador de Sorpresa (Dominus p.52).
       if (g === 0 && !limitado && ki?.camuflar) camuflar(ctx, atk, blanco, ki.camuflar);
-      const r = resolverDefensa(ctx, atk, blanco, hab, tA, opciones, etiquetaPara(blanco));
+      const r = resolverDefensa(MOTOR, ctx, atk, blanco, hab, tA, opciones, etiquetaPara(blanco));
       if (blanco === def && r.defensor === def && r.impacto) impactoCombinado = true;
       if (blanco === def && !r.impacto) cortaCombo = true;
       if (r.contra !== null) {
@@ -902,7 +797,7 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
     // Engatillar: la amenaza se consume cuando quien amenaza ataca a su amenazado.
     if (def.amenazadoPor === atk && m !== 'engatillar') def.amenazadoPor = null;
     // Ataque combinado (Leo): si la hoja alcanzó el cuerpo, dispara a bocajarro antes de cualquier contra.
-    if (m === 'combinado' && impactoCombinado && atk.balas > 0 && activo(atk) && activo(def)) disparoCombinado(ctx, atk, def);
+    if (m === 'combinado' && impactoCombinado && atk.balas > 0 && activo(atk) && activo(def)) disparoCombinado(MOTOR, ctx, atk, def);
     // La sorpresa vale sólo para su primera acción (Core p.86): se gasta al resolverla, después de
     // que el sorprendido se defendió con su −90 y antes de cualquier contra.
     atk.sorprendeA.clear();
@@ -920,124 +815,6 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
   }
 }
 
-/**
- * Disparar, recargar o apuntar con un arma a distancia: ocupa todo el turno (Core p.94-96). Los
- * disparos van al objetivo y, si cae, al siguiente que mejor rinda (con −10 por cambiar de blanco).
- */
-function accionADistancia(ctx: Contexto, l: Luchador, d0: ia.AccionDistancia) {
-  // El motor sólo acepta las formas de disparar que permite la regla (recarga y cadencia, Core p.97).
-  const formas = d0.tipo === 'disparar' ? formasDeDisparar(l, d0.arma) : [];
-  const d = d0.tipo === 'disparar' && formas.length && !formas.some((f) => f.disparos === d0.disparos && f.pen === d0.pen) ? { ...d0, ...formas[0] } : d0;
-  const arma = l.ficha.armasDistancia![d.arma];
-  const st = l.proyectiles[d.arma];
-  l.disparo = true;
-  if (d.tipo === 'recargar') {
-    st.recargaFalta--;
-    // Una recámara vacía se recarga entera (ballesta de repetición).
-    const recamara = completarArma(arma).recamara;
-    if (!st.recargaFalta && recamara) st.enRecamara = Math.min(recamara, st.municion);
-    log(ctx, () => `${l.ficha.nombre} recarga ${arma.nombre}${st.recargaFalta ? ` (le falta${st.recargaFalta > 1 ? 'n' : ''} ${st.recargaFalta} asalto${st.recargaFalta > 1 ? 's' : ''})` : ''}.`);
-  } else if (d.tipo === 'apuntar') {
-    const sigue = l.apuntando?.blanco === d.objetivo && l.apuntando.arma === d.arma;
-    l.apuntando = { blanco: d.objetivo, arma: d.arma, asaltos: sigue ? Math.min(3, l.apuntando!.asaltos + 1) : 1 };
-    log(ctx, () => `${l.ficha.nombre} apunta con ${arma.nombre} a ${d.objetivo.ficha.nombre} (+${10 * l.apuntando!.asaltos}).`);
-  } else {
-    // Antes de disparar se aleja de quien lo alcanzaría el asalto que viene (hasta un cuarto de su
-    // movimiento, sin penalizador), si desde ahí sigue viendo y alcanzando a su blanco.
-    const atras = ia.retroceso(ctx, l, d.objetivo, d.arma);
-    if (atras) {
-      const desde = { ...l.pos };
-      l.pos = atras.celda;
-      l.metrosMovidos += atras.metros;
-      ctx.movimientosEnAsalto++;
-      log(ctx, () => `${l.ficha.nombre} retrocede ${atras.metros.toFixed(1)} m.`, () => ({ camino: { quien: nro(ctx, l), celdas: [desde, { ...l.pos }] } }));
-    }
-    if (d.disparos > 1) log(ctx, () => `${l.ficha.nombre} ${arma.clase === 'disparo' ? 'dispara' : 'lanza'} ${d.disparos} veces con ${arma.nombre} (−${d.pen} a cada uno).`);
-    let blanco: Luchador | null = d.objetivo;
-    for (let k = 0; k < d.disparos && blanco; k++) {
-      if (!ia.armaUsable(l, d.arma)) break;
-      atacar(ctx, l, blanco, { esContra: false, bono: 0, proyectil: { arma: d.arma, pen: d.pen } });
-      if (!puedeActuar(l) || terminado(ctx)) break;
-      if (!activo(blanco)) blanco = ia.siguienteBlanco(ctx, l, d.arma, d.pen);
-    }
-    st.recargaFalta = recargaTrasDisparar(l, d.arma, d.recargaFalta);
-  }
-  l.ataquesRestantes = 0;
-}
-
-/** Recarga pendiente después de disparar: con recámara, sólo cuando se vacía (y es la recarga entera). */
-function recargaTrasDisparar(l: Luchador, i: number, segunRecarga: number): number {
-  const a = completarArma(l.ficha.armasDistancia![i]);
-  if (!a.recamara) return segunRecarga;
-  return l.proyectiles[i].enRecamara <= 0 && l.proyectiles[i].municion > 0 ? a.recarga : 0;
-}
-
-function disparoParalelo(ctx: Contexto, l: Luchador, atk: Luchador) {
-  if (l.haActuado || l === ctx.turnoDe || !puedeActuar(l) || l.ataquesRestantes <= 0 || !activo(atk)) return;
-  if (Math.abs(l.iniciativa - atk.iniciativa) >= 25) return;
-  const d = ia.accionADistancia(ctx, l);
-  if (d?.tipo !== 'disparar') return;
-  log(ctx, () => `  ${l.ficha.nombre} dispara a la vez (disparos paralelos).`);
-  accionADistancia(ctx, l, d);
-  l.haActuado = true;
-}
-
-
-/**
- * Trucos de manos contra un proyectil (Core p.94): contra la dificultad del proyectil, o enfrentado
- * con el ataque final si es sobrenatural (una técnica de Ki a distancia). −25 por cada control de
- * más en el asalto. Devuelve si lo atrapó.
- */
-function atrapar(ctx: Contexto, l: Luchador, atk: Luchador, ataqueTotal: number, o: Golpe): boolean {
-  const dif = dificultadAtrapar(o.ranura.proyectil);
-  const base = (l.ficha.trucosDeManos ?? 0) - penAccion(l) - PEN_ATRAPAR_ADICIONAL * l.atrapadas;
-  l.atrapadas++;
-  const t = tirar(ctx, umbralPifia(l.ficha.trucosDeManos ?? 0, l.cap.ajustePifia));
-  const total = base + valorTirada(t);
-  const contra = dif ?? ataqueTotal;
-  const logra = !t.pifia && (dif === null ? total > contra : total >= contra);
-  log(ctx, () => `  ${l.ficha.nombre} intenta atrapar el ${dif === null ? 'ataque' : 'proyectil'} de ${atk.ficha.nombre} (Trucos de manos ${textoTirada(base, t)} contra ${contra}): ${logra ? '¡lo atrapa!' : 'no lo logra'}.`);
-  return logra;
-}
-
-/**
- * Pifia con un arma de fuego (Core p.80-81): por debajo del umbral (80, el cañón 70; +15 por cada +5 de calidad)
- * se encasquilla; por encima, estalla. En los dos casos no la puede usar más en el combate.
- */
-function armaDeFuegoFalla(ctx: Contexto, l: Luchador, i: number, nivel: number) {
-  const arma = l.ficha.armasDistancia![i];
-  const estalla = nivel >= umbralEstallido(arma.calidad, arma.nombre);
-  l.proyectiles[i].inutil = estalla ? 'rota' : 'encasquillada';
-  log(ctx, () => `  ¡${estalla ? 'Estalla' : 'Se encasquilla'} ${arma.nombre} de ${l.ficha.nombre}!`);
-}
-
-/** Bocajarro: +30 al disparo (Tabla 47). */
-const BONO_BOCAJARRO = 30;
-const RANURA_BALA: Ranura = { pen: 0, sinArmas: false, bala: true };
-
-/**
- * Segundo ataque del Ataque combinado (Leo, Dominus p.101): el disparo a bocajarro, con +30 y sin más
- * penalizador que el −20 de la maniobra. A bocajarro el defensor no sufre los penalizadores contra
- * disparos: se defiende como de un golpe cuerpo a cuerpo (Core p.96). No consume otro ataque.
- */
-function disparoCombinado(ctx: Contexto, atk: Luchador, def: Luchador) {
-  atk.balas--;
-  const opciones = { declarados: 1, ranura: RANURA_BALA, bono: BONO_BOCAJARRO, maniobra: 'combinado' as const, esContra: false };
-  const hab = ataqueFinal(atk, def, opciones);
-  const tA = tirar(ctx, atk.cap.umbralAtaque);
-  const etiqueta = `${atk.ficha.nombre} dispara a bocajarro a ${def.ficha.nombre}`;
-  if (tA.pifia) {
-    atk.aLaDefensiva = true;
-    log(ctx, () => `${etiqueta}: ¡pifia! (sacó ${tA.natural}, nivel ${tA.nivelPifia}).`,
-      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: false, resultado: null } }));
-    avisarPifia(ctx, atk);
-    if (enAlcance(atk, def)) ofrecerContra(ctx, def, atk, tA.nivelPifia);
-    return;
-  }
-  const r = resolverDefensa(ctx, atk, def, hab, tA, { maniobra: 'normal', esContra: false, ranura: RANURA_BALA, tipo: perfilDe(atk, RANURA_BALA).tipoAtaque }, etiqueta);
-  if (r.contra !== null) ofrecerContra(ctx, r.defensor, atk, r.contra);
-}
-
 /** La pifia niega el resto de las acciones activas del asalto (Core p.98). */
 function avisarPifia(ctx: Contexto, atk: Luchador) {
   if (atk.ataquesRestantes > 0 && activo(atk))
@@ -1049,433 +826,6 @@ function avisarPifia(ctx: Contexto, atk: Luchador) {
 /** Quien amenaza pierde la amenaza si lo impactan o cae (interpretación: la regla no lo precisa). */
 function liberarAmenazados(ctx: Contexto, l: Luchador) {
   for (const x of ctx.luchadores) if (x.amenazadoPor === l) x.amenazadoPor = null;
-}
-
-/** Un escudo sobrenatural que recibe golpes (de energía del Ki, mágico; mañana, psíquico). */
-interface EscudoSobrenatural {
-  /** Cómo se lo nombra en el registro ("el escudo de energía de X", "Escudo de Luz de X"). */
-  nombre: string;
-  resistencia: number;
-  quedan(resistencia: number): void;
-  romper(): void;
-}
-
-/**
- * El escudo detiene un golpe y recibe su daño (Core p.100): si aguanta, pierde esa resistencia; si no,
- * se rompe y el resto pasa sin defensa. Devuelve el daño base que pasa, o −1 si aguantó.
- */
-function escudoRecibe(ctx: Contexto, golpe: number, ataqueTotal: number, esc: EscudoSobrenatural): number {
-  if (golpe < esc.resistencia) {
-    const quedan = esc.resistencia - golpe;
-    esc.quedan(quedan);
-    log(ctx, () => `  ${esc.nombre[0].toUpperCase()}${esc.nombre.slice(1)} aguanta (le quedan ${quedan}).`);
-    return -1;
-  }
-  const pasa = golpe - esc.resistencia;
-  esc.romper();
-  log(ctx, () => `  ¡El golpe rompe ${esc.nombre}! Pasa con daño ${pasa} → ${ataqueTotal}.`);
-  return pasa;
-}
-
-/** Algo que hace que un golpe no llegue al defensor antes de que se defienda (y lo narra). */
-type EvitaElGolpe = (ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, tipo: TipoAtaque, etiqueta: string) => boolean;
-
-/** Intangibilidad (Ki): lo atraviesa todo ataque que no sea de energía (Dominus p.69). */
-const intangible: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
-  if (!esIntangible(def) || tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) return false;
-  log(ctx, () => `${etiqueta}: el golpe atraviesa a ${def.ficha.nombre}, intangible.`);
-  return true;
-};
-
-/**
- * Holograma: quien no lo descubrió puede pegarle a la imagen (la mitad de las veces, interpretación); un
- * golpe de energía la deshace (Core p.127).
- */
-const holograma: EvitaElGolpe = (ctx, atk, def, o, tipo, etiqueta) => {
-  if (!def.holograma || atk.descubre.has(def) || ctx.rng.next() >= 0.5) return false;
-  log(ctx, () => `${etiqueta}: ¡ataca a la imagen! El golpe la atraviesa.`);
-  if (tipo === 'ENE' || atk.cap.danaEnergia || o.ki?.danaEnergia) {
-    const m = mantenidoDe(def, 'holograma');
-    if (m) dejarDeMantener(def, m);
-    log(ctx, () => `  La imagen se deshace.`);
-  }
-  return true;
-};
-
-/** En este orden: lo que evita el golpe sin defensa. Uno nuevo (un poder psíquico, una ilusión) se agrega acá. */
-const EVITAN_EL_GOLPE: readonly EvitaElGolpe[] = [intangible, holograma];
-
-/** Intangible por su técnica o por la de un aliado que todavía la mantiene (Dominus p.69). */
-function esIntangible(l: Luchador): boolean {
-  const por = l.intangiblePor;
-  return !!l.ki?.activo.intangible || (!!por && activo(por) && !!por.ki?.activo.intangible);
-}
-
-/**
- * La defensa gana (resultado 0 o menos): absorber Ki de la técnica, Reflectar, el desarme de Emp
- * arcano y la contra que le corresponde.
- */
-function defensaGana(
-  ctx: Contexto, atk: Luchador, quienDefiende: Luchador, o: Golpe, kiDef: ModKi | undefined, resultado: number, ataqueTotal: number,
-): ResultadoDefensa {
-  // Absorción de Ki: con una defensa que permita contraatacar absorbe Ki de la técnica (Dominus p.64).
-  if (kiDef?.absorcionKi && resultado < 0 && o.costeTecnica && quienDefiende.ki) {
-    const absorbe = recuperarKi(quienDefiende, Math.min(kiDef.absorcionKi, o.costeTecnica));
-    if (absorbe) log(ctx, () => `  ${quienDefiende.ficha.nombre} absorbe ${absorbe} de Ki de la técnica [reserva ${quienDefiende.ki!.reserva}].`);
-  }
-  // Reflectar el ataque (Ki): lo devuelve con la habilidad final del atacante, más el bono de
-  // contraataque, sin sus efectos esotéricos y sin gastar acciones; cuenta como su contra (Dominus p.71).
-  if (kiDef?.reflectar && !o.reflejado && activo(atk)) {
-    reflectar(MOTOR, ctx, quienDefiende, atk, ataqueTotal + (resultado < 0 ? bonoContraataque(resultado) : 0), o, kiDef);
-    return { defensor: quienDefiende, contra: null, impacto: false };
-  }
-  // Emp arcano: cada defensa con éxito contra un arma permite desarmar (Dominus p.39).
-  if (quienDefiende.cap.est.desarmaAlDefender && !atk.cap.desarmado && activo(atk)) {
-    const c = caracteristicasControl('desarmar', quienDefiende, atk);
-    // Control directo, sin los modificadores de Emp (Dominus p.39); los negativos sí cuentan.
-    if (controlEnfrentado(ctx.rng, c.atk + modControl(quienDefiende), c.def + modControl(atk)) > 0) desarmar(ctx, atk, quienDefiende);
-  }
-  // Transporte automático atado a la defensa: con éxito puede retirarse del combate (Dominus p.59).
-  if (kiDef?.transporte && !quienDefiende.presaExistencial && ia.valorRetirada(ctx, quienDefiende, kiDef.transporte) > 0 && retirarseConTransporte(ctx, quienDefiende, atk, kiDef.transporte)) {
-    return { defensor: quienDefiende, contra: null, impacto: false };
-  }
-  // Parada o esquiva limitada (Ki): no permite contraatacar (Dominus p.53).
-  // Ataque indirecto (Ki): no se puede contraatacar (Dominus p.52).
-  return { defensor: quienDefiende, contra: resultado < 0 && !kiDef?.sinContra && !o.ki?.indirecto ? bonoContraataque(resultado) : null, impacto: false };
-}
-
-/**
- * El golpe entra: maniobras de control, daño contra la armadura, efectos sobrenaturales de la técnica,
- * Engatillar, Destrucción por Ki, puntos de presión, Absorción de energía y el fuego.
- */
-function golpeQueEntra(
-  ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, resultado: number, baseTrasEscudo: number, tipoGolpe: TipoAtaque,
-  resiste: boolean, avisar: () => void,
-): ResultadoDefensa {
-  const m = o.maniobra;
-  const porcentaje = porcentajeDano(resultado, absorcionContra(def, atk, m, o.tipo, o.ranura, o.ki));
-
-  if (esManiobraDeControl(m)) {
-    if (porcentaje >= 10) resolverControl(ctx, atk, def, m, porcentaje, o.esContra, o.ki?.apresamiento ?? 0, o.ki);
-    else log(ctx, () => `  No alcanza el 10% necesario para la maniobra.`);
-    if (m === 'desarmar') {
-      avisar();
-      return { defensor: def, contra: null, impacto: true };
-    }
-  }
-
-  // Daño: Derribo y Presa a la mitad (Grappling supremo completo), contra la armadura real.
-  let base = baseTrasEscudo >= 0 ? baseTrasEscudo : danoBase(atk, def, o.esContra, o.ranura, o.ki);
-  if (o.factorDano !== undefined) base = Math.floor(base * o.factorDano);
-  if (def.bono?.inmuneFuego) base = Math.max(0, base - reduccionFuego(def, tipoGolpe));
-  if ((m === 'derribo' || m === 'presa') && !atk.cap.est.danoCompletoEnPresa) base = Math.floor(base / 2);
-  // Contra la armadura real (los controles van contra TA 0 sólo para alcanzar el 10%); en un
-  // apuntado, la de la zona.
-  const abs = absorcionContra(def, atk, esManiobraDeControl(m) ? 'normal' : m, o.tipo, o.ranura, o.ki);
-  const tipo = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  const frena = barreraFrena(def, atk, base, o.ki);
-  let dano = frena ? 0 : danoFinal(base, porcentajeDano(resultado, abs));
-  // Sangre de Aeon: daño de su elemento a la mitad.
-  if (def.cap.est.elementoAfin && def.cap.est.elementoAfin === tipo) dano = Math.floor(dano / 2);
-  // Un área contra un ser con acumulación: el doble de daño (Core p.99).
-  if (areaDoblaDano(atk, def, m, o.area, o.ki)) dano *= 2;
-  // Efectos sobrenaturales de la técnica: los que piden dañar cuentan el daño que habría hecho aunque
-  // tenga Daño reducido (Dominus p.69, p.73). Impacto basta con superar la defensa (p.68).
-  const ki = o.ki;
-  if (ki && (ki.impacto || ki.marca || ki.interrumpe || ki.estados.length || ki.danoReducido) && !esManiobraDeControl(m)) {
-    const habriaDanado = dano;
-    if (ki.danoReducido) dano = Math.floor(dano * (1 - ki.danoReducido));
-    const porcentajeContacto = porcentajeDano(resultado, absorcion(0));
-    efectosAlImpactar(MOTOR, ctx, atk, def, ki, habriaDanado, porcentajeContacto);
-    if (!activo(def)) {
-      avisar();
-      return { defensor: def, contra: null, impacto: true };
-    }
-  }
-
-  // Engatillar: si el ataque habría dañado, no daña y deja al rival amenazado (Core p.92).
-  if (m === 'engatillar') {
-    if (dano > 0) {
-      def.amenazadoPor = atk;
-      log(ctx, () => `  ${def.ficha.nombre} queda amenazado por ${atk.ficha.nombre}.`);
-    } else log(ctx, () => `  No logra engatillarlo.`);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Destrucción por Ki: basta con alcanzarlo, aunque el golpe no dañe (Core p.104).
-  if (m === 'destruccionKi') {
-    destruccionPorKi(MOTOR, ctx, atk, def, o.kiDestruccion ?? 0, resiste);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Puntos de presión (Mushin): en vez de daño, RF contra el daño + 20 (Dominus p.42).
-  if (m === 'puntosPresion') {
-    if (dano > 0) puntosDePresion(MOTOR, ctx, atk, def, dano, o.estadoMushin ?? null);
-    else log(ctx, () => `  No alcanza los puntos de presión.`);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  // Absorción de energía: el daño plenamente energético se puede pagar con Ki, 1 cada 5 (Dominus p.20).
-  let absorbido = false;
-  if (dano > 0 && (tipo === 'ENE' || o.ki?.sobrenatural)) {
-    const ki = ia.kiParaAbsorber(def, dano);
-    if (ki > 0) {
-      def.ki!.reserva -= ki;
-      const antes = dano;
-      dano = Math.max(0, dano - 5 * ki);
-      absorbido = true;
-      log(ctx, () => `  ${def.ficha.nombre} absorbe ${antes - dano} de daño con ${ki} de Ki (Absorción de energía) [reserva ${def.ki!.reserva}].`);
-    }
-  }
-  if (dano > 0) {
-    aplicarDano(ctx, atk, def, dano, resiste, m, o.ki);
-    // Daño por calor: 1d100 (cerrada) + el daño en la Tabla 76 (Core p.236).
-    if (tipo === 'CAL' && activo(def)) prender(MOTOR, ctx, atk, def, tirarD100Cerrada(ctx.rng) + dano);
-  } else if (frena) log(ctx, () => `  Impacta, pero la barrera de daño ${def.cap.barrera} frena el daño base ${base}.`);
-  else if (!esManiobraDeControl(m) && !absorbido) {
-    log(ctx, () => `  Impacta sin daño (absorción ${abs}).`);
-    // La armadura evitó el daño: puede romperse (Core p.93).
-    if (ctx.opciones.rotura) roturaDeArmadura(MOTOR, ctx, atk, def, o.ranura, zonaDe(m));
-  }
-  avisar();
-  return { defensor: def, contra: null, impacto: true };
-}
-
-function resolverDefensa(
-  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
-): ResultadoDefensa {
-  const r = defenderse(ctx, atk, def, habAtk, tA, o, etiqueta);
-  trasLaTecnica(MOTOR, ctx, r.defensor);
-  return r;
-}
-
-function defenderse(
-  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string,
-): ResultadoDefensa {
-  // Parada en área (Ki): lo cubre la de un aliado, que ya se defendió (Dominus p.58).
-  const pa = o.paradaArea;
-  if (pa && pa.quien !== def && pa.resultado !== undefined && def.equipo === pa.quien.equipo && distancia(def, pa.quien) <= pa.radio) {
-    return defensaCubierta(ctx, atk, def, habAtk, tA, o, etiqueta, pa);
-  }
-  const cubre = pa?.quien === def ? pa : undefined;
-  // Un aliado puede defender en su lugar: Guardián (−10, sin necesitar el turno, Dominus p.86) o
-  // Apartar (esquiva −30, Guardaespaldas −10; acción activa reservada, Core p.93).
-  const proteccion = cubre ? null : ia.protectorPara(ctx, def, atk);
-  const quienDefiende = proteccion?.quien ?? def;
-  // Fascinación: al verse en peligro repite la RF (Dominus p.67).
-  if (def.fascinado) repetirFascinacion(MOTOR, ctx, def);
-  const tipoGolpe = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-  // Lo que hace que el golpe no llegue, antes de defenderse (intangible, holograma…).
-  if (!proteccion && EVITAN_EL_GOLPE.some((evita) => evita(ctx, atk, def, o, tipoGolpe, etiqueta))) return { defensor: def, contra: null, impacto: false };
-  if (proteccion?.apartar) quienDefiende.ataquesRestantes--;
-  const resiste = !proteccion && !cubre && !def.ficha.acumulacion && ia.resistir(ctx, def, atk);
-  // Haima: sacrifica PV para crear una sombra de sangre que recibe el golpe (Dominus p.88).
-  const sacrificio = !proteccion && !cubre && def.cap.est.haima ? ia.sacrificioHaima(def, atk, habAtk) : 0;
-  if (sacrificio) {
-    def.pv -= sacrificio;
-    log(ctx, () => `${def.ficha.nombre} sacrifica ${sacrificio} PV en una sombra de sangre (aguante ${2 * sacrificio}).`);
-  }
-  const cDef = ia.cansancioDefensa(ctx, quienDefiende, atk, habAtk, resiste);
-  gastarCansancio(quienDefiende, cDef);
-  const samielDef = ia.gastoSamiel(quienDefiende, atk, 'defensa');
-  if (samielDef) quienDefiende.samiel.set(atk, (quienDefiende.samiel.get(atk) ?? 0) - samielDef);
-  // Trucos de manos: atrapar el proyectil en el aire, como defensa pasiva; si falla, se defiende igual
-  // con −50 (Core p.94).
-  let trasAtrapar = 0;
-  if (!proteccion && o.aDistancia && !def.ficha.acumulacion && def.ficha.trucosDeManos !== undefined && puedeAtrapar(def.ficha.trucosDeManos, o.ranura.proyectil) && ia.intentaAtrapar(ctx, def, atk, habAtk, o)) {
-    if (atrapar(ctx, def, atk, habAtk + tA.valor, o)) return { defensor: def, contra: null, impacto: false };
-    trasAtrapar = PEN_ESQUIVA_TRAS_ATRAPAR;
-  }
-  // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
-  // defiende con él (no se combina con parar o esquivar).
-  let escudoNuevo = false;
-  if (!proteccion && !cubre && def.magia) {
-    const nuevo = iaMagia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
-    if (nuevo) {
-      escudoNuevo = true;
-      const g = lanzar(def, nuevo.conjuro, nuevo.grado);
-      def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] = (def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] ?? 0) + 1;
-      log(ctx, () => `${def.ficha.nombre} levanta ${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]}, ${g.resistencia} de resistencia) [zeon ${g.zeon}; reserva ${def.magia!.reserva}].`);
-    }
-  }
-  const conEscudo = !proteccion && !cubre && escudoDetiene(def, tipoGolpe) && iaMagia.defiendeConEscudoMagico(def, atk, { ...o, tipo: tipoGolpe });
-  // Defenderse sin el escudo es hacer otra cosa que lanzar: ACT a la mitad (Core p.117).
-  if (!conEscudo) hacerOtraAccion(quienDefiende);
-  // Técnica de defensa (Ki), declarada antes de que nadie tire (Core p.105).
-  const elegida = cubre ? cubre.tecnica : quienDefiende.ficha.acumulacion || conEscudo ? null : ia.elegirTecnicaDefensa(ctx, quienDefiende, atk, habAtk, o);
-  // Defensa especializada: contra otra clase de ataque no da nada (Dominus p.73).
-  const tecnica = elegida && defensaSirve(efectosDe(elegida).desventajas.defensaContra, o) ? elegida : null;
-  let kiDef: ModKi | undefined;
-  if (tecnica) {
-    kiDef = usarTecnica(MOTOR, ctx, quienDefiende, tecnica);
-  } else kiDef = modDeAccion(quienDefiende, 'defensa', true);
-  const habDef = conEscudo ? defensaEscudoMagico(quienDefiende, atk, o.ki) - trasAtrapar : defensaFinal(quienDefiende, atk, { cansancio: cDef, resistir: resiste, samiel: samielDef, ki: kiDef, kiAtk: o.ki, proyectil: o.aDistancia ? o.ranura.proyectil?.clase ?? 'disparo' : undefined, area: o.area, centroArea: o.centroArea }) - (proteccion?.pen ?? 0) - trasAtrapar;
-  quienDefiende.previenePendiente.delete(atk);
-  const para = (quienDefiende.ficha.tipoDefensa ?? 'parada') === 'parada';
-  // Parar con el arma la desenfunda (si no lo sorprendieron, que entonces se defiende sin ella).
-  if (para && !atk.sorprendeA.has(quienDefiende)) quienDefiende.enfundada = false;
-
-  let resultado: number;
-  if (quienDefiende.ficha.acumulacion) {
-    resultado = habAtk + tA.valor;
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra acumulación → ${resultado}.`,
-      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-  } else if (quienDefiende.ki && quienDefiende.ki.sinDefensa === quienDefiende.ki.asalto) {
-    // Sin defensa: ejecutó una técnica que le baja la guardia todo el asalto (Dominus p.75).
-    resultado = habAtk + tA.valor;
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)}; ${quienDefiende.ficha.nombre} no puede defenderse (Sin defensa) → ${resultado}.`,
-      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-  } else {
-    // Defensa Predeterminada (Ki): defensa final fija, sin dados (Dominus p.53). Con el escudo mágico,
-    // la Proyección Mágica Determinada hace lo mismo pagando zeon (Arcana p.26).
-    const det = conEscudo ? proyeccionDeterminada(quienDefiende, habDef) : null;
-    if (det) {
-      pagarDeterminada(quienDefiende, det);
-      log(ctx, () => `${quienDefiende.ficha.nombre} defiende con Proyección Mágica Determinada: ${det.valor} [zeon ${det.zeon}].`);
-    }
-    const fija = det?.valor ?? kiDef?.defensaFija ?? 0;
-    // Con un escudo mágico tira su Proyección: la maestría es la de ella (Core p.10, p.17).
-    const umbralDef = (conEscudo ? umbralPifia(quienDefiende.ficha.magia!.proyeccionDefensa ?? quienDefiende.ficha.magia!.proyeccion, quienDefiende.cap.ajustePifia) : quienDefiende.cap.umbralDefensa) +
-      (tecnica && efectosDe(tecnica).desventajas.compleja ? 2 : 0);
-    const tD = fija ? DADO_FIJO : tirar(ctx, umbralDef);
-    const valorDef = valorTirada(tD);
-    quienDefiende.defensasHechas++;
-    // Una pifia resta su nivel directamente de la defensa, sin mínimo (Core p.98), como en el pronóstico.
-    // Pero un escudo que se lanza con pifia fracasa (el zeon se pierde) y queda sin defensa, salvo
-    // con Seguridad Defensiva (Core p.118, Arcana p.27).
-    const fracasa = conEscudo && escudoNuevo && tD.pifia && !def.ficha.magia?.seguridadDefensiva;
-    const total = fracasa ? 0 : fija || habDef + valorDef;
-    resultado = fracasa ? habAtk + tA.valor : habAtk + tA.valor - total;
-    const nombreEscudo = conEscudo ? def.magia!.escudo!.conjuro.nombre : '';
-    if (fracasa) {
-      log(ctx, () => `  ¡Pifia al lanzar ${nombreEscudo}! El escudo fracasa y ${def.ficha.nombre} queda sin defensa.`);
-      romperEscudo(def);
-    }
-    if (cubre) cubre.resultado = resultado;
-    // Con acumulación, si superan la defensa de su escudo mágico pierde la acción (Core p.99).
-    if (conEscudo && def.ficha.acumulacion && resultado > 0) def.aLaDefensiva = true;
-    const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${nombreEscudo}` : '';
-    log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
-      () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
-    if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(MOTOR, ctx, atk, quienDefiende, o.ranura, resultado <= 0, o.ki?.conjuro ? o.ki.danoFijo : undefined);
-  }
-
-  // Escudo de energía (Ki): si detiene el golpe recibe su daño base (+10 por punto de TA que reste),
-  // salvo que no pase su barrera de daño 40; si lo rompe, el resto alcanza al defensor sin defensa
-  // (Core p.100, Dominus p.11, p.66).
-  let baseTrasEscudo = -1;
-  if (resultado <= 0 && quienDefiende.escudoKi > 0 && !quienDefiende.ficha.acumulacion) {
-    const golpe = danoAEscudo(atk, quienDefiende, o.esContra, o.ranura, o.ki, o.tipo);
-    if (golpe >= 40) {
-      baseTrasEscudo = escudoRecibe(ctx, golpe, habAtk + tA.valor, {
-        nombre: `el escudo de energía de ${quienDefiende.ficha.nombre}`, resistencia: quienDefiende.escudoKi,
-        quedan: (r) => { quienDefiende.escudoKi = r; }, romper: () => { quienDefiende.escudoKi = 0; },
-      });
-      if (baseTrasEscudo >= 0) resultado = habAtk + tA.valor;
-    }
-  }
-
-  // Escudo mágico: si detiene el golpe recibe su daño base (+10 por TA que reste); el de Luz sólo lo
-  // dañan los ataques sobrenaturales. Si se rompe, el resto pasa sin defensa (Core p.100, p.126).
-  if (resultado <= 0 && conEscudo && def.magia?.escudo) {
-    const esc = def.magia.escudo;
-    const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-    if (!esc.conjuro.escudoSoloSobrenatural || golpeSobrenatural(atk, o.ki, tipoG)) {
-      // Escudo de Luz: lo de oscuridad le hace el doble (Core p.126).
-      const doble = !!esc.conjuro.escudoDobleContra && o.ki?.naturaleza === esc.conjuro.escudoDobleContra ? 2 : 1;
-      baseTrasEscudo = escudoRecibe(ctx, doble * danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo), habAtk + tA.valor, {
-        nombre: `${esc.conjuro.nombre} de ${def.ficha.nombre}`, resistencia: esc.resistencia,
-        quedan: (r) => { esc.resistencia = r; }, romper: () => romperEscudo(def),
-      });
-      if (baseTrasEscudo >= 0) resultado = habAtk + tA.valor;
-    }
-  }
-
-  if (resultado <= 0) return defensaGana(ctx, atk, quienDefiende, o, kiDef, resultado, habAtk + tA.valor);
-  return golpeRecibido(ctx, atk, def, o, resultado, baseTrasEscudo, tipoGolpe, resiste, sacrificio);
-}
-
-/**
- * Parada en área (Dominus p.58): cubierto por la de un aliado, no se defiende. Si la Parada ganó no
- * le pasa nada (ni contraataca); si perdió, recibe el daño por esa diferencia.
- */
-function defensaCubierta(
-  ctx: Contexto, atk: Luchador, def: Luchador, habAtk: number, tA: TiradaD100, o: Golpe, etiqueta: string, pa: ParadaArea,
-): ResultadoDefensa {
-  const resultado = pa.resultado!;
-  log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)}, cubierto por la Parada en área de ${pa.quien.ficha.nombre} → ${resultado}.`,
-    () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, def), contra: o.esContra, resultado } }));
-  if (resultado <= 0) return { defensor: def, contra: null, impacto: false };
-  return golpeRecibido(ctx, atk, def, o, resultado, -1, o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque, false, 0);
-}
-
-/** El ataque superó la defensa: anímico, Cuerpo a Fuego, Haima y, si entra, el golpe. */
-function golpeRecibido(
-  ctx: Contexto, atk: Luchador, def: Luchador, o: Golpe, resultado: number, baseTrasEscudo: number, tipoGolpe: TipoAtaque,
-  resiste: boolean, sacrificio: number,
-): ResultadoDefensa {
-  // El golpe de una ilusión no hace nada, salvo si es fantasmal y falla la RP (Dominus p.66).
-  if (o.ilusion && (!o.ilusion.fantasmal || !controlResistencia(ctx, def, 'RP', rpDe(def), o.ilusion.fantasmal, 'la ilusión fantasmal').falla)) {
-    log(ctx, () => `  El golpe es ilusorio: no le hace nada.`);
-    return { defensor: def, contra: null, impacto: false };
-  }
-
-
-  // Conjuro anímico (Core p.122): alcanza si logra un resultado de daño contra la TA de energía; en
-  // vez de dañar, el blanco hace la RM. No lo deja a la defensiva: no lo golpea (interpretación).
-  if (o.animico) {
-    const pct = porcentajeDano(resultado, absorcionContra(def, atk, 'normal', 'ENE', o.ranura, o.ki));
-    if (pct <= 0) {
-      log(ctx, () => `  No alcanza un resultado de daño contra su TA de energía: el conjuro no lo afecta.`);
-      return { defensor: def, contra: null, impacto: false };
-    }
-    efectoAnimico(MOTOR, ctx, atk, def, o.animico, pct);
-    return { defensor: def, contra: null, impacto: true };
-  }
-
-  // Cuerpo a Fuego: lo que no es energía, frío o agua lo atraviesa sin dañarlo; quien lo toca se
-  // quema (Core p.158).
-  const sinArmasCerca = o.ranura.sinArmas && !o.aDistancia && !o.ki?.conjuro;
-  if (def.bono?.cuerpoFuego && inmuneAlGolpe(def, atk, tipoGolpe, o.ki)) {
-    log(ctx, () => `  El golpe atraviesa las llamas del cuerpo de ${def.ficha.nombre} sin dañarlo.`);
-    if (sinArmasCerca && activo(atk)) quemarAlTocar(MOTOR, ctx, def, atk);
-    return { defensor: def, contra: null, impacto: false };
-  }
-  if (atk.bono?.cuerpoFuego && sinArmasCerca && activo(def)) quemarAlTocar(MOTOR, ctx, atk, def);
-  if (!activo(def)) return { defensor: def, contra: null, impacto: true };
-
-  // Haima: si el daño no supera el aguante de la sombra, la sombra lo recibe y no pierde la acción;
-  // si lo supera, recibe el daño pleno y queda a la defensiva.
-  if (sacrificio) {
-    const golpe = danoFinal(danoBase(atk, def, o.esContra, o.ranura, o.ki), porcentajeDano(resultado, absorcionContra(def, atk, esManiobraDeControl(o.maniobra) ? 'normal' : o.maniobra, o.tipo, o.ranura, o.ki)));
-    if (golpe <= 2 * sacrificio) {
-      log(ctx, () => `  La sombra de sangre recibe el golpe (${golpe} de ${2 * sacrificio}).`);
-      return { defensor: def, contra: null, impacto: true };
-    }
-    log(ctx, () => `  El golpe (${golpe}) atraviesa la sombra de sangre.`);
-  }
-
-  // Impacta: el agredido queda a la defensiva (aunque lo haya cubierto un Guardián que falló).
-  // Seraphite arcano sigue actuando salvo que un crítico tenga efecto (Dominus p.40).
-  const yaEstaba = def.aLaDefensiva;
-  if (!def.ficha.acumulacion && !resiste && def.modo.seraphite !== 3) def.aLaDefensiva = true;
-  // Se narra después del daño: impactado, queda a la defensiva le haya hecho daño o no (Core p.89).
-  const avisar = () => {
-    if (yaEstaba || !activo(def) || def.ficha.acumulacion) return;
-    if (def.aLaDefensiva) {
-      const porCritico = resiste || def.modo.seraphite === 3 ? ' por el crítico' : '';
-      log(ctx, () => `  ${def.ficha.nombre} queda a la defensiva${porCritico}.`);
-    } else if (resiste) log(ctx, () => `  ${def.ficha.nombre} resistió el golpe: sigue pudiendo actuar.`);
-  };
-  liberarAmenazados(ctx, def);
-  // Fusión: intangible, se materializa dentro de él en vez de golpearlo (Dominus p.70).
-  if (atk.ki?.activo.fusion && atk.ki.activo.intangible && !o.esContra && ia.quiereFusion(atk, def)) {
-    fusion(MOTOR, ctx, atk, def);
-    avisar();
-    return { defensor: def, contra: null, impacto: true };
-  }
-  return golpeQueEntra(ctx, atk, def, o, resultado, baseTrasEscudo, tipoGolpe, resiste, avisar);
 }
 
 // --------------------------------------------------------------------------- efectos sobrenaturales (Ki)
@@ -1522,7 +872,7 @@ function perderPv(ctx: Contexto, atk: Luchador, def: Luchador, pv: number) {
   verificarCaida(ctx, atk, def);
 }
 
-// --------------------------------------------------------------------------- rotura (opcional, Core p.93)
+// --------------------------------------------------------------------------- control, presa, contra, daño y críticos
 
 /** Derribo, Presa o Desarmar: control enfrentado de características (Core p.91-92). */
 function resolverControl(ctx: Contexto, atk: Luchador, def: Luchador, m: 'derribo' | 'presa' | 'desarmar', porcentaje: number, esContra: boolean, apresamiento = 0, kiAtk?: ModKi) {
@@ -1734,50 +1084,6 @@ function advertir(ctx: Contexto, atk: Luchador, blanco: Luchador, dif: number, q
   if (!advierte) atk.camufladoA.add(blanco);
   log(ctx, () => `  ${blanco.ficha.nombre} ${advierte ? 'advierte' : 'no advierte'} ${que} (Advertir ${textoTirada(hab, t)} contra ${dif}).`);
   return advierte;
-}
-
-/** Transporte automático: Muy Difícil advertirlo, las dos primeras veces contra cada rival (Dominus p.59). */
-const ADVERTIR_TRANSPORTE = { dificultad: 140, veces: 2 } as const;
-
-/** Llega al instante junto al blanco, sin gastar movimiento (Transporte automático, Proyección). */
-function llegarJunto(ctx: Contexto, atk: Luchador, def: Luchador, como: string) {
-  // Un transporte lo libra de una presa, salvo de una existencial (Dominus p.64).
-  if (atk.apresadoPor && !atk.presaExistencial) soltar(atk);
-  if (atk.apresadoPor) return;
-  if (atk.apresando) soltar(atk.apresando);
-  const metros = distancia(atk, def);
-  const desde = { ...atk.pos };
-  moverHacia(MOTOR, ctx, atk, def, Infinity);
-  log(ctx, () => `${atk.ficha.nombre} ${como} ${metros.toFixed(0)} m hasta ${def.ficha.nombre}.`, () => ({ camino: { quien: nro(ctx, atk), celdas: [desde, { ...atk.pos }] } }));
-}
-
-/** Aparece junto al blanco (Transporte automático); sus primeras veces, quizá lo sorprende (Dominus p.59). */
-function aparecerJunto(ctx: Contexto, atk: Luchador, def: Luchador) {
-  llegarJunto(ctx, atk, def, 'se transporta');
-  const vistas = atk.transportesVistos.get(def) ?? 0;
-  if (vistas >= ADVERTIR_TRANSPORTE.veces) return;
-  atk.transportesVistos.set(def, vistas + 1);
-  advertir(ctx, atk, def, ADVERTIR_TRANSPORTE.dificultad, 'el transporte');
-}
-
-/**
- * Retirada con un Transporte automático tras una defensa con éxito (Dominus p.59): los demás trabados
- * con él que aún pueden atacar tiran un ataque natural cada uno contra su defensa plena; si alguno le
- * hace daño, no se va (como al retirarse, Core p.94). Devuelve si se fue.
- */
-function retirarseConTransporte(ctx: Contexto, l: Luchador, atk: Luchador, metros: number): boolean {
-  const antes = l.pv;
-  l.defensaPlena = true;
-  for (const e of ctx.luchadores) {
-    if (e === atk || e.equipo === l.equipo || !activo(e) || !activo(l) || !enAlcance(e, l) || e.aLaDefensiva || e.ataquesRestantes <= 0 || !puedeActuar(e)) continue;
-    log(ctx, () => `  ${e.ficha.nombre} intenta impedir que ${l.ficha.nombre} se retire.`);
-    atacar(ctx, e, l, { esContra: false, bono: 0, natural: true });
-  }
-  l.defensaPlena = false;
-  const sale = activo(l) && l.pv >= antes;
-  if (activo(l) && !sale) log(ctx, () => `  ${l.ficha.nombre} no logra retirarse.`);
-  if (sale) transportar(MOTOR, ctx, l, metros);
-  return sale;
 }
 
 /** Límites que se activan por perder PV (Caelum, Terminus, Cenobus). */

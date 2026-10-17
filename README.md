@@ -121,6 +121,7 @@ src/motor/      el motor (sin DOM)
   magia.ts        zeon, ACT, lanzar y mantener, beneficios (bendecir), Tabla 76
   conjuros.ts, grimorio.ts   catálogo de conjuros (datos) y grimorio generado de la planilla
   efectos/        registro de efectos de conjuro (resolver + valorar), estados, valoración compartida
+  combate-defensa.ts, combate-distancia.ts, combate-movimiento.ts   la defensa, las armas a distancia, moverse
   combate-magia.ts, combate-ki.ts, llamas.ts, rotura.ts   partes del motor por dominio (reciben el Motor)
   condiciones.ts  condiciones con duración (ceguera, parálisis inducida)
   ki.ts           acumulación, técnicas, mantener, en espera, Límites
