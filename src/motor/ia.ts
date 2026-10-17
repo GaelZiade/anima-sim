@@ -1464,8 +1464,10 @@ function valorEstado(atk: Luchador, def: Luchador, est: EstadoSobrenatural, golp
     // −1 a las cuatro físicas cada 10: cerca de −5 a lo que hace con cada una, todo el combate.
     case 'debilidad': return p * valorNegativo(atk, def, 5 * Math.floor(medio / 10), golpes, 0) * 2;
     case 'ilusion': return 0;
-    // Paralización total, inconsciencia, coma, muerte, control y terror: lo sacan de la pelea.
-    default: return p * fuera;
+    // Lo sacan de la pelea.
+    case 'paralisisTotal': case 'inconsciencia': case 'coma': case 'muerte': case 'control': case 'terror':
+      return p * fuera;
+    // Sin `default`: un estado nuevo no compila hasta que se diga cuánto vale.
   }
 }
 
@@ -2199,9 +2201,19 @@ function valorEfectosDeAsalto(ctx: Contexto, l: Luchador, asalto: ModKi): number
   });
 }
 
-/** Los efectos de Asalto que valora `valorEfectosDeAsalto`. */
+/**
+ * Los efectos de Asalto de una técnica Variable que valora `valorEfectosDeAsalto`: todos los que no
+ * tienen una cuenta propia en `tecnicaDeTurno`. Sale de los campos de `ModKi`, así un efecto nuevo se
+ * valora sin agregarlo a ninguna lista.
+ */
+const CON_CUENTA_PROPIA: ReadonlySet<keyof ModKi> = new Set(['turno', 'intangible', 'intangibleOtros', 'fusion', 'accionesAdicionales', 'prevision', 'espejismos', 'espejismoIndeteccion', 'espejismoFantasmal']);
 function cambiaElAsalto(m: ModKi): boolean {
-  return !!(m.movimiento || m.visionNocturna || m.veEnergia || m.rm || m.rf || m.capacidad.length || m.lentitud) || m.armaKi >= 0;
+  for (const k of Object.keys(m) as (keyof ModKi)[]) {
+    if (CON_CUENTA_PROPIA.has(k)) continue;
+    const v = m[k], base = SIN_KI[k];
+    if (Array.isArray(v) ? v.length > 0 : v !== base) return true;
+  }
+  return false;
 }
 
 /**

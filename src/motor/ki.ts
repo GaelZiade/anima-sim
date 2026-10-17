@@ -223,9 +223,14 @@ export function combinar(a: Readonly<ModKi>, b: Readonly<ModKi>): ModKi {
   return r as unknown as ModKi;
 }
 
+/** Los campos opcionales de `ModKi` (no están en `SIN_KI`). */
+type Opcionales<T> = { [K in keyof T]-?: undefined extends T[K] ? K : never }[keyof T];
+/** Todos, uno por uno: un opcional nuevo no compila hasta agregarlo acá (y así se combina). */
+const OPCIONALES: Record<Opcionales<ModKi>, true> = { conjuro: true, invisible: true };
+
 /** Las claves de `ModKi` por tipo de valor, sacadas de `SIN_KI` una sola vez (para `combinar`). */
 const CLAVES = (() => {
-  const c = { numeros: [] as string[], sino: [] as string[], textos: [] as string[], listas: [] as string[], opcionales: ['conjuro', 'invisible'] };
+  const c = { numeros: [] as string[], sino: [] as string[], textos: [] as string[], listas: [] as string[], opcionales: Object.keys(OPCIONALES) };
   for (const [k, v] of Object.entries(SIN_KI)) {
     if (typeof v === 'number') c.numeros.push(k);
     else if (typeof v === 'boolean') c.sino.push(k);
