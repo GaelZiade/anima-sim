@@ -31,7 +31,7 @@ import { apagarse, arder, mitigarFuego, prender, quemarAlTocar } from './llamas'
 import { cruzarMuros, transportar, type Motor } from './efectos';
 import { GRADOS } from './conjuros';
 import {
-  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
+  crearEstadoMagia, danoAlAcumular, hacerOtraAccion, escudoDetiene, golpeSobrenatural, mantenidoDe, dejarDeMantener, empezarAsaltoMagia, lanzar,
   rmDe, rpDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
@@ -1374,8 +1374,7 @@ function defenderse(
   if (resultado <= 0 && conEscudo && def.magia?.escudo) {
     const esc = def.magia.escudo;
     const tipoG = o.tipo ?? perfilDe(atk, o.ranura).tipoAtaque;
-    const sobrenatural = atk.cap.danaEnergia || !!o.ki?.danaEnergia || !!o.ki?.sobrenatural || tipoG === 'ENE';
-    if (!esc.conjuro.escudoSoloSobrenatural || sobrenatural) {
+    if (!esc.conjuro.escudoSoloSobrenatural || golpeSobrenatural(atk, o.ki, tipoG)) {
       // Escudo de Luz: lo de oscuridad le hace el doble (Core p.126).
       const doble = !!esc.conjuro.escudoDobleContra && o.ki?.naturaleza === esc.conjuro.escudoDobleContra ? 2 : 1;
       baseTrasEscudo = escudoRecibe(ctx, doble * danoAEscudo(atk, def, o.esContra, o.ranura, o.ki, o.tipo), habAtk + tA.valor, {

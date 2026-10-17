@@ -481,9 +481,21 @@ export function mantenidoDe(l: Luchador, efecto: EfectoConjuro): Mantenido | und
 /** Su escudo mágico detiene ese tipo de ataque (la Barrera de Fuego, sólo algunos, Core p.157). */
 export function escudoDetiene(l: Luchador, tipo?: TipoAtaque): boolean {
   const esc = l.magia?.escudo;
-  if (!esc) return false;
-  const contra = esc.conjuro.grados[esc.grado].escudoContra;
+  return !!esc && gradoDetiene(esc.conjuro, esc.grado, tipo);
+}
+
+/** Ese grado de escudo detiene ese tipo de ataque (la Barrera de Fuego base sólo algunos). */
+export function gradoDetiene(c: Conjuro, grado: number, tipo?: TipoAtaque): boolean {
+  const contra = c.grados[grado].escudoContra;
   return !contra || (!!tipo && contra.includes(tipo));
+}
+
+/**
+ * El golpe es sobrenatural para un escudo: daña energía, es de Ki o de un conjuro, o ataca en
+ * Energía. Al Escudo de Luz sólo lo dañan éstos (Core p.126).
+ */
+export function golpeSobrenatural(atk: Luchador, ki: ModKi | undefined, tipo: TipoAtaque): boolean {
+  return atk.cap.danaEnergia || !!ki?.danaEnergia || !!ki?.sobrenatural || tipo === 'ENE';
 }
 
 /** Ese conjuro, si lo mantiene. */

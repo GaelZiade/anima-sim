@@ -8,12 +8,12 @@ import {
 } from './efectos/valorar';
 import { gradosPosibles, type Conjuro, type Grado } from './conjuros';
 import {
-  actDe, actPara, actPorCansancio, escudoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
+  actDe, actPara, actPorCansancio, escudoDetiene, golpeSobrenatural, gradoDetiene, mantenidoDe, golpeDeConjuro, RANURA_MAGIA, alcanceMagico, presenciaDe, costeConjuro, danoLlamas, maximoInnato,
   preparadoListo, zeonLibre, ZEON_CONTROL_DEL_ESPACIO, type PlanMagia,
 } from './magia';
 import {
   danoAEscudo, rfCritico, activo, ataqueMagico, defensaEscudoMagico, ALCANCE, defensaFinal, distancia, danoEsperado, pronostico,
-  puedeActuar,
+  puedeActuar, perfilDe,
 } from './calculos';
 import { tabla } from './probabilidades';
 import { umbralPifia, type TipoAtaque } from './reglas';
@@ -90,7 +90,22 @@ export function sacrificioVitalPara(ctx: Contexto, l: Luchador, obj: Luchador, c
  * El mejor uso de un conjuro en un grado: a quién, y cuánto vale en PV (sin restar su zeon). Cada
  * conjuro se valora a su manera, como se resuelve en el motor.
  */
-function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: number, ya: readonly Lanzamiento[]): { l: Lanzamiento; valor: number; extra: number } | null {
+function mejorUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: number, ya: readonly Lanzamiento[]): UsoConjuro | null {
+  // Sin nada lanzado todavía, el mismo uso se pide varias veces en una decisión (plan, meta, innato).
+  if (ya.length) return calcularUso(ctx, l, c, i, alcance, ya);
+  let porGrado = usosSinNada.get(l);
+  if (!porGrado) usosSinNada.set(l, (porGrado = new Map()));
+  const g = c.grados[i];
+  let uso = porGrado.get(g);
+  if (uso === undefined) porGrado.set(g, (uso = calcularUso(ctx, l, c, i, alcance, ya)));
+  return uso;
+}
+
+type UsoConjuro = { l: Lanzamiento; valor: number; extra: number };
+const usosSinNada = cacheDeDecision<Luchador, Map<Grado, UsoConjuro | null>>();
+const metas = cacheDeDecision<Luchador, { meta: Meta | null }>();
+
+function calcularUso(ctx: Contexto, l: Luchador, c: Conjuro, i: number, alcance: number, ya: readonly Lanzamiento[]): UsoConjuro | null {
   const g = c.grados[i];
   const e = l.magia!;
   let mejor: { l: Lanzamiento; valor: number; extra: number } | null = null;
@@ -243,6 +258,12 @@ function mejorInnato(ctx: Contexto, l: Luchador, alcance: number): { l: Lanzamie
 
 /** El conjuro al que conviene apuntar acumulando: el que más rinde por asalto de espera. */
 function metaMagica(ctx: Contexto, l: Luchador, alcance: number): Meta | null {
+  let m = metas.get(l);
+  if (!m) metas.set(l, (m = { meta: calcularMeta(ctx, l, alcance) }));
+  return m.meta;
+}
+
+function calcularMeta(ctx: Contexto, l: Luchador, alcance: number): Meta | null {
   const e = l.magia!;
   let mejor: Meta | null = null;
   for (const c of e.conjuros) {
@@ -362,18 +383,29 @@ export function quiereApagarse(_ctx: Contexto, l: Luchador): boolean {
 export function escudoMagicoAlDefender(ctx: Contexto, def: Luchador, atk: Luchador, habAtk: number, g: { ki?: ModKi; tipo?: TipoAtaque; ranura: Ranura }): Lanzamiento | null {
   const e = def.magia;
   if (!e || e.escudo || perfil(def) === 'bestia') return null;
+  // Primero lo barato: los grados que le alcanzan, que detienen este golpe y que lo aguantan (al de
+  // Luz no lo daña un golpe que no es sobrenatural), como el motor.
+  const tipo = g.tipo ?? perfilDe(atk, g.ranura).tipoAtaque;
+  const golpe = danoAEscudo(atk, def, false, g.ranura, g.ki, g.tipo);
+  const candidatos: [Conjuro, number][] = [];
+  for (const c of e.conjuros) {
+    if (c.accion !== 'pasiva' || !c.tipos.includes('defensa')) continue;
+    const loDana = !c.escudoSoloSobrenatural || golpeSobrenatural(atk, g.ki, tipo);
+    for (const i of gradosPosibles(c, def.ficha.inteligencia ?? 6, def.ficha.magia)) {
+      const gr = c.grados[i];
+      if (gr.zeon <= e.acumulado && gradoDetiene(c, i, tipo) && (!loDana || (gr.resistencia ?? 0) >= golpe)) candidatos.push([c, i]);
+    }
+  }
+  if (!candidatos.length) return null;
   nuevaDecision(ctx);
   const fisica = danoEsperado(atk, def, habAtk, defensaFinal(def, atk, { kiAtk: g.ki }), { ki: g.ki, tipo: g.tipo, ranura: g.ranura });
   let otros = 0;
   for (const x of enemigos(ctx, def)) if (x !== atk && !x.haActuado && puedeActuar(x) && alcanzable(x, def)) otros += 1;
-  const golpe = danoAEscudo(atk, def, false, g.ranura, g.ki, g.tipo);
   let mejor: Lanzamiento | null = null;
   let mejorNeto = 0;
-  for (const c of e.conjuros) {
-    if (c.accion !== 'pasiva' || !c.tipos.includes('defensa')) continue;
-    for (const i of gradosPosibles(c, def.ficha.inteligencia ?? 6, def.ficha.magia)) {
-      const gr = c.grados[i];
-      if (gr.zeon > e.acumulado || (gr.resistencia ?? 0) < golpe) continue;
+  for (const [c, i] of candidatos) {
+    const gr = c.grados[i];
+    {
       const conEscudo = conCambio(() => {
         const previo = e.escudo;
         e.escudo = { conjuro: c, grado: i, resistencia: gr.resistencia ?? 0 };
