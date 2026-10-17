@@ -146,6 +146,10 @@ export interface MagiaFicha {
   proyeccionDeterminada?: number;
   /** Transmisión de Magia: pasar zeon sin tocarse, hasta su Presencia en metros (Arcana p.29). */
   transmision?: boolean;
+  /** Seguridad Defensiva: un escudo lanzado con pifia se activa igual (Arcana p.27). */
+  seguridadDefensiva?: boolean;
+  /** Efectos Persistentes: sus anímicos se vuelven a resistir cada 10 asaltos en vez de cada 5 (Arcana p.24). */
+  efectosPersistentes?: boolean;
 }
 
 /** Lo que pasa con un arma a distancia durante el combate. */

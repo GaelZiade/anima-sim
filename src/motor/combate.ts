@@ -1279,9 +1279,11 @@ function defenderse(
   }
   // Escudo mágico (Core p.100): lo levanta como conjuro pasivo si le conviene y, si lo tiene, se
   // defiende con él (no se combina con parar o esquivar).
+  let escudoNuevo = false;
   if (!proteccion && !cubre && def.magia) {
     const nuevo = iaMagia.escudoMagicoAlDefender(ctx, def, atk, habAtk, o);
     if (nuevo) {
+      escudoNuevo = true;
       const g = lanzar(def, nuevo.conjuro, nuevo.grado);
       def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] = (def.stats.tecnicas[`${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]})`] ?? 0) + 1;
       log(ctx, () => `${def.ficha.nombre} levanta ${nuevo.conjuro.nombre} (${GRADOS[nuevo.grado]}, ${g.resistencia} de resistencia) [zeon ${g.zeon}; reserva ${def.magia!.reserva}].`);
@@ -1332,13 +1334,21 @@ function defenderse(
     const valorDef = valorTirada(tD);
     quienDefiende.defensasHechas++;
     // Una pifia resta su nivel directamente de la defensa, sin mínimo (Core p.98), como en el pronóstico.
-    const total = fija || habDef + valorDef;
-    resultado = habAtk + tA.valor - total;
+    // Pero un escudo que se lanza con pifia fracasa (el zeon se pierde) y queda sin defensa, salvo
+    // con Seguridad Defensiva (Core p.118, Arcana p.27).
+    const fracasa = conEscudo && escudoNuevo && tD.pifia && !def.ficha.magia?.seguridadDefensiva;
+    const total = fracasa ? 0 : fija || habDef + valorDef;
+    resultado = fracasa ? habAtk + tA.valor : habAtk + tA.valor - total;
+    const nombreEscudo = conEscudo ? def.magia!.escudo!.conjuro.nombre : '';
+    if (fracasa) {
+      log(ctx, () => `  ¡Pifia al lanzar ${nombreEscudo}! El escudo fracasa y ${def.ficha.nombre} queda sin defensa.`);
+      romperEscudo(def);
+    }
     if (cubre) cubre.resultado = resultado;
     // Con acumulación, si superan la defensa de su escudo mágico pierde la acción (Core p.99).
     if (conEscudo && def.ficha.acumulacion && resultado > 0) def.aLaDefensiva = true;
     const quien = proteccion ? `${proteccion.quien.ficha.nombre} (${proteccion.apartar ? 'aparta' : 'Guardián'}) ` : '';
-    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${def.magia!.escudo!.conjuro.nombre}` : '';
+    const conTecnica = tecnica ? ` con ${tecnica.nombre}` : conEscudo ? ` con ${nombreEscudo}` : '';
     log(ctx, () => `${etiqueta}: ${textoTirada(habAtk, tA)} contra ${quien}${fija ? `${fija} (fija)` : textoTirada(habDef, tD)}${conTecnica}${resiste ? ' (resiste el golpe)' : ''} → ${resultado}.`,
       () => ({ ataque: { de: nro(ctx, atk), a: nro(ctx, quienDefiende), contra: o.esContra, resultado } }));
     if (para && !conEscudo && ctx.opciones.rotura) roturaEnParada(MOTOR, ctx, atk, quienDefiende, o.ranura, resultado <= 0);

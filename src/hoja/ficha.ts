@@ -134,6 +134,8 @@ function leerMagia(json: HojaJson): MagiaFicha | undefined {
     ...(Object.keys(subvias).length ? { subvias } : {}),
     ...(metamagia.some(([k]) => k.startsWith('control del espacio')) ? { controlDelEspacio: true } : {}),
     ...(metamagia.some(([k]) => k.startsWith('transmision de magia')) ? { transmision: true } : {}),
+    ...(metamagia.some(([k]) => k.startsWith('seguridad defensiva')) ? { seguridadDefensiva: true } : {}),
+    ...(metamagia.some(([k]) => k.startsWith('efectos persistentes')) ? { efectosPersistentes: true } : {}),
     ...(romper ? { romperResistencias: Number(romper) } : {}),
     ...(explotacion ? { explotacion: Number(explotacion) } : {}),
     ...(determinada ? { proyeccionDeterminada: Number(determinada) } : {}),

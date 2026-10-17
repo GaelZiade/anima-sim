@@ -98,6 +98,9 @@ describe('planillas reales (port de sheet_import_test.dart)', () => {
     expect(j.Combate.desventajas).toHaveLength(3);
     expect(tieneRasgo(j.Combate.desventajas, 'Miopía')).toBe(true);
     expect(tablasDeEstilo(j)).toEqual([]);
+    // Metamagia: Efectos persistentes sí, Seguridad defensiva no (sus escudos fallan con pifia).
+    const m = jsonAFicha(j).magia!;
+    expect([m.efectosPersistentes, m.seguridadDefensiva]).toEqual([true, undefined]);
     expect(j.Combate.ambidestria).toBe(false);
   });
 });

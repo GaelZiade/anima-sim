@@ -78,6 +78,9 @@ export const criticoDirecto: ManejadorEfecto = {
   valorar: (v) => valorarPorFracaso(v, 'critico'),
 };
 
+/** Quienes sufren un Éxtasis por fallar la RM: quién lo lanzó, contra qué y desde cuándo. */
+const resistidos = new WeakMap<Luchador, { de: Luchador; rm: number; que: string; desde: number }>();
+
 /**
  * Éxtasis (Core p.128): −20 a toda acción en lugar de los demás negativos. Los aliados elegidos lo
  * aceptan sin resistirse (interpretación); a los enemigos los alcanza como anímico.
@@ -92,14 +95,29 @@ export const extasis: ManejadorEfecto = {
       m.log(ctx, () => `  ${b.ficha.nombre} se deja llevar por el Éxtasis (−20 a toda acción, sin otros negativos).`);
     }
   },
-  alAlcanzar(m, { ctx, def, rm, que, afectados }) {
+  alAlcanzar(m, { ctx, atk, def, rm, que, afectados }) {
     if (!m.tirarResistencia(ctx, def, rm, que, 'RM', frialdadDe(def)).falla) return;
     def.extasis = true;
+    resistidos.set(def, { de: atk, rm, que, desde: ctx.asalto });
     afectados?.push(def);
     m.log(ctx, () => `  ${def.ficha.nombre} queda en Éxtasis: −20 a toda acción, sin otros negativos.`);
   },
   alTerminar(_m, _l, a) {
     a.extasis = false;
+    resistidos.delete(a);
+  },
+  // Quien lo sufre por fallar la RM la repite cada 5 asaltos (10 con Efectos Persistentes, Core p.123,
+  // Arcana p.24); si la supera, se libra.
+  cadaAsalto(m, ctx, l) {
+    const periodo = l.ficha.magia?.efectosPersistentes ? 10 : 5;
+    for (const b of ctx.luchadores) {
+      const r = resistidos.get(b);
+      if (!r || r.de !== l || !b.extasis || !activo(b) || (ctx.asalto - r.desde) % periodo !== 0 || ctx.asalto === r.desde) continue;
+      if (m.tirarResistencia(ctx, b, r.rm, r.que, 'RM', frialdadDe(b)).falla) continue;
+      b.extasis = false;
+      resistidos.delete(b);
+      m.log(ctx, () => `  ${b.ficha.nombre} se libra del Éxtasis.`);
+    }
   },
   valorar({ ctx, l, c, i, g, probar }) {
     // −20 a toda acción en lugar de sus negativos: malo para quien tiene pocos, bueno para quien tiene muchos.
