@@ -164,9 +164,18 @@ function dijkstra(
   m: MapaListo, dist: Float32Array, origenes: number[], bloqueada: Uint8Array | null, tope = Infinity,
   parar?: (i: number) => boolean,
 ): number {
-  dist.fill(Infinity);
+  // Sólo se limpian las celdas que tocó la búsqueda anterior con este arreglo (suele ser una parte
+  // chica del mapa); la primera vez, todo.
+  let tocadas = tocadasPor.get(dist);
+  if (tocadas) for (const i of tocadas) dist[i] = Infinity;
+  else {
+    dist.fill(Infinity);
+    tocadasPor.set(dist, (tocadas = []));
+  }
+  tocadas.length = 0;
   cola.vaciar();
   for (const o of origenes) {
+    if (dist[o] === Infinity) tocadas.push(o);
     dist[o] = 0;
     cola.empujar(0, o);
   }
@@ -187,6 +196,7 @@ function dijkstra(
       if (dx && dy && (pared[y * ancho + nx] || pared[ny * ancho + x])) continue;
       const nd = d + PASO_M[k];
       if (nd < dist[j] && nd <= tope) {
+        if (dist[j] === Infinity) tocadas.push(j);
         dist[j] = nd;
         // Se encola el valor ya guardado en 32 bits: si no, al sacarlo parecería mayor y se descartaría.
         cola.empujar(dist[j], j);
@@ -223,6 +233,14 @@ export function campoHacia(m: MapaListo, c: Celda): Float32Array {
  * metros, hasta la primera celda en la que `listo(i)` da true. Devuelve esa celda (−1 si no hay) y
  * deja en `m.costos` los metros hasta cada celda explorada.
  */
+/** Celdas de la última búsqueda con estos costos, en orden de índice (las demás quedaron en Infinity). */
+const tocadasPor = new WeakMap<Float32Array, number[]>();
+
+/** Las celdas a las que llegó la última `buscarCamino`, de menor a mayor índice. */
+export function celdasAlcanzadas(m: MapaListo): number[] {
+  return [...(tocadasPor.get(m.costos) ?? [])].sort((a, b) => a - b);
+}
+
 export function buscarCamino(m: MapaListo, desde: Celda, ocupadas: Uint8Array, tope: number, listo: (i: number) => boolean): number {
   return dijkstra(m, m.costos, [indice(m, desde)], ocupadas, tope, listo);
 }

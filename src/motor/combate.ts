@@ -37,7 +37,7 @@ import {
 } from './magia';
 import { completarArma, dificultadAtrapar, estadoProyectiles, formasDeDisparar, puedeAtrapar, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
-  buscarCamino, campoHacia, caminoHasta, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
+  buscarCamino, campoHacia, caminoHasta, celdaDe, celdasAlcanzadas, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
   type Celda, type MapaListo,
 } from './mapa';
 import {
@@ -668,8 +668,7 @@ function moverEnMapa(ctx: Contexto, l: Luchador, obj: Luchador, m: MapaListo, di
   if (mejor < 0) {
     // No llega este asalto: la celda alcanzable que más lo acerca (y, a igual distancia, la más barata).
     mejor = indice(m, l.pos);
-    for (let i = 0; i < costo.length; i++) {
-      if (costo[i] === Infinity) continue;
+    for (const i of celdasAlcanzadas(m)) {
       if (falta[i] < falta[mejor] - 1e-6 || (Math.abs(falta[i] - falta[mejor]) < 1e-6 && costo[i] < costo[mejor])) mejor = i;
     }
   }

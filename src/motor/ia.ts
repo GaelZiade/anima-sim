@@ -548,9 +548,8 @@ function preverSorpresa(l: Luchador, entrantes: { e: Luchador; peso: number }[])
   const elegidos: Luchador[] = [];
   for (const { e } of entrantes) {
     const pSorpresa = pIniciativa(e, l, turnoFinal(e) - turnoFinal(l), e.cap.est.diferenciaSorpresa);
-    const atk = ataqueFinal(e, l);
-    const def = defensaFinal(l, e);
-    const dano = (pen: number) => danoEsperado(e, l, atk, def - pen);
+    const b = base(e, l);
+    const dano = (pen: number) => danoCon(b.prep, b.hab - b.def + pen);
     if (pSorpresa * (dano(90) - dano(0)) > dano(PEN_PREVER_SORPRESA) - dano(0)) elegidos.push(e);
   }
   return elegidos;
@@ -1492,7 +1491,7 @@ function valorEfectosKi(
   const marcaPrevia = def.marcas.get(atk) ?? 0;
   if (ki.marca > marcaPrevia) {
     const b = base(atk, def);
-    v += pDana * Math.max(1, golpes) * (danoEsperado(atk, def, b.hab + ki.marca, b.def) - danoEsperado(atk, def, b.hab + marcaPrevia, b.def));
+    v += pDana * Math.max(1, golpes) * (danoCon(b.prep, b.hab + ki.marca - b.def) - danoCon(b.prep, b.hab + marcaPrevia - b.def));
   }
   if (ki.interrumpe && def.ki) {
     let concentrado = 0;
@@ -2159,8 +2158,8 @@ export function intercambio(ctx: Contexto, a: Luchador): { hace: number; recibe:
   let hace = 0;
   let recibe = 0;
   for (const e of enemigos(ctx, a)) {
-    if (!conMagia) hace = Math.max(hace, danoEsperado(a, e, ataqueFinal(a, e), defensaFinal(e, a)) * Math.max(1, a.ataquesDeclarados || 1));
-    if (faltaParaLlegar(e, a) <= metrosTotales(e)) recibe += danoEsperado(e, a, ataqueFinal(e, a), defensaFinal(a, e)) * Math.max(1, e.ataquesDeclarados || 1);
+    if (!conMagia) hace = Math.max(hace, base(a, e).golpe * Math.max(1, a.ataquesDeclarados || 1));
+    if (faltaParaLlegar(e, a) <= metrosTotales(e)) recibe += base(e, a).golpe * Math.max(1, e.ataquesDeclarados || 1);
   }
   return { hace, recibe };
 }
@@ -2245,7 +2244,7 @@ function valorPrevision(ctx: Contexto, l: Luchador, anula: number): number {
     if (e.haActuado || !alcanzable(e, l)) continue;
     const p = pIniciativa(e, l, turnoFinal(e) - turnoFinal(l), e.cap.est.diferenciaSorpresa);
     const b = base(e, l);
-    const ahorro = danoEsperado(e, l, b.hab, b.def + MOD_SORPRESA_DEFENSA) - danoEsperado(e, l, b.hab, b.def + MOD_SORPRESA_DEFENSA + anula);
+    const ahorro = danoCon(b.prep, b.hab - b.def - MOD_SORPRESA_DEFENSA) - danoCon(b.prep, b.hab - b.def - MOD_SORPRESA_DEFENSA - anula);
     mejor = Math.max(mejor, lambda(l) * p * ahorro);
   }
   return mejor;
@@ -2263,7 +2262,7 @@ function valorTurno(ctx: Contexto, l: Luchador, bono: number): number {
     const dif = propio - turnoFinal(e);
     const p = (d: number, umbral: number) => pIniciativa(l, e, d, umbral);
     const b = base(l, e);
-    const conSorpresa = danoEsperado(l, e, b.hab, b.def - 90) - b.golpe;
+    const conSorpresa = danoCon(b.prep, b.hab - b.def + 90) - b.golpe;
     const sorpresa = l.cap.est.diferenciaSorpresa;
     valor += (p(dif + bono, 1) - p(dif, 1)) * amenaza(e, l) * 0.5 +
       (p(dif + bono, sorpresa) - p(dif, sorpresa)) * conSorpresa;
