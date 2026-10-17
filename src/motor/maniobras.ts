@@ -204,6 +204,7 @@ const PARALISIS: Record<1 | 2 | 3, ModEstado> = {
   3: { ataque: -200, parada: -200, esquiva: -200, turno: -100 },
 };
 const DERRIBADO: ModEstado = { ataque: -30, parada: -30, esquiva: -30, turno: -10 };
+const DERRIBADO_SOO_BAHK: ModEstado = { ataque: 0, parada: 0, esquiva: 0, turno: -10 };
 
 /** Tabla 43: amenazado (sólo contra quien lo amenaza). */
 export const AMENAZADO: ModEstado = { ataque: -20, parada: -120, esquiva: -120, turno: -50 };
@@ -242,7 +243,8 @@ export function modEstados(l: Luchador): Readonly<ModEstado> {
     }
   };
   const e = l.cap.est;
-  if (l.derribado && !e.derribadoSinPenalizador) sumar(DERRIBADO);
+  // Soo Bahk supremo quita lo de ataque y defensa, no lo del turno (Dominus p.38).
+  if (l.derribado) sumar(e.derribadoSinPenalizador ? DERRIBADO_SOO_BAHK : DERRIBADO);
   // Las parálisis no se suman: vale la peor entre la de una presa (sufrida o hecha: quien apresa
   // queda en parálisis menor, salvo Pankration avanzado) y la inducida por Mushin arcano.
   const deLaPresa = Math.max(l.paralisis, l.apresando && !e.sinPenalizadorApresando ? 1 : 0);

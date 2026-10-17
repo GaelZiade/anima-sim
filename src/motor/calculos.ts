@@ -287,7 +287,7 @@ function situacionAtaque(atk: Luchador, def: Luchador, ki: ModKi | undefined): n
   const i = atk.trabados.indexOf(def);
   const pos = i < 0 ? 'frente' : posicionPorOrden(i);
   const e = atk.cap.est;
-  const factor = pos === 'flanco' ? e.factorFlanco : pos === 'espalda' ? e.factorEspalda : 1;
+  const factor = pos === 'flanco' ? e.factorFlancoAtaque : pos === 'espalda' ? e.factorEspalda : 1;
   const posicion = factor === 0 ? 0 : MOD_POSICION[pos].ataque;
   return conCeguera(pos, posicion, ki?.area ? SIN_CEGUERA : cegueraContra(atk, def), 'ataque');
 }

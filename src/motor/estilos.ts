@@ -114,6 +114,8 @@ export interface Estilos {
   /** Soo Bahk: fracción del penalizador de flanco a la defensa (1, 1/2 base, 0 avanzado). Hanja: espalda 0. */
   factorFlanco: number;
   factorEspalda: number;
+  /** Atacar a quien tiene al costado (−10): Soo Bahk avanzado y Hanja, con habilidad plena (Dominus p.38, p.43). */
+  factorFlancoAtaque: number;
   /** Soo Bahk supremo: derribado sin penalizador a ataque ni defensa (p.37). */
   derribadoSinPenalizador: boolean;
   /** Hanja arcano: sin penalizador a la defensa por parálisis menor o parcial ni por estar amenazado (p.44). */
@@ -291,6 +293,7 @@ export function estilos(f: Ficha, desarmado: boolean): Estilos {
     bonoDefensaTotal: shephon >= 3 ? 100 : shephon >= 1 ? 60 : 30,
     factorFlanco: sooBahk >= 2 || hanja >= 1 ? 0 : sooBahk === 1 ? 0.5 : 1,
     factorEspalda: hanja >= 1 ? 0 : 1,
+    factorFlancoAtaque: sooBahk >= 2 || hanja >= 1 ? 0 : 1,
     derribadoSinPenalizador: sooBahk >= 3,
     defensaSinParalisis: hanja >= 3,
     paraEnergia: tiene(r.habilidadesKi, 'extrusion de presencia') || tiene(r.habilidadesKi, 'extension del aura'),
