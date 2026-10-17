@@ -35,7 +35,7 @@ import {
   rmDe, rpDe, romperEscudo, terminarAsaltoMagia, terminarMantenidos, zeonLibre, actPorCansancio, pagarDeterminada,
   proyeccionDeterminada,
 } from './magia';
-import { completarArma, dificultadAtrapar, estadoProyectiles, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
+import { completarArma, dificultadAtrapar, estadoProyectiles, formasDeDisparar, puedeAtrapar, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL, umbralEstallido } from './proyectiles';
 import {
   buscarCamino, campoHacia, caminoHasta, celdaDe, celdaLibreCerca, indice, mapaAbierto, prepararMapa, transitable,
   type Celda, type MapaListo,
@@ -922,7 +922,10 @@ function golpear(ctx: Contexto, atk: Luchador, def: Luchador, a: Ataque) {
  * Disparar, recargar o apuntar con un arma a distancia: ocupa todo el turno (Core p.94-96). Los
  * disparos van al objetivo y, si cae, al siguiente que mejor rinda (con −10 por cambiar de blanco).
  */
-function accionADistancia(ctx: Contexto, l: Luchador, d: ia.AccionDistancia) {
+function accionADistancia(ctx: Contexto, l: Luchador, d0: ia.AccionDistancia) {
+  // El motor sólo acepta las formas de disparar que permite la regla (recarga y cadencia, Core p.97).
+  const formas = d0.tipo === 'disparar' ? formasDeDisparar(l, d0.arma) : [];
+  const d = d0.tipo === 'disparar' && formas.length && !formas.some((f) => f.disparos === d0.disparos && f.pen === d0.pen) ? { ...d0, ...formas[0] } : d0;
   const arma = l.ficha.armasDistancia![d.arma];
   const st = l.proyectiles[d.arma];
   l.disparo = true;
@@ -1277,7 +1280,7 @@ function defenderse(
   // Trucos de manos: atrapar el proyectil en el aire, como defensa pasiva; si falla, se defiende igual
   // con −50 (Core p.94).
   let trasAtrapar = 0;
-  if (!proteccion && o.aDistancia && !def.ficha.acumulacion && def.ficha.trucosDeManos !== undefined && ia.intentaAtrapar(ctx, def, atk, habAtk, o)) {
+  if (!proteccion && o.aDistancia && !def.ficha.acumulacion && def.ficha.trucosDeManos !== undefined && puedeAtrapar(def.ficha.trucosDeManos, o.ranura.proyectil) && ia.intentaAtrapar(ctx, def, atk, habAtk, o)) {
     if (atrapar(ctx, def, atk, habAtk + tA.valor, o)) return { defensor: def, contra: null, impacto: false };
     trasAtrapar = PEN_ESQUIVA_TRAS_ATRAPAR;
   }

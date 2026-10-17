@@ -12,7 +12,7 @@ import {
 import { fallaResistencia, pLlegaArea, tabla } from './probabilidades';
 import { absorcion, MOD_SORPRESA_DEFENSA, negativoCansancio, PEN_ACCION_ACTIVA, posicionPorOrden, umbralPifia, type TipoAtaque } from './reglas';
 import { capacidades, planDeAtaques, type Ranura } from './rasgos';
-import { completarArma, dificultadAtrapar, disparosConRecarga, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, lanzamientosPosibles, reduccionesPosibles, superaTope, TOPE_PROYECTIL } from './proyectiles';
+import { dificultadAtrapar, formasDeDisparar, puedeAtrapar, PEN_ATRAPAR_ADICIONAL, PEN_ESQUIVA_TRAS_ATRAPAR, superaTope, TOPE_PROYECTIL } from './proyectiles';
 import { efectoCritico } from './valoracion';
 import { MEDIA_TIRADA, sinDado } from './dados';
 import type { ParadaArea } from './golpe';
@@ -1575,32 +1575,6 @@ export function armaUsable(l: Luchador, i: number): boolean {
   return !st.inutil && (a.leo ? l.balas > 0 : st.municion > 0);
 }
 
-/**
- * Formas de usar el arma este asalto: con recarga, bajándola de a una por cada 100 de habilidad
- * (−30 cada vez); arrojadiza, lanzando de una a tantas como permita la cadencia (−10 por cada una
- * de más), sin pasar de las que tiene (Core p.96).
- */
-function formasDeDisparar(l: Luchador, i: number): { disparos: number; pen: number; recargaFalta: number }[] {
-  const a = completarArma(l.ficha.armasDistancia![i]);
-  if (a.clase === 'disparo' && a.recamara) {
-    // Con recámara dispara como con índice 1 hasta vaciarla; vacía, la recarga entera (Core p.81).
-    const res = [];
-    const quedan = Math.min(l.proyectiles[i].enRecamara, l.proyectiles[i].municion);
-    for (let k = 0; k <= reduccionesPosibles(a.ataque) && k < quedan; k++)
-      res.push({ disparos: k + 1, pen: 30 * k, recargaFalta: k + 1 >= quedan ? a.recarga : 0 });
-    return res;
-  }
-  if (a.clase === 'disparo') {
-    const res = [];
-    for (let k = 0; k <= reduccionesPosibles(a.ataque); k++) res.push(disparosConRecarga(a.recarga, k));
-    const quedan = a.leo ? l.balas : l.proyectiles[i].municion;
-    return res.filter((x) => x.disparos <= quedan || x.disparos === 1);
-  }
-  const res = [];
-  const tope = Math.min(lanzamientosPosibles(a.ataque, a.cadencia), l.proyectiles[i].municion);
-  for (let n = 1; n <= tope; n++) res.push({ disparos: n, pen: 10 * (n - 1), recargaFalta: 0 });
-  return res;
-}
 
 /** Si puede dispararle a `e` con esa arma (lo alcanza y lo ve), la Tabla 47 de ese disparo. */
 function tabla47(ctx: Contexto, l: Luchador, e: Luchador, i: number): { bono: number; lejos: boolean } | null {
@@ -1720,7 +1694,7 @@ export function intentaAtrapar(ctx: Contexto, def: Luchador, atk: Luchador, habA
   if (perfil(def) === 'bestia') return false;
   const trucos = def.ficha.trucosDeManos ?? 0;
   const arma = g.ranura.proyectil;
-  if (arma?.fuego && trucos < 200) return false;
+  if (!puedeAtrapar(trucos, arma)) return false;
   nuevaDecision(ctx);
   // Como `atrapar` (combate.ts): Trucos de manos abierta, con su pifia, contra la dificultad del
   // proyectil (la iguala) o, si no tiene, contra el resultado del ataque (lo supera).

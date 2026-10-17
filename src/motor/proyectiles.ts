@@ -1,7 +1,7 @@
 // Armas de proyectiles y arrojadizas (Core p.80-81, p.94-96): Tabla 34 (recarga, cadencia y
 // alcance), Tabla 47 (modificadores al ataque), recarga y cadencia de fuego, y el tope de 280.
 
-import type { ArmaDistancia, EstadoArmaDistancia, Ficha } from './modelo';
+import type { ArmaDistancia, EstadoArmaDistancia, Ficha, Luchador } from './modelo';
 import { normalizarRasgo, tiene } from './rasgos';
 
 interface DatosTabla34 {
@@ -148,6 +148,11 @@ export function dificultadAtrapar(arma: ArmaDistancia | undefined): number | nul
   return arma.clase === 'lanzamiento' ? 180 : 240;
 }
 
+/** Puede intentar atraparlo: una bala pide maestría en Trucos de manos (200, Core p.94). */
+export function puedeAtrapar(trucos: number, arma: ArmaDistancia | undefined): boolean {
+  return !arma?.fuego || trucos >= 200;
+}
+
 /** Cada control de Trucos de manos de más en el asalto: −25 (Core p.94). */
 export const PEN_ATRAPAR_ADICIONAL = 25;
 /** Si no lo atrapa, todavía puede esquivarlo con −50 (Core p.94). */
@@ -156,4 +161,33 @@ export const PEN_ESQUIVA_TRAS_ATRAPAR = 50;
 /** Extiende su Ki al arma (Extensión del aura al arma): sus proyectiles pasan el tope de 280 (Core p.95). */
 export function superaTope(f: Ficha): boolean {
   return tiene(f.rasgos?.habilidadesKi, 'extension del aura');
+}
+
+/**
+ * Formas de usar el arma este asalto: con recarga, bajándola de a una por cada 100 de habilidad
+ * (−30 cada vez); arrojadiza, lanzando de una a tantas como permita la cadencia (−10 por cada una
+ * de más), sin pasar de las que tiene (Core p.96).
+ */
+export function formasDeDisparar(l: Luchador, i: number): { disparos: number; pen: number; recargaFalta: number }[] {
+  const a = completarArma(l.ficha.armasDistancia![i]);
+  // Recarga y cadencia: la más alta entre su ataque y sus Trucos de manos (Core p.97).
+  const hab = Math.max(a.ataque, l.ficha.trucosDeManos ?? 0);
+  if (a.clase === 'disparo' && a.recamara) {
+    // Con recámara dispara como con índice 1 hasta vaciarla; vacía, la recarga entera (Core p.81).
+    const res = [];
+    const quedan = Math.min(l.proyectiles[i].enRecamara, l.proyectiles[i].municion);
+    for (let k = 0; k <= reduccionesPosibles(hab) && k < quedan; k++)
+      res.push({ disparos: k + 1, pen: 30 * k, recargaFalta: k + 1 >= quedan ? a.recarga : 0 });
+    return res;
+  }
+  if (a.clase === 'disparo') {
+    const res = [];
+    for (let k = 0; k <= reduccionesPosibles(hab); k++) res.push(disparosConRecarga(a.recarga, k));
+    const quedan = a.leo ? l.balas : l.proyectiles[i].municion;
+    return res.filter((x) => x.disparos <= quedan || x.disparos === 1);
+  }
+  const res = [];
+  const tope = Math.min(lanzamientosPosibles(hab, a.cadencia), l.proyectiles[i].municion);
+  for (let n = 1; n <= tope; n++) res.push({ disparos: n, pen: 10 * (n - 1), recargaFalta: 0 });
+  return res;
 }
